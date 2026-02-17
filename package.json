@@ -1,0 +1,7 @@
+{
+  "name": "trinventario-firebase",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "TRInventario con Firestore (sin JSONBin), catálogo/proveedores vía Google Sheets (proxy en Vercel)."
+}
