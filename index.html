@@ -79,26 +79,6 @@
               <div id="fechaInventario" class="small text-muted fw-semibold"></div>
             </div>
 
-            <!-- Sesión (multi-inventario sin usuarios) -->
-            <div class="border rounded-3 p-2 bg-light mb-2">
-              <div class="small fw-semibold mb-1">Sesión</div>
-              <div id="sessionInfo" class="small text-muted">Sin sesión activa.</div>
-              <div class="d-flex flex-wrap gap-2 mt-2">
-                <button id="btnStartSession" class="btn btn-sm btn-outline-primary">
-                  <i class="fa-solid fa-play me-1"></i> Iniciar inventario
-                </button>
-                <button id="btnSaveProgress" class="btn btn-sm btn-primary" disabled>
-                  <i class="fa-solid fa-floppy-disk me-1"></i> Guardar avance
-                </button>
-                <button id="btnFinishSession" class="btn btn-sm btn-outline-success" disabled>
-                  <i class="fa-solid fa-check me-1"></i> Finalizar
-                </button>
-              </div>
-              <div class="form-text small mt-2">
-                Consejo: usa <strong>Iniciar inventario</strong> para que varias personas trabajen al mismo tiempo.
-              </div>
-            </div>
-
             <!-- Historial por día -->
             <div class="mb-2">
               <label for="historyDate" class="form-label fw-semibold mb-1">Historial</label>
@@ -171,6 +151,9 @@
               <div class="col-md-4">
                 <label class="form-label fw-semibold mb-1">Ubicación del producto</label>
                 <input id="ubicacionInput" type="text" class="form-control form-control-sm" placeholder="Ej. Bodega, pasillo 3, góndola A">
+                <div id="ubicacionLockHint" class="form-text small text-muted d-none">
+                  Ubicación definida por el tipo de inventario.
+                </div>
               </div>
               <!-- Buscador de productos -->
               <div class="col-md-4 position-relative">
@@ -261,8 +244,8 @@
                     <th>Nombre</th>
                     <th>Código inventario</th>
                     <th>Bodega</th>
-                    <th class="text-center text-nowrap">Fecha vencimiento</th>
                     <th class="text-center text-nowrap">Cantidad</th>
+                    <th class="text-center text-nowrap">Fecha vencimiento</th>
                     <th class="text-center text-nowrap">Acciones</th>
                   </tr>
                 </thead>
@@ -329,6 +312,79 @@
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="button" id="btnAddManual" class="btn btn-primary">
             <i class="fas fa-plus"></i> Agregar al inventario
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Wizard: Inicio de Inventario (Obligatorio) -->
+  <div class="modal fade" id="wizardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="fa-solid fa-clipboard-check me-2 text-primary"></i>
+            Configurar inventario
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Selecciona el tipo de inventario y los datos requeridos para iniciar.
+          </p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tipo de inventario</label>
+              <select id="wizTipo" class="form-select">
+                <option value="">Cargando...</option>
+              </select>
+            </div>
+
+            <div class="col-md-6 d-none" id="wizAlmacenWrap">
+              <label class="form-label fw-semibold">Ubicación (Almacén)</label>
+              <select id="wizUbicacion" class="form-select">
+                <option value="">Selecciona...</option>
+              </select>
+            </div>
+
+            <div class="col-md-6 d-none" id="wizDependienteWrap">
+              <label class="form-label fw-semibold">Dependiente responsable</label>
+              <select id="wizDependiente" class="form-select">
+                <option value="">Selecciona...</option>
+              </select>
+            </div>
+
+            <div class="col-md-6 d-none" id="wizSalaWrap">
+              <label class="form-label fw-semibold">Sala de venta</label>
+              <select id="wizSala" class="form-select">
+                <option value="">Selecciona...</option>
+                <option value="Sexta Calle">Sexta Calle</option>
+                <option value="Centro Comercial">Centro Comercial</option>
+                <option value="Avenida Morazán">Avenida Morazán</option>
+              </select>
+            </div>
+
+            <div class="col-md-12 d-none" id="wizEstanteWrap">
+              <label class="form-label fw-semibold">Estante</label>
+              <select id="wizEstante" class="form-select">
+                <option value="">Selecciona...</option>
+              </select>
+              <div class="form-text small text-muted mt-1">
+                La lista de estantes depende de la sala seleccionada.
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-info small mt-3 mb-0">
+            <i class="fa-solid fa-circle-info me-2"></i>
+            Para <strong>Sala de venta</strong>: primero elige dependiente, luego sala y estante.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span class="me-auto small text-muted" id="wizStatus"></span>
+          <button type="button" class="btn btn-primary" id="wizStartBtn">
+            <i class="fa-solid fa-play me-1"></i> Iniciar inventario
           </button>
         </div>
       </div>

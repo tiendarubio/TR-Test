@@ -11,9 +11,7 @@ export default function handler(req, res) {
     };
 
     if (!cfg.apiKey || !cfg.projectId) {
-      return res.status(500).json({
-        error: 'Faltan variables de entorno de Firebase (FIREBASE_*)'
-      });
+      return res.status(500).json({ error: 'Faltan variables de entorno de Firebase (FIREBASE_*)' });
     }
 
     return res.status(200).json(cfg);

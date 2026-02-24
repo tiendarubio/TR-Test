@@ -46,11 +46,6 @@ body {
   font-weight: 600;
 }
 
-.section-title {
-  margin-bottom: 20px;
-  font-weight: 700;
-}
-
 @media (max-width: 767.98px) {
   .table-checklist-wrapper {
     max-height: none;
@@ -58,14 +53,8 @@ body {
 }
 
 /* Área de escaneo de códigos de barras */
-.scan-wrap {
-  display: none;
-  margin-top: 0.75rem;
-}
-
-.scan-wrap.active {
-  display: block;
-}
+.scan-wrap { display: none; margin-top: 0.75rem; }
+.scan-wrap.active { display: block; }
 
 .scanner {
   position: relative;
@@ -75,11 +64,7 @@ body {
   background: #000;
 }
 
-.scanner video {
-  width: 100%;
-  height: auto;
-  display: block;
-}
+.scanner video { width: 100%; height: auto; display: block; }
 
 .scan-overlay {
   position: absolute;
@@ -100,9 +85,7 @@ body {
 }
 
 /* Indicador en el calendario para días con inventario guardado */
-.flatpickr-day.has-history {
-  position: relative;
-}
+.flatpickr-day.has-history { position: relative; }
 .flatpickr-day.has-history::after {
   content: "";
   position: absolute;

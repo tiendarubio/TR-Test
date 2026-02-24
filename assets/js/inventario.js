@@ -2,29 +2,32 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = (id) => document.getElementById(id);
 
-  // --- Sesión de inventario (multi-persona, sin usuarios) ---
-  let CURRENT_SESSION_ID = localStorage.getItem('TR_AVM_SESSION_ID') || '';
-  let CURRENT_SESSION_META = null;
-
-  const btnStartSession = $('btnStartSession');
-  const btnSaveProgress = $('btnSaveProgress');
-  const btnFinishSession = $('btnFinishSession');
-  const sessionInfoEl = $('sessionInfo');
-
-  const fechaEl = $('fechaInventario');
-  if (fechaEl) {
-    fechaEl.textContent = 'Fecha de inventario: ' + new Date().toLocaleString('es-SV', { timeZone: 'America/El_Salvador' });
-  }
-
+  // =========================
+  // Elementos principales (DECLARAR ANTES DE USAR)
+  // =========================
   const body           = $('recepcionBody');
   const proveedorInput = $('proveedorInput');
   const ubicacionInput = $('ubicacionInput');
+  const ubicacionLockHint = $('ubicacionLockHint');
+
   const btnSave        = $('saveReception');
   const btnPDF         = $('exportPDF');
   const btnPrint       = $('printPDF');
   const btnExcel       = $('exportExcel');
   const btnClear       = $('clearReception');
 
+  const inventarioSelect = $('inventarioSelect');
+  const searchInput   = $('searchInput');
+  const btnScan       = $('btnScan');
+  const scanWrap      = $('scanWrap');
+  const scanVideo     = $('scanVideo');
+  const btnScanStop   = $('btnScanStop');
+  const fileScan      = $('fileScan');
+
+  const suggestions   = $('suggestions');
+  const provSuggestions = $('provSuggestions');
+
+  // Modal manual
   const mCodigo       = $('mCodigo');
   const mNombre       = $('mNombre');
   const mCodInv       = $('mCodInv');
@@ -34,21 +37,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   const manualModalEl = document.getElementById('manualModal');
   const manualModal   = new bootstrap.Modal(manualModalEl);
 
-  const modalInputs = [mCodigo, mNombre, mCodInv, mBodega, mVencimiento, mCantidad];
-  modalInputs.forEach((inp, idx) => {
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (idx < modalInputs.length - 1) {
-          modalInputs[idx + 1].focus();
-        } else {
-          $('btnAddManual').click();
-        }
-      }
-    });
-  });
+  // Wizard modal
+  const wizardModalEl = document.getElementById('wizardModal');
+  const wizardModal   = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });
 
-  // IDs originales (antes eran JSONBin binId). Ahora se reutilizan como docId en Firestore.
+  const wizTipo = $('wizTipo');
+  const wizUbicacion = $('wizUbicacion');
+  const wizDependiente = $('wizDependiente');
+  const wizSala = $('wizSala');
+  const wizEstante = $('wizEstante');
+
+  const wizAlmacenWrap = $('wizAlmacenWrap');
+  const wizDependienteWrap = $('wizDependienteWrap');
+  const wizSalaWrap = $('wizSalaWrap');
+  const wizEstanteWrap = $('wizEstanteWrap');
+
+  const wizStartBtn = $('wizStartBtn');
+  const wizStatus = $('wizStatus');
+
+  // Fecha UI
+  const fechaEl = $('fechaInventario');
+  if (fechaEl) {
+    fechaEl.textContent = 'Fecha de inventario: ' + new Date().toLocaleString('es-SV', { timeZone: 'America/El_Salvador' });
+  }
+
+  // =========================
+  // Config / bins
+  // =========================
   const INVENTARIO_BINS = {
     inventario1: '692091aa43b1c97be9bc18dd',
     inventario2: '692091efd0ea881f40f71767',
@@ -63,298 +78,227 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   let CURRENT_INVENTARIO = localStorage.getItem('TR_AVM_CURRENT_INVENTARIO') || 'inventario1';
-  const inventarioSelect = $('inventarioSelect');
+  if (inventarioSelect) inventarioSelect.value = CURRENT_INVENTARIO;
 
-  function updateSessionUI() {
-    if (!sessionInfo) return;
-    if (!CURRENT_SESSION_ID) {
-      sessionInfo.textContent = 'Sin sesión activa.';
-      sessionInfo.classList.remove('text-success');
-      sessionInfo.classList.add('text-muted');
-    } else {
-      const shortId = CURRENT_SESSION_ID.slice(0, 8);
-      const status = (CURRENT_SESSION_META && CURRENT_SESSION_META.estado) ? CURRENT_SESSION_META.estado : 'en progreso';
-      sessionInfo.textContent = `Sesión: ${shortId} — ${status}`;
-      sessionInfo.classList.remove('text-muted');
-      sessionInfo.classList.add('text-success');
-    }
-    if (btnSaveProgress) btnSaveProgress.disabled = !CURRENT_SESSION_ID || IS_HISTORY;
-    if (btnFinishSession) btnFinishSession.disabled = !CURRENT_SESSION_ID || IS_HISTORY;
+  function getCurrentDocId() {
+    return INVENTARIO_BINS[CURRENT_INVENTARIO];
   }
 
-  async function startSessionFlow() {
-    // No iniciar sesión en modo histórico
-    if (IS_HISTORY) {
-      Swal.fire('Histórico', 'Regresa a "Hoy" para iniciar un inventario.', 'info');
-      return;
-    }
+  // =========================
+  // Wizard (tipo inventario)
+  // =========================
+  const WIZ_KEY_PREFIX = 'TR_AVM_WIZ_DONE_';
+  const WIZ_CFG_KEY    = 'TR_AVM_WIZARD_CONFIG';
 
-    try {
-      const opts = await loadEstantesOptions();
-      const tipos = (opts && opts.tipos) ? opts.tipos : [];
-      if (!tipos.length) {
-        Swal.fire('Sin opciones', 'No se encontraron tipos en el sheet "estantes" (columna E).', 'info');
-        return;
-      }
-
-      // Paso 1: tipo
-      const tipoRes = await Swal.fire({
-        title: 'Iniciar inventario',
-        text: 'Seleccione el tipo de inventario',
-        input: 'select',
-        inputOptions: Object.fromEntries(tipos.map(t => [t, t])),
-        inputPlaceholder: 'Seleccione...',
-        showCancelButton: true,
-        confirmButtonText: 'Siguiente'
-      });
-      if (!tipoRes.isConfirmed) return;
-      const tipo = String(tipoRes.value || '').trim();
-      if (!tipo) return;
-
-      const meta = {
-        tipo,
-        tienda: 'AVENIDA MORAZÁN',
-        hoja_inventario: CURRENT_INVENTARIO,
-        creadoEn: new Date().toISOString(),
-        estado: 'en progreso'
-      };
-
-      if (tipo === 'Almacén') {
-        const ubicaciones = (opts && opts.ubicaciones) ? opts.ubicaciones : [];
-        const ubRes = await Swal.fire({
-          title: 'Almacén',
-          text: 'Seleccione la ubicación',
-          input: 'select',
-          inputOptions: Object.fromEntries(ubicaciones.map(u => [u, u])),
-          inputPlaceholder: 'Seleccione...',
-          showCancelButton: true,
-          confirmButtonText: 'Continuar'
-        });
-        if (!ubRes.isConfirmed) return;
-        meta.ubicacionAlmacen = String(ubRes.value || '').trim();
-        if (ubicacionInput) ubicacionInput.value = meta.ubicacionAlmacen;
-      }
-
-      if (tipo === 'Sala de venta') {
-        const deps = (opts && opts.dependientes) ? opts.dependientes : [];
-        const depRes = await Swal.fire({
-          title: 'Sala de venta',
-          text: 'Seleccione el/la dependiente',
-          input: 'select',
-          inputOptions: Object.fromEntries(deps.map(d => [d, d])),
-          inputPlaceholder: 'Seleccione...',
-          showCancelButton: true,
-          confirmButtonText: 'Siguiente'
-        });
-        if (!depRes.isConfirmed) return;
-        meta.dependiente = String(depRes.value || '').trim();
-
-        const salaRes = await Swal.fire({
-          title: 'Sala de venta',
-          text: 'Seleccione la sala',
-          input: 'select',
-          inputOptions: {
-            'Sexta Calle': 'Sexta Calle',
-            'Centro Comercial': 'Centro Comercial',
-            'Avenida Morazán': 'Avenida Morazán'
-          },
-          inputPlaceholder: 'Seleccione...',
-          showCancelButton: true,
-          confirmButtonText: 'Siguiente'
-        });
-        if (!salaRes.isConfirmed) return;
-        meta.sala = String(salaRes.value || '').trim();
-
-        let estantes = [];
-        if (meta.sala === 'Sexta Calle') estantes = (opts && opts.estantes_sexta) ? opts.estantes_sexta : [];
-        else if (meta.sala === 'Centro Comercial') estantes = (opts && opts.estantes_centro) ? opts.estantes_centro : [];
-        else estantes = (opts && opts.estantes_avm) ? opts.estantes_avm : [];
-
-        const estRes = await Swal.fire({
-          title: meta.sala,
-          text: 'Seleccione el estante',
-          input: 'select',
-          inputOptions: Object.fromEntries(estantes.map(e => [e, e])),
-          inputPlaceholder: 'Seleccione...',
-          showCancelButton: true,
-          confirmButtonText: 'Iniciar'
-        });
-        if (!estRes.isConfirmed) return;
-        meta.estante = String(estRes.value || '').trim();
-        if (ubicacionInput) ubicacionInput.value = `Sala de venta - ${meta.sala} - ${meta.estante}`;
-      }
-
-      // Averías: pasa directo
-      if (tipo === 'Averías') {
-        if (ubicacionInput && !ubicacionInput.value.trim()) {
-          ubicacionInput.value = 'Averías';
-        }
-      }
-
-      // Crear nueva sesión
-      const docId = getCurrentDocId();
-      const sessionId = newSessionId();
-      CURRENT_SESSION_ID = sessionId;
-      CURRENT_SESSION_META = meta;
-      localStorage.setItem('TR_AVM_SESSION_ID', CURRENT_SESSION_ID);
-
-      // Limpiar UI para iniciar conteo
-      body.innerHTML = '';
-      proveedorInput.value = '';
-      recalcTotals();
-      updateButtons();
-
-      // Guardar estado inicial (vacío)
-      await saveInventorySessionToFirestore(docId, sessionId, {
-        meta: { ...meta, fechaInventario: new Date().toISOString() },
-        items: [],
-        totales: { lineas: 0, cantidad_total: 0 }
-      }, getTodayString());
-
-      updateSessionUI();
-      Swal.fire('Sesión iniciada', 'Ya puedes comenzar a inventariar. Usa "Guardar avance" durante el proceso y "Finalizar" al terminar.', 'success');
-      if (searchInput) searchInput.focus();
-    } catch (e) {
-      console.error(e);
-      Swal.fire('Error', String(e), 'error');
-    }
+  function getToday() {
+    return (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
   }
 
-  async function buildPayloadFromUI() {
-    const items = [...body.getElementsByTagName('tr')].map(tr => {
-      const qty       = parseNum(tr.querySelector('.qty').value);
-      const fechaVenc = (tr.querySelector('.vencimiento')?.value || '').trim();
-      return {
-        codigo_barras:     tr.cells[1].innerText.trim(),
-        nombre:            tr.cells[2].innerText.trim(),
-        codigo_inventario: tr.cells[3].innerText.trim(),
-        bodega:            tr.cells[4].innerText.trim(),
-        fecha_vencimiento: fechaVenc,
-        cantidad:          qty
-      };
+  function wizardDoneKey() {
+    return `${WIZ_KEY_PREFIX}${getCurrentDocId()}_${getToday()}`;
+  }
+
+  function setControlsEnabled(enabled) {
+    const dis = !enabled;
+    const disable = (el) => { if (el) el.disabled = dis; };
+    disable(btnSave); disable(btnClear);
+    disable(proveedorInput); disable(ubicacionInput);
+    disable(searchInput); disable(btnScan);
+    const btnOpenManual = document.getElementById('btnOpenManual');
+    disable(btnOpenManual);
+  }
+
+  function lockUbicacion(lock, value) {
+    if (!ubicacionInput) return;
+    ubicacionInput.disabled = !!lock;
+    if (typeof value === 'string') ubicacionInput.value = value;
+    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !lock);
+  }
+
+  function fillSelect(selectEl, values, placeholder='Selecciona...') {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = placeholder;
+    selectEl.appendChild(opt0);
+    (values || []).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      selectEl.appendChild(opt);
     });
-
-    return {
-      meta: {
-        tienda: 'AVENIDA MORAZÁN',
-        proveedor: proveedorInput.value.trim(),
-        ubicacion: ubicacionInput ? ubicacionInput.value.trim() : '',
-        hoja_inventario: CURRENT_INVENTARIO,
-        sessionId: CURRENT_SESSION_ID || '',
-        ...(CURRENT_SESSION_META || {}),
-        fechaInventario: new Date().toISOString()
-      },
-      items,
-      totales: {
-        lineas:         Number($('tLineas').textContent),
-        cantidad_total: Number($('tCantidad').textContent)
-      }
-    };
   }
 
-  async function saveProgress(finalize = false) {
-    if (!CURRENT_SESSION_ID) {
-      Swal.fire('Sin sesión', 'Primero presiona "Iniciar inventario".', 'info');
-      return;
-    }
-
-    if (!finalize) {
-      // Guardar avance: permite vacío, solo persiste estado actual
-      const payload = await buildPayloadFromUI();
-      if (finalize) payload.meta.finalizado = true;
-      await saveInventorySessionToFirestore(getCurrentDocId(), CURRENT_SESSION_ID, payload, getTodayString());
-      Swal.fire('Guardado', 'Avance guardado.', 'success');
-      updateSessionUI();
-      return;
-    }
-
-    // Finalizar: validaciones similares al guardado principal
-    if (!ubicacionInput || !ubicacionInput.value.trim()) {
-      Swal.fire('Ubicación requerida', 'Ingrese la ubicación del producto.', 'info');
-      return;
-    }
-    if (body.rows.length === 0) {
-      Swal.fire('Sin ítems', 'Agregue al menos un producto.', 'error');
-      return;
-    }
-
-    const payload = await buildPayloadFromUI();
-    payload.meta.finalizado = true;
-    payload.meta.finalizadoAt = new Date().toISOString();
-    await finishInventorySessionToFirestore(getCurrentDocId(), CURRENT_SESSION_ID, payload, getTodayString());
-
-    Swal.fire('Finalizado', 'Inventario finalizado y guardado.', 'success');
-    updateSessionUI();
+  let ESTANTES_DATA = {};
+  async function initWizardData() {
+    wizStatus.textContent = 'Cargando listas...';
+    ESTANTES_DATA = await (typeof preloadEstantes === 'function' ? preloadEstantes() : Promise.resolve({})) || {};
+    const tipos = (ESTANTES_DATA.tipos || []).filter(Boolean);
+    fillSelect(wizTipo, tipos, 'Selecciona tipo...');
+    fillSelect(wizUbicacion, (ESTANTES_DATA.ubicaciones || []).filter(Boolean), 'Selecciona ubicación...');
+    fillSelect(wizDependiente, (ESTANTES_DATA.dependientes || []).filter(Boolean), 'Selecciona dependiente...');
+    // sala tiene opciones fijas en el HTML
+    fillSelect(wizEstante, [], 'Selecciona estante...');
+    wizStatus.textContent = '';
   }
 
-  async function resumeSessionIfAny() {
-    if (!CURRENT_SESSION_ID) {
-      updateSessionUI();
-      return;
-    }
-    try {
-      const docId = getCurrentDocId();
-      const rec = await loadInventorySessionFromFirestore(docId, CURRENT_SESSION_ID, getTodayString());
-      if (!rec || !rec.meta) {
-        // Sesión no existe (o fue borrada) -> limpiar local
-        CURRENT_SESSION_ID = '';
-        CURRENT_SESSION_META = null;
-        localStorage.removeItem('TR_AVM_SESSION_ID');
-        updateSessionUI();
-        return;
-      }
-
-      CURRENT_SESSION_META = rec.meta || null;
-
-      // Hidratar UI
-      if (proveedorInput && rec.meta.proveedor) proveedorInput.value = rec.meta.proveedor;
-      if (ubicacionInput && rec.meta.ubicacion) ubicacionInput.value = rec.meta.ubicacion;
-      if (rec.meta.hoja_inventario && inventarioSelect) {
-        CURRENT_INVENTARIO = rec.meta.hoja_inventario;
-        inventarioSelect.value = CURRENT_INVENTARIO;
-      }
-
-      body.innerHTML = '';
-      (rec.items || []).forEach(it => {
-        addRow({
-          barcode:   it.codigo_barras || '',
-          nombre:    it.nombre || '',
-          codInvent: it.codigo_inventario || 'N/A',
-          bodega:    it.bodega || '',
-          fechaVenc: it.fecha_vencimiento || '',
-          cantidad:  (it.cantidad !== undefined && it.cantidad !== null) ? Number(it.cantidad) : '',
-          skipDuplicateCheck: true
-        });
-      });
-      recalcTotals();
-      updateButtons();
-      updateSessionUI();
-    } catch (e) {
-      console.error('No se pudo reanudar sesión:', e);
-      updateSessionUI();
-    }
+  function resetWizardVisibility() {
+    wizAlmacenWrap.classList.add('d-none');
+    wizDependienteWrap.classList.add('d-none');
+    wizSalaWrap.classList.add('d-none');
+    wizEstanteWrap.classList.add('d-none');
+    wizUbicacion.value = '';
+    wizDependiente.value = '';
+    wizSala.value = '';
+    wizEstante.value = '';
   }
 
-  // Botones de sesión
-  if (btnStartSession) btnStartSession.addEventListener('click', startSessionFlow);
-  if (btnSaveProgress) btnSaveProgress.addEventListener('click', () => saveProgress(false));
-  if (btnFinishSession) btnFinishSession.addEventListener('click', () => saveProgress(true));
+  function updateWizardByTipo() {
+    const tipo = (wizTipo.value || '').trim();
+    resetWizardVisibility();
 
-  // Intentar reanudar sesión si existe
-  await resumeSessionIfAny();
+    if (!tipo) return;
 
-  // --- Historial por día (calcado a TRLista) ---
+    if (tipo === 'Averías' || tipo === 'Averias') {
+      // directo
+      return;
+    }
+
+    if (tipo === 'Almacén' || tipo === 'Almacen') {
+      wizAlmacenWrap.classList.remove('d-none');
+      return;
+    }
+
+    if (tipo === 'Sala de venta') {
+      wizDependienteWrap.classList.remove('d-none');
+      wizSalaWrap.classList.remove('d-none');
+      // estante aparece cuando haya sala seleccionada
+      return;
+    }
+
+    // otros tipos: por ahora directo
+  }
+
+  function updateEstantesBySala() {
+    const sala = (wizSala.value || '').trim();
+    wizEstanteWrap.classList.add('d-none');
+    fillSelect(wizEstante, [], 'Selecciona estante...');
+
+    if (!sala) return;
+
+    let list = [];
+    if (sala === 'Sexta Calle') list = ESTANTES_DATA.estantes_sexta || [];
+    else if (sala === 'Centro Comercial') list = ESTANTES_DATA.estantes_cc || [];
+    else if (sala === 'Avenida Morazán') list = ESTANTES_DATA.estantes_avm || [];
+
+    list = (list || []).filter(Boolean);
+    fillSelect(wizEstante, list, 'Selecciona estante...');
+    wizEstanteWrap.classList.remove('d-none');
+  }
+
+  function validateWizard() {
+    const tipo = (wizTipo.value || '').trim();
+    if (!tipo) return { ok:false, msg:'Selecciona el tipo de inventario.' };
+
+    if (tipo === 'Almacén' || tipo === 'Almacen') {
+      const u = (wizUbicacion.value || '').trim();
+      if (!u) return { ok:false, msg:'Selecciona la ubicación del Almacén.' };
+      return { ok:true };
+    }
+
+    if (tipo === 'Sala de venta') {
+      const dep = (wizDependiente.value || '').trim();
+      const sala = (wizSala.value || '').trim();
+      const est = (wizEstante.value || '').trim();
+      if (!dep) return { ok:false, msg:'Selecciona el dependiente responsable.' };
+      if (!sala) return { ok:false, msg:'Selecciona la sala de venta.' };
+      if (!est) return { ok:false, msg:'Selecciona el estante.' };
+      return { ok:true };
+    }
+
+    // Averías u otros
+    return { ok:true };
+  }
+
+  function applyWizardConfig(cfg) {
+    // Guarda y aplica los bloqueos (especialmente ubicación)
+    localStorage.setItem(WIZ_CFG_KEY, JSON.stringify(cfg));
+    localStorage.setItem(wizardDoneKey(), '1');
+
+    // Aplicar ubicación “forzada” si corresponde
+    if (cfg.tipo === 'Almacén' || cfg.tipo === 'Almacen') {
+      lockUbicacion(true, cfg.ubicacion || '');
+    } else if (cfg.tipo === 'Sala de venta') {
+      // Ubicación la definimos como: "Sala - Estante"
+      const ub = [cfg.sala, cfg.estante].filter(Boolean).join(' — ');
+      lockUbicacion(true, ub);
+    } else {
+      // Averías u otros: libre
+      lockUbicacion(false);
+    }
+
+    setControlsEnabled(true);
+    wizardModal.hide();
+    setTimeout(() => { if (searchInput && !searchInput.disabled) searchInput.focus(); }, 150);
+  }
+
+  function showWizardIfNeeded() {
+    const done = localStorage.getItem(wizardDoneKey()) === '1';
+    if (done) {
+      // si ya hay config, reaplicar locks
+      try {
+        const cfg = JSON.parse(localStorage.getItem(WIZ_CFG_KEY) || '{}');
+        if (cfg && cfg.tipo) applyWizardConfig(cfg);
+      } catch (_) {
+        setControlsEnabled(true);
+      }
+      return;
+    }
+
+    // bloquear controles hasta iniciar
+    setControlsEnabled(false);
+    lockUbicacion(false); // mostrar editable pero deshabilitado por setControlsEnabled
+    wizardModal.show();
+  }
+
+  // Eventos wizard
+  wizTipo.addEventListener('change', () => {
+    updateWizardByTipo();
+  });
+  wizSala.addEventListener('change', () => {
+    updateEstantesBySala();
+  });
+  wizStartBtn.addEventListener('click', () => {
+    const v = validateWizard();
+    if (!v.ok) {
+      Swal.fire('Faltan datos', v.msg, 'info');
+      return;
+    }
+
+    const tipo = (wizTipo.value || '').trim();
+    const cfg = { tipo };
+
+    if (tipo === 'Almacén' || tipo === 'Almacen') {
+      cfg.ubicacion = (wizUbicacion.value || '').trim();
+    } else if (tipo === 'Sala de venta') {
+      cfg.dependiente = (wizDependiente.value || '').trim();
+      cfg.sala = (wizSala.value || '').trim();
+      cfg.estante = (wizEstante.value || '').trim();
+    }
+
+    applyWizardConfig(cfg);
+  });
+
+  // =========================
+  // Historial por día
+  // =========================
   const historyDateEl = $('historyDate');
   const btnToday      = $('btnToday');
   const historyHint   = $('historyHint');
 
-  let SELECTED_DATE = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
+  let SELECTED_DATE = getToday();
   let IS_HISTORY    = false;
-
-  function isToday(dateStr) {
-    const t = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
-    return String(dateStr || '') === String(t);
-  }
 
   function setReadOnlyMode(readOnly) {
     IS_HISTORY = !!readOnly;
@@ -362,24 +306,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const disable = (el, val) => { if (el) el.disabled = !!val; };
     disable(btnSave, readOnly);
     disable(btnClear, readOnly);
-    disable(btnPDF, false);   // export siempre disponible si hay filas
+    disable(btnPDF, false);
     disable(btnPrint, false);
     disable(btnExcel, false);
 
-    // Inputs principales
     disable(proveedorInput, readOnly);
-    disable(ubicacionInput, readOnly);
+    // ubicación puede estar lockeada por wizard; aquí solo no tocar si está lock
+    if (ubicacionInput) {
+      if (!ubicacionInput.dataset.locked) disable(ubicacionInput, readOnly);
+    }
+
     disable(searchInput, readOnly);
     disable(btnScan, readOnly);
+    const btnOpenManual = document.getElementById('btnOpenManual');
     disable(btnOpenManual, readOnly);
 
-    // Detener scanner si se pasa a historial
     if (readOnly) {
       try { stopScanner(); } catch (_) {}
       if (scanWrap) scanWrap.classList.remove('active');
     }
 
-    // Tabla: bloquear edición / eliminar
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
       const venc = tr.querySelector('.vencimiento');
@@ -389,13 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (del) del.disabled = readOnly;
     });
 
-    if (historyHint) {
-      historyHint.classList.toggle('d-none', !readOnly);
-    }
-  }
-
-  function getCurrentDocId() {
-    return INVENTARIO_BINS[CURRENT_INVENTARIO];
+    if (historyHint) historyHint.classList.toggle('d-none', !readOnly);
   }
 
   let fpHistory = null;
@@ -405,38 +345,227 @@ document.addEventListener('DOMContentLoaded', async () => {
     const docId = getCurrentDocId();
     const dates = await getHistoryDates(docId).catch(() => []);
     historySet = new Set((dates || []).filter(Boolean));
-    if (fpHistory) {
-      fpHistory.redraw();
+    if (fpHistory) fpHistory.redraw();
+  }
+
+  function parseNum(v) {
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function recalcTotals() {
+    let lineas = 0;
+    let tCantidad = 0;
+
+    [...body.getElementsByTagName('tr')].forEach(tr => {
+      const qty = parseNum(tr.querySelector('.qty') && tr.querySelector('.qty').value);
+      if (qty > 0) { lineas++; tCantidad += qty; }
+    });
+
+    $('tLineas').textContent   = lineas;
+    $('tCantidad').textContent = tCantidad;
+
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const hasRows = body.rows.length > 0;
+    btnPDF.disabled   = !hasRows;
+    btnPrint.disabled = !hasRows;
+    btnExcel.disabled = !hasRows;
+    btnClear.disabled = !hasRows && !(proveedorInput.value.trim() || (ubicacionInput && ubicacionInput.value.trim()));
+  }
+
+  function renumber() {
+    [...body.getElementsByTagName('tr')].forEach((row, idx) => {
+      row.cells[0].textContent = (body.rows.length - idx);
+    });
+  }
+
+  // =========================
+  // Fix bug foco móvil en "Sumar cantidades"
+  // =========================
+  let LAST_DUPLICATE_QTY_INPUT = null;
+  let LOCK_SEARCH_FOCUS_UNTIL = 0;
+
+  function lockSearchFocusFor(ms, qtyInput) {
+    LAST_DUPLICATE_QTY_INPUT = qtyInput || null;
+    LOCK_SEARCH_FOCUS_UNTIL = Date.now() + (ms || 800);
+  }
+
+  function maybeBlockSearchFocus(target) {
+    if (target !== searchInput) return false;
+    if (Date.now() <= LOCK_SEARCH_FOCUS_UNTIL && LAST_DUPLICATE_QTY_INPUT) {
+      // devolver foco a la cantidad
+      setTimeout(() => {
+        try { LAST_DUPLICATE_QTY_INPUT.focus({ preventScroll: true }); } catch (_) { LAST_DUPLICATE_QTY_INPUT.focus(); }
+      }, 0);
+      return true;
+    }
+    return false;
+  }
+
+  function centerOnElement(el) {
+    if (!el) return;
+    setTimeout(() => {
+      const rect = el.getBoundingClientRect();
+      const absoluteTop = rect.top + window.pageYOffset;
+      const middle = absoluteTop - (window.innerHeight / 2) + rect.height / 2;
+      window.scrollTo({ top: middle, behavior: 'smooth' });
+    }, 0);
+  }
+
+  document.addEventListener('focusin', (e) => {
+    const t = e.target;
+    if (maybeBlockSearchFocus(t)) return;
+
+    if (t === searchInput || (t && t.classList && t.classList.contains('qty'))) {
+      centerOnElement(t);
+    }
+  });
+
+  // =========================
+  // Agregar filas / duplicados
+  // =========================
+  function findExistingRow(barcode, codInvent) {
+    const barcodeTrim = (barcode || '').toString().trim();
+    const codInvTrim  = (codInvent || '').toString().trim();
+    const rows = [...body.getElementsByTagName('tr')];
+    for (const tr of rows) {
+      const rowBarcode = tr.cells[1]?.innerText.trim() || '';
+      const rowCodInv  = tr.cells[3]?.innerText.trim() || '';
+      const sameBarcode = barcodeTrim && rowBarcode && rowBarcode === barcodeTrim;
+      const sameCodInv  = codInvTrim && rowCodInv && rowCodInv === codInvTrim;
+      if ((sameBarcode && sameCodInv) || sameBarcode || sameCodInv) return tr;
+    }
+    return null;
+  }
+
+  function addRow({ barcode, nombre, codInvent, bodega = '', fechaVenc = '', cantidad = '', skipDuplicateCheck = false }) {
+    if (!skipDuplicateCheck) {
+      const existing = findExistingRow(barcode, codInvent);
+      if (existing) {
+        Swal.fire({
+          title: 'Producto ya agregado',
+          text: 'Este producto ya existe en la tabla. ¿Desea sumar la cantidad a la existente o cancelar?',
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sumar cantidades',
+          cancelButtonText: 'Cancelar'
+        }).then(res => {
+          if (res.isConfirmed) {
+            const qtyInput = existing.querySelector('.qty');
+            const currentQty = parseNum(qtyInput && qtyInput.value);
+            const addQty = parseNum(cantidad);
+            if (addQty > 0 && qtyInput) {
+              qtyInput.value = currentQty + addQty;
+              recalcTotals();
+            }
+            // asegurar foco en cantidad y bloquear refocus accidental al searchInput en móvil
+            if (qtyInput) {
+              lockSearchFocusFor(1200, qtyInput);
+              setTimeout(() => {
+                try { qtyInput.focus({ preventScroll: true }); } catch (_) { qtyInput.focus(); }
+              }, 0);
+            }
+            existing.classList.add('table-warning');
+            setTimeout(() => existing.classList.remove('table-warning'), 800);
+          }
+        });
+        return;
+      }
+    }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td></td>' +
+      '<td>' + (barcode || '') + '</td>' +
+      '<td>' + (nombre || '') + '</td>' +
+      '<td>' + (codInvent || 'N/A') + '</td>' +
+      '<td>' + (bodega || '') + '</td>' +
+      '<td><input type="number" class="form-control form-control-sm qty" inputmode="numeric" min="0" step="1" value="' + (cantidad || '') + '"></td>' +
+      '<td><input type="date" class="form-control form-control-sm vencimiento" value="' + (fechaVenc || '') + '"></td>' +
+      '<td><button class="btn btn-outline-danger btn-sm" title="Eliminar fila"><i class="fas fa-trash"></i></button></td>';
+
+    body.insertBefore(tr, body.firstChild);
+    renumber();
+    if (suggestions) suggestions.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+
+    const venc   = tr.querySelector('.vencimiento');
+    const qty    = tr.querySelector('.qty');
+    const delBtn = tr.querySelector('button');
+
+    if (venc) {
+      venc.addEventListener('focus', () => { try { if (venc.showPicker) venc.showPicker(); } catch (_) {} });
+      venc.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); if (searchInput) searchInput.focus(); }
+      });
+    }
+
+    if (qty) {
+      qty.addEventListener('input', recalcTotals);
+      qty.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); if (venc) venc.focus(); }
+      });
+    }
+
+    delBtn.addEventListener('click', () => {
+      Swal.fire({
+        title: '¿Eliminar ítem?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar'
+      }).then(res => {
+        if (res.isConfirmed) {
+          tr.remove();
+          renumber();
+          recalcTotals();
+          updateButtons();
+        }
+      });
+    });
+
+    recalcTotals();
+    updateButtons();
+  }
+
+  function addRowAndFocus({ barcode, nombre, codInvent, bodega, fechaVenc }) {
+    addRow({ barcode, nombre, codInvent, bodega, fechaVenc });
+    const firstRow = body.firstElementChild;
+    if (firstRow) {
+      const qty  = firstRow.querySelector('.qty');
+      if (qty) qty.focus();
     }
   }
 
+  function sanitizeName(s) {
+    return (s || '').toString().trim().replace(/\s+/g, '_').replace(/[^\w\-.]/g, '_');
+  }
+
+  // =========================
+  // Carga por fecha
+  // =========================
   async function loadForDate(dateStr) {
-    const day = (typeof dateStr === 'string' && dateStr) ? dateStr : (typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().split('T')[0]);
+    const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getToday();
     SELECTED_DATE = day;
 
-    // limpiar UI
     body.innerHTML = '';
     proveedorInput.value = '';
-    if (ubicacionInput) ubicacionInput.value = '';
+    if (ubicacionInput && !ubicacionInput.dataset.locked) ubicacionInput.value = '';
     recalcTotals();
     updateButtons();
 
-    const isHistory = day !== (typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().split('T')[0]);
+    const isHistory = day !== getToday();
     setReadOnlyMode(isHistory);
 
     try {
-      // 1) Si existen sesiones para el día, cargamos la más reciente
-      let record = await loadLatestInventorySessionFromFirestore(getCurrentDocId(), day);
-      // 2) Compatibilidad: si no hay sesiones, usamos el documento del día (modo legacy)
-      if (!record || !record.items) {
-        record = await loadInventoryFromFirestore(getCurrentDocId(), day);
-      }
+      const record = await loadInventoryFromFirestore(getCurrentDocId(), day);
       if (record && record.items && Array.isArray(record.items)) {
-        if (record.meta && record.meta.proveedor) {
-          proveedorInput.value = record.meta.proveedor;
-        }
+        if (record.meta && record.meta.proveedor) proveedorInput.value = record.meta.proveedor;
         if (record.meta && record.meta.ubicacion) {
-          if (ubicacionInput) ubicacionInput.value = record.meta.ubicacion;
+          // solo escribir si no está lockeada por wizard
+          if (ubicacionInput && !ubicacionInput.dataset.locked) ubicacionInput.value = record.meta.ubicacion;
         }
         record.items.forEach(it => {
           addRow({
@@ -455,25 +584,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error al cargar historial:', e);
     }
 
-    // aplicar readonly también a filas ya renderizadas
     if (isHistory) {
-      [...body.querySelectorAll('input,button')].forEach(el => {
-        if (el.tagName === 'INPUT') el.disabled = true;
-        if (el.tagName === 'BUTTON') el.disabled = true;
-      });
+      [...body.querySelectorAll('input,button')].forEach(el => el.disabled = true);
     }
   }
 
-  // Cargar fechas con historial (para puntos azules)
+  // =========================
+  // Calendario historial
+  // =========================
   await refreshHistoryDates();
 
-  // Inicializar calendario
   if (historyDateEl && window.flatpickr) {
     fpHistory = window.flatpickr(historyDateEl, {
       dateFormat: 'Y-m-d',
       defaultDate: SELECTED_DATE,
       locale: (window.flatpickr.l10ns && window.flatpickr.l10ns.es) ? window.flatpickr.l10ns.es : undefined,
-      onChange: async (selectedDates, dateStr) => {
+      onChange: async (_selectedDates, dateStr) => {
         if (!dateStr) return;
         await loadForDate(dateStr);
       },
@@ -481,67 +607,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const d = dayElem.dateObj;
         if (!d) return;
         const key = d.toISOString().split('T')[0];
-        if (historySet.has(key)) {
-          dayElem.classList.add('has-history');
-        }
+        if (historySet.has(key)) dayElem.classList.add('has-history');
       }
     });
-  }
-
-  // Refrescar estilos de días con historial después de crear el calendario
-  if (fpHistory && fpHistory.redraw) {
     fpHistory.redraw();
   }
 
   if (btnToday) {
     btnToday.addEventListener('click', async () => {
-      const today = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
+      const today = getToday();
       if (fpHistory) fpHistory.setDate(today, true);
       else await loadForDate(today);
     });
   }
 
-  function sanitizeName(s) {
-    return (s || '').toString().trim()
-      .replace(/\s+/g, '_')
-      .replace(/[^\w\-.]/g, '_');
-  }
+  // =========================
+  // Proveedores + Catálogo (preload)
+  // =========================
+  await (typeof preloadProviders === 'function' ? preloadProviders().catch(() => {}) : Promise.resolve());
+  await (typeof preloadCatalog === 'function' ? preloadCatalog().catch(() => {}) : Promise.resolve());
 
-  if (inventarioSelect) {
-    inventarioSelect.value = CURRENT_INVENTARIO;
-  }
-
-  const searchInput = $('searchInput');
-  const btnScan     = $('btnScan');
-  const scanWrap    = $('scanWrap');
-  const scanVideo   = $('scanVideo');
-  const btnScanStop = $('btnScanStop');
-  const fileScan    = $('fileScan');
-
-  let mediaStream = null;
-  let scanInterval = null;
-  let detector = null;
-
-  function centerOnElement(el) {
-    if (!el) return;
-    setTimeout(() => {
-      const rect        = el.getBoundingClientRect();
-      const absoluteTop = rect.top + window.pageYOffset;
-      const middle      = absoluteTop - (window.innerHeight / 2) + rect.height / 2;
-      window.scrollTo({ top: middle, behavior: 'smooth' });
-    }, 0);
-  }
-
-  document.addEventListener('focusin', (e) => {
-    const t = e.target;
-    if (t === searchInput || t.classList.contains('qty')) {
-      centerOnElement(t);
-    }
-  });
-
-  const provSuggestions = $('provSuggestions');
-  await preloadProviders().catch(() => {});
-
+  // Proveedores autocompletar
   let provFocus = -1;
   proveedorInput.addEventListener('input', () => {
     const q = (proveedorInput.value || '').trim().toLowerCase();
@@ -554,11 +640,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter(p => p.toLowerCase().includes(q))
         .slice(0, 50)
         .forEach(name => {
-          const li       = document.createElement('li');
-          li.className   = 'list-group-item';
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
           li.textContent = name;
           li.addEventListener('click', () => {
-            proveedorInput.value   = name;
+            proveedorInput.value = name;
             provSuggestions.innerHTML = '';
           });
           provSuggestions.appendChild(li);
@@ -600,73 +686,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     provSuggestions.innerHTML = '';
     provFocus = -1;
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      provSuggestions.innerHTML = '';
-      provFocus = -1;
-    }
-  });
 
-  function openManualModalFromSearch(rawQuery) {
-    const q = (rawQuery || '').trim();
-    mCodigo.value   = '';
-    mNombre.value   = '';
-    mCodInv.value   = 'N/A';
-    mBodega.value   = '';
-    mCantidad.value = '';
-    if (q) {
-      if (/^\d+$/.test(q)) mCodigo.value = q;
-      else mNombre.value = q;
-    }
-    manualModal.show();
-    setTimeout(() => mCodigo.focus(), 200);
-  }
-
-  const btnOpenManual = document.getElementById('btnOpenManual');
-  btnOpenManual.addEventListener('click', () => {
-    const raw = (searchInput.value || '').replace(/\r|\n/g, '').trim();
-    openManualModalFromSearch(raw);
-  });
-
-  $('btnAddManual').addEventListener('click', () => {
-    const codigo   = (mCodigo.value || '').trim();
-    const nombre   = (mNombre.value || '').trim();
-    const codInv   = (mCodInv.value || 'N/A').trim() || 'N/A';
-    const bodega   = (mBodega.value || '').trim();
-    const fechaVenc= (mVencimiento.value || '').trim();
-    const qty      = parseNum(mCantidad.value);
-
-    if (!codigo || !nombre) {
-      Swal.fire('Campos faltantes', 'Ingrese código de barras y nombre.', 'info');
-      return;
-    }
-    if (!(qty > 0)) {
-      Swal.fire('Cantidad inválida', 'La cantidad debe ser mayor que 0.', 'warning');
-      return;
-    }
-
-    addRow({ barcode: codigo, nombre, codInvent: codInv, bodega, fechaVenc, cantidad: qty });
-    manualModal.hide();
-    searchInput.focus();
-  });
-
-  const suggestions = $('suggestions');
-  let currentFocus  = -1;
-
-  await preloadCatalog().catch(() => {});
+  // Catálogo sugerencias
+  let currentFocus = -1;
 
   searchInput.addEventListener('input', () => {
     const raw = (searchInput.value || '').replace(/\r|\n/g, '').trim();
-    const q   = raw.toLowerCase();
+    const q = raw.toLowerCase();
     suggestions.innerHTML = '';
     currentFocus = -1;
     if (!q) return;
 
     loadProductsFromGoogleSheets().then(rows => {
       const filtered = (rows || []).filter(r => {
-        const nombre    = (r[0] || '').toLowerCase();
+        const nombre = (r[0] || '').toLowerCase();
         const codInvent = (r[1] || '').toLowerCase();
-        const barcode   = (r[3] || '').toLowerCase();
+        const barcode = (r[3] || '').toLowerCase();
         return nombre.includes(q) || barcode.includes(q) || codInvent.includes(q);
       });
 
@@ -679,13 +714,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       filtered.slice(0, 50).forEach(prod => {
-        const li        = document.createElement('li');
-        li.className    = 'list-group-item';
-        const nombre    = prod[0] || '';
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        const nombre = prod[0] || '';
         const codInvent = prod[1] || 'N/A';
-        const bodega    = prod[2] || '';
-        const barcode   = prod[3] || 'sin código';
-        li.textContent  = nombre + ' (' + barcode + ') [' + codInvent + '] — ' + bodega;
+        const bodega = prod[2] || '';
+        const barcode = prod[3] || 'sin código';
+        li.textContent = nombre + ' (' + barcode + ') [' + codInvent + '] — ' + bodega;
         li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent, bodega }));
         suggestions.appendChild(li);
       });
@@ -698,6 +733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
     else if (e.key === 'Enter') {
       e.preventDefault();
+
       if (currentFocus > -1 && items[currentFocus]) {
         items[currentFocus].click();
         return;
@@ -707,20 +743,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!raw) return;
 
       const rows = (window.CATALOGO_CACHE || []);
-      let match  = null;
+      let match = null;
       for (const r of rows) {
-        const barcode   = r[3] ? String(r[3]).trim() : '';
+        const barcode = r[3] ? String(r[3]).trim() : '';
         const codInvent = r[1] ? String(r[1]).trim() : '';
-        if (barcode === raw || codInvent === raw) {
-          match = r;
-          break;
-        }
+        if (barcode === raw || codInvent === raw) { match = r; break; }
       }
       if (match) {
-        const nombre    = match[0] || '';
+        const nombre = match[0] || '';
         const codInvent = match[1] || 'N/A';
-        const bodega    = match[2] || '';
-        const barcode   = match[3] || raw;
+        const bodega = match[2] || '';
+        const barcode = match[3] || raw;
         addRowAndFocus({ barcode, nombre, codInvent, bodega });
       }
     }
@@ -741,35 +774,79 @@ document.addEventListener('DOMContentLoaded', async () => {
     suggestions.innerHTML = '';
     currentFocus = -1;
   });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       suggestions.innerHTML = '';
+      provSuggestions.innerHTML = '';
       currentFocus = -1;
+      provFocus = -1;
     }
   });
+
+  // Manual modal (+)
+  function openManualModalFromSearch(rawQuery) {
+    const q = (rawQuery || '').trim();
+    mCodigo.value = '';
+    mNombre.value = '';
+    mCodInv.value = 'N/A';
+    mBodega.value = '';
+    mCantidad.value = '';
+    if (q) {
+      if (/^\d+$/.test(q)) mCodigo.value = q;
+      else mNombre.value = q;
+    }
+    manualModal.show();
+    setTimeout(() => mCodigo.focus(), 200);
+  }
+
+  const btnOpenManual = document.getElementById('btnOpenManual');
+  btnOpenManual.addEventListener('click', () => {
+    const raw = (searchInput.value || '').replace(/\r|\n/g, '').trim();
+    openManualModalFromSearch(raw);
+  });
+
+  $('btnAddManual').addEventListener('click', () => {
+    const codigo = (mCodigo.value || '').trim();
+    const nombre = (mNombre.value || '').trim();
+    const codInv = (mCodInv.value || 'N/A').trim() || 'N/A';
+    const bodega = (mBodega.value || '').trim();
+    const fechaVenc = (mVencimiento.value || '').trim();
+    const qty = parseNum(mCantidad.value);
+
+    if (!codigo || !nombre) {
+      Swal.fire('Campos faltantes', 'Ingrese código de barras y nombre.', 'info');
+      return;
+    }
+    if (!(qty > 0)) {
+      Swal.fire('Cantidad inválida', 'La cantidad debe ser mayor que 0.', 'warning');
+      return;
+    }
+
+    addRow({ barcode: codigo, nombre, codInvent: codInv, bodega, fechaVenc, cantidad: qty });
+    manualModal.hide();
+    searchInput.focus();
+  });
+
+  // =========================
+  // Scanner
+  // =========================
+  let mediaStream = null;
+  let scanInterval = null;
+  let detector = null;
 
   async function startScanner() {
     if (!btnScan || !scanWrap) return;
 
     if (!('BarcodeDetector' in window)) {
-      Swal.fire(
-        'Escáner limitado',
-        'Este navegador no soporta escaneo en vivo. Usa la opción de archivo o la pistola de códigos.',
-        'info'
-      );
-      if (fileScan) {
-        fileScan.click();
-      }
+      Swal.fire('Escáner limitado', 'Este navegador no soporta escaneo en vivo. Usa la opción de archivo o la pistola de códigos.', 'info');
+      if (fileScan) fileScan.click();
       return;
     }
 
     try {
-      detector = new window.BarcodeDetector({
-        formats: ['ean_13','code_128','code_39','ean_8','upc_a','upc_e']
-      });
-    } catch (e) {
-      detector = null;
-    }
+      detector = new window.BarcodeDetector({ formats: ['ean_13','code_128','code_39','ean_8','upc_a','upc_e'] });
+    } catch (_) { detector = null; }
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       Swal.fire('No compatible', 'Tu navegador no permite usar la cámara.', 'info');
@@ -777,10 +854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false
-      });
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       if (!scanVideo) return;
       scanVideo.srcObject = mediaStream;
       await scanVideo.play();
@@ -793,12 +867,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const barcodes = await detector.detect(scanVideo);
             if (barcodes && barcodes.length) {
               const raw = String(barcodes[0].rawValue || '').trim();
-              if (raw) {
-                await onBarcodeFound(raw);
-              }
+              if (raw) await onBarcodeFound(raw);
             }
-          } catch (_e) {
-          }
+          } catch (_) {}
         }, 250);
       }
     } catch (err) {
@@ -808,24 +879,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function stopScanner() {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      mediaStream = null;
-    }
-    if (scanWrap) {
-      scanWrap.classList.remove('active');
-    }
+    if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    if (scanWrap) scanWrap.classList.remove('active');
   }
 
   async function onBarcodeFound(code) {
     await stopScanner();
     if (!searchInput) return;
     searchInput.value = code;
-    const e = new KeyboardEvent('keydown', { key: 'Enter' });
+    // Disparar el handler de Enter
+    const e = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
     searchInput.dispatchEvent(e);
   }
 
@@ -835,193 +899,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!f) return;
       const m = (f.name || '').match(/\d{8,}/);
       if (m) {
-        if (searchInput) {
-          searchInput.value = m[0];
-          const e = new KeyboardEvent('keydown', { key: 'Enter' });
-          searchInput.dispatchEvent(e);
-        }
+        searchInput.value = m[0];
+        const e = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+        searchInput.dispatchEvent(e);
       } else {
-        Swal.fire(
-          'Atención',
-          'No se pudo leer el código desde la imagen. Prueba con la cámara o la pistola.',
-          'info'
-        );
+        Swal.fire('Atención', 'No se pudo leer el código desde la imagen. Prueba con la cámara o la pistola.', 'info');
       }
     });
   }
 
-  if (btnScan) {
-    btnScan.addEventListener('click', startScanner);
-  }
-  if (btnScanStop) {
-    btnScanStop.addEventListener('click', stopScanner);
-  }
+  if (btnScan) btnScan.addEventListener('click', startScanner);
+  if (btnScanStop) btnScanStop.addEventListener('click', stopScanner);
 
-  function addRowAndFocus({ barcode, nombre, codInvent, bodega, fechaVenc }) {
-    addRow({ barcode, nombre, codInvent, bodega, fechaVenc });
-    const firstRow = body.firstElementChild;
-    if (firstRow) {
-      const venc = firstRow.querySelector('.vencimiento');
-      const qty  = firstRow.querySelector('.qty');
-      if (qty) qty.focus();
-      else if (venc) venc.focus();
-    }
-  }
-
-  // Busca si el producto ya existe en la tabla (por código de inventario y/o código de barras)
-  function findExistingRow(barcode, codInvent) {
-    const barcodeTrim = (barcode || '').toString().trim();
-    const codInvTrim  = (codInvent || '').toString().trim();
-    const rows = [...body.getElementsByTagName('tr')];
-    for (const tr of rows) {
-      const rowBarcode = tr.cells[1]?.innerText.trim() || '';
-      const rowCodInv  = tr.cells[3]?.innerText.trim() || '';
-      const sameBarcode = barcodeTrim && rowBarcode && rowBarcode === barcodeTrim;
-      const sameCodInv  = codInvTrim && rowCodInv && rowCodInv === codInvTrim;
-      if ((sameBarcode && sameCodInv) || sameBarcode || sameCodInv) {
-        return tr;
-      }
-    }
-    return null;
-  }
-
-  function addRow({ barcode, nombre, codInvent, bodega = '', fechaVenc = '', cantidad = '', skipDuplicateCheck = false }) {
-    // Control de duplicados: pregunta si desea sumar cantidades o cancelar
-    if (!skipDuplicateCheck) {
-      const existing = findExistingRow(barcode, codInvent);
-      if (existing) {
-        Swal.fire({
-          title: 'Producto ya agregado',
-          text: 'Este producto ya existe en la tabla. ¿Desea sumar la cantidad a la existente o cancelar?',
-          icon: 'question',
-          showCancelButton: true,
-          confirmButtonText: 'Sumar cantidades',
-          cancelButtonText: 'Cancelar'
-        }).then(res => {
-          if (res.isConfirmed) {
-            const qtyInput = existing.querySelector('.qty');
-            const currentQty = parseNum(qtyInput && qtyInput.value);
-            const addQty = parseNum(cantidad);
-            if (addQty > 0 && qtyInput) {
-              qtyInput.value = currentQty + addQty;
-              recalcTotals();
-            }
-            // En cualquier caso, enfocar y resaltar la fila existente
-            if (qtyInput) qtyInput.focus();
-            existing.classList.add('table-warning');
-            setTimeout(() => existing.classList.remove('table-warning'), 800);
-          }
-        });
-        return;
-      }
-    }
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = '' +
-      '<td></td>' +
-      '<td>' + (barcode || '') + '</td>' +
-      '<td>' + (nombre || '') + '</td>' +
-      '<td>' + (codInvent || 'N/A') + '</td>' +
-      '<td>' + (bodega || '') + '</td>' +
-      '<td><input type="number" class="form-control form-control-sm qty" min="0" step="1" value="' + (cantidad || '') + '"></td>' +
-      '<td><input type="date" class="form-control form-control-sm vencimiento" value="' + (fechaVenc || '') + '"></td>' +
-      '<td><button class="btn btn-outline-danger btn-sm" title="Eliminar fila"><i class="fas fa-trash"></i></button></td>';
-    body.insertBefore(tr, body.firstChild);
-    renumber();
-    suggestions.innerHTML = '';
-    if (searchInput) searchInput.value = '';
-
-    const venc   = tr.querySelector('.vencimiento');
-    const qty    = tr.querySelector('.qty');
-    const delBtn = tr.querySelector('button');
-
-    if (venc) {
-      venc.addEventListener('focus', () => {
-        try {
-          if (venc.showPicker) venc.showPicker();
-        } catch (e) {}
-      });
-      venc.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (searchInput) searchInput.focus();
-        }
-      });
-    }
-
-    if (qty) {
-      qty.addEventListener('input', recalcTotals);
-      qty.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (venc) venc.focus();
-        }
-      });
-    }
-
-    delBtn.addEventListener('click', () => {
-      Swal.fire({
-        title: '¿Eliminar ítem?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar'
-      }).then(res => {
-        if (res.isConfirmed) {
-          tr.remove();
-          renumber();
-          recalcTotals();
-          updateButtons();
-        }
-      });
-    });
-
-    recalcTotals();
-    updateButtons();
-  }
-
-  function renumber() {
-    [...body.getElementsByTagName('tr')].forEach((row, idx) => {
-      row.cells[0].textContent = (body.rows.length - idx);
-    });
-  }
-
-  function parseNum(v) {
-    const n = parseFloat(v);
-    return isNaN(n) ? 0 : n;
-  }
-
-  function recalcTotals() {
-    let lineas    = 0;
-    let tCantidad = 0;
-
-    [...body.getElementsByTagName('tr')].forEach(tr => {
-      const qty = parseNum(tr.querySelector('.qty') && tr.querySelector('.qty').value);
-      if (qty > 0) {
-        lineas++;
-        tCantidad += qty;
-      }
-    });
-
-    $('tLineas').textContent   = lineas;
-    $('tCantidad').textContent = tCantidad;
-
-    updateButtons();
-  }
-
-  function updateButtons() {
-    const hasRows = body.rows.length > 0;
-    btnPDF.disabled   = !hasRows;
-    btnPrint.disabled = !hasRows;
-    btnExcel.disabled = !hasRows;
-    btnClear.disabled = !hasRows && !(proveedorInput.value.trim() || (ubicacionInput && ubicacionInput.value.trim()));
-  }
-
+  // =========================
+  // Guardar / limpiar / exportar
+  // =========================
   btnSave.addEventListener('click', async () => {
-    // Si hay una sesión activa, este botón actúa como "Guardar avance"
-    if (CURRENT_SESSION_ID) {
-      await saveCurrentToSession({ finalize: false, requireValidation: true });
-      return;
-    }
     if (!ubicacionInput || !ubicacionInput.value.trim()) {
       Swal.fire('Ubicación requerida', 'Ingrese la ubicación del producto.', 'info');
       return;
@@ -1031,16 +924,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    let wizCfg = {};
+    try { wizCfg = JSON.parse(localStorage.getItem(WIZ_CFG_KEY) || '{}'); } catch (_) { wizCfg = {}; }
+
     const items = [...body.getElementsByTagName('tr')].map(tr => {
-      const qty       = parseNum(tr.querySelector('.qty').value);
+      const qty = parseNum(tr.querySelector('.qty').value);
       const fechaVenc = (tr.querySelector('.vencimiento')?.value || '').trim();
       return {
-        codigo_barras:     tr.cells[1].innerText.trim(),
-        nombre:            tr.cells[2].innerText.trim(),
+        codigo_barras: tr.cells[1].innerText.trim(),
+        nombre: tr.cells[2].innerText.trim(),
         codigo_inventario: tr.cells[3].innerText.trim(),
-        bodega:            tr.cells[4].innerText.trim(),
+        bodega: tr.cells[4].innerText.trim(),
         fecha_vencimiento: fechaVenc,
-        cantidad:          qty
+        cantidad: qty
       };
     });
 
@@ -1050,17 +946,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         proveedor: proveedorInput.value.trim(),
         ubicacion: ubicacionInput.value.trim(),
         hoja_inventario: CURRENT_INVENTARIO,
-        fechaInventario: new Date().toISOString()
+        fechaInventario: new Date().toISOString(),
+        wizard: wizCfg || {}
       },
       items,
       totales: {
-        lineas:         Number($('tLineas').textContent),
+        lineas: Number($('tLineas').textContent),
         cantidad_total: Number($('tCantidad').textContent)
       }
     };
 
     try {
-      await saveInventoryToFirestore(getCurrentDocId(), payload); // guarda en {docId}/historial/{hoy}
+      await saveInventoryToFirestore(getCurrentDocId(), payload);
       const msgEl = $('successMessage');
       if (msgEl) {
         msgEl.textContent = 'Inventario guardado correctamente.';
@@ -1075,158 +972,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Cargar estado inicial (fecha seleccionada)
-  await loadForDate(SELECTED_DATE);
-
-  inventarioSelect.addEventListener('change', async () => {
-    CURRENT_INVENTARIO = inventarioSelect.value;
-    localStorage.setItem('TR_AVM_CURRENT_INVENTARIO', CURRENT_INVENTARIO);
-
-    await refreshHistoryDates();
-    if (fpHistory && fpHistory.redraw) fpHistory.redraw();
-    await loadForDate(SELECTED_DATE);
-  });
-
-  btnPDF.addEventListener('click', () => exportPDF(false));
-  btnPrint.addEventListener('click', () => exportPDF(true));
-
-  function exportPDF(openWindow) {
-    if (body.rows.length === 0) return;
-    const jsPDF = window.jspdf.jsPDF;
-    const doc   = new jsPDF();
-    const fecha = new Date().toISOString().split('T')[0];
-
-    doc.setFontSize(12);
-    doc.text('Tienda: AVENIDA MORAZÁN', 10, 10);
-    doc.text('Ubicación: ' + (ubicacionInput ? (ubicacionInput.value || '-') : '-'), 10, 18);
-    if (proveedorInput.value.trim()) {
-      doc.text('Proveedor: ' + proveedorInput.value, 10, 26);
-    }
-    if (inventarioSelect) {
-      doc.text('Hoja de inventario: ' + inventarioSelect.value, 10, 34);
-    } else {
-      doc.text('Fecha: ' + fecha, 10, 34);
-    }
-
-    const rows = [...body.getElementsByTagName('tr')].map((tr, i) => {
-      const bodega = tr.cells[4].innerText;
-      const qty    = tr.querySelector('.qty').value;
-      const fechaV = (tr.querySelector('.vencimiento')?.value || '');
-      return [
-        i + 1,
-        tr.cells[1].innerText,
-        tr.cells[2].innerText,
-        tr.cells[3].innerText,
-        bodega,
-        qty,
-        fechaV
-      ];
-    });
-
-    doc.autoTable({
-      startY: 40,
-      head: [['#','Código barras','Producto','Cod. Inv.','Bodega','Cant.','F. vencimiento']],
-      body: rows,
-      styles: { fontSize: 9, cellPadding: 2 }
-    });
-
-    const y = doc.lastAutoTable.finalY + 6;
-    doc.text(
-      'Líneas: ' + $('tLineas').textContent + '  |  Cantidad total: ' + $('tCantidad').textContent,
-      10,
-      y
-    );
-
-    const name = 'INVENTARIO_AVM_' + sanitizeName(ubicacionInput ? (ubicacionInput.value || '') : '') + '_' + (inventarioSelect ? inventarioSelect.value : '') + '_' + fecha + '.pdf';
-    if (openWindow) {
-      doc.output('dataurlnewwindow');
-    } else {
-      doc.save(name);
-    }
-  }
-
-  // Exportador Excel (sin cambios)
-  btnExcel.addEventListener('click', () => {
-    if (body.rows.length === 0) return;
-
-    const fechaFis = new Date().toISOString().split('T')[0];
-    const ubicacionValor = ubicacionInput ? (ubicacionInput.value || '') : '';
-
-    const data = [[
-      'fechafis',
-      'idgrupo',
-      'idsubgrupo',
-      'idarticulo',
-      'descrip',
-      'codigobarra',
-      'cod_unidad',
-      'ubicacion',
-      'Bodega_5'
-    ]];
-
-    const catalogo = (window.CATALOGO_CACHE || []);
-
-    [...body.getElementsByTagName('tr')].forEach(tr => {
-      const nombreUI       = tr.cells[2].innerText.trim();
-      const codInventUI    = tr.cells[3].innerText.trim();
-      const codigoBarrasUI = tr.cells[1].innerText.trim();
-      const qty            = parseNum(tr.querySelector('.qty').value);
-
-      let match = null;
-      if (catalogo && catalogo.length) {
-        match = catalogo.find(r => {
-          const idartCatalogo = (r[1] || '').toString().trim();
-          const codBarCatalog = (r[3] || '').toString().trim();
-          const sameCodInv    = codInventUI && idartCatalogo && idartCatalogo === codInventUI;
-          const sameBar       = codigoBarrasUI && codBarCatalog && codBarCatalog === codigoBarrasUI;
-          if (sameCodInv && sameBar) return true;
-          if (sameBar) return true;
-          if (sameCodInv) return true;
-          return false;
-        }) || null;
-      }
-
-      const descrip   = match ? ((match[0] || '').toString().trim() || nombreUI)          : nombreUI;
-      const idart     = match ? ((match[1] || '').toString().trim() || codInventUI)      : codInventUI;
-      const codBar    = match ? ((match[3] || '').toString().trim() || codigoBarrasUI)   : codigoBarrasUI;
-      const idgrupo   = match ? ((match[4] || '').toString().trim())                     : '';
-      const idsubgr   = match ? ((match[5] || '').toString().trim())                     : '';
-      const codUnidad = 6;
-
-      data.push([
-        fechaFis,
-        idgrupo,
-        idsubgr,
-        idart,
-        descrip,
-        codBar,
-        codUnidad,
-        ubicacionValor,
-        qty
-      ]);
-    });
-
-    const wb    = XLSX.utils.book_new();
-    const ws    = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-
-    const fechaArchivo = new Date().toISOString().split('T')[0];
-    const nombreArchivo =
-      'INVENTARIO_AVM_' +
-      sanitizeName(ubicacionValor) + '_' +
-      (inventarioSelect ? inventarioSelect.value : '') + '_' +
-      fechaArchivo + '.xlsx';
-
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob  = new Blob([wbout], { type: 'application/octet-stream' });
-    const a     = document.createElement('a');
-    a.href      = URL.createObjectURL(blob);
-    a.download  = nombreArchivo;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  });
-
   btnClear.addEventListener('click', () => {
     if (body.rows.length === 0 && !(proveedorInput.value.trim() || (ubicacionInput && ubicacionInput.value.trim()))) return;
     Swal.fire({
@@ -1239,38 +984,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res.isConfirmed) {
         body.innerHTML = '';
         proveedorInput.value = '';
-        if (ubicacionInput) ubicacionInput.value = '';
+        if (ubicacionInput && !ubicacionInput.dataset.locked) ubicacionInput.value = '';
         recalcTotals();
         updateButtons();
 
+        const payload = {
+          meta: {
+            tienda: 'AVENIDA MORAZÁN',
+            proveedor: '',
+            ubicacion: ubicacionInput ? (ubicacionInput.value || '') : '',
+            hoja_inventario: CURRENT_INVENTARIO,
+            fechaInventario: new Date().toISOString()
+          },
+          items: [],
+          totales: { lineas: 0, cantidad_total: 0 }
+        };
+
         try {
-          if (CURRENT_SESSION_ID) {
-            // Modo sesión: guardamos avance vacío en la sesión actual
-            await saveCurrentToSession({ finalize: false, requireValidation: false });
-          } else {
-            // Modo legacy: guardamos vacío en el doc de hoy
-            const payload = {
-              meta: {
-                tienda: 'AVENIDA MORAZÁN',
-                proveedor: '',
-                ubicacion: '',
-                hoja_inventario: CURRENT_INVENTARIO,
-                fechaInventario: new Date().toISOString()
-              },
-              items: [],
-              totales: {
-                lineas: 0,
-                cantidad_total: 0
-              }
-            };
-            await saveInventoryToFirestore(getCurrentDocId(), payload);
-          }
-          const msgEl = $('successMessage');
-          if (msgEl) {
-            msgEl.textContent = 'Inventario limpiado y guardado. Lista para empezar una nueva hoja.';
-            msgEl.style.display = 'block';
-            setTimeout(() => msgEl.style.display = 'none', 4000);
-          }
+          await saveInventoryToFirestore(getCurrentDocId(), payload);
           Swal.fire('Listo', 'Se limpió y guardó el estado vacío.', 'success');
           await refreshHistoryDates();
           if (fpHistory && fpHistory.redraw) fpHistory.redraw();
@@ -1280,6 +1011,146 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   });
+
+  btnPDF.addEventListener('click', () => exportPDF(false));
+  btnPrint.addEventListener('click', () => exportPDF(true));
+
+  function exportPDF(openWindow) {
+    if (body.rows.length === 0) return;
+    const jsPDF = window.jspdf.jsPDF;
+    const doc = new jsPDF();
+    const fecha = new Date().toISOString().split('T')[0];
+
+    doc.setFontSize(12);
+    doc.text('Tienda: AVENIDA MORAZÁN', 10, 10);
+    doc.text('Ubicación: ' + (ubicacionInput ? (ubicacionInput.value || '-') : '-'), 10, 18);
+    if (proveedorInput.value.trim()) doc.text('Proveedor: ' + proveedorInput.value, 10, 26);
+    doc.text('Hoja de inventario: ' + (inventarioSelect ? inventarioSelect.value : ''), 10, 34);
+
+    const rows = [...body.getElementsByTagName('tr')].map((tr, i) => {
+      const bodega = tr.cells[4].innerText;
+      const qty = tr.querySelector('.qty').value;
+      const fechaV = (tr.querySelector('.vencimiento')?.value || '');
+      return [i + 1, tr.cells[1].innerText, tr.cells[2].innerText, tr.cells[3].innerText, bodega, qty, fechaV];
+    });
+
+    doc.autoTable({
+      startY: 40,
+      head: [['#','Código barras','Producto','Cod. Inv.','Bodega','Cant.','F. vencimiento']],
+      body: rows,
+      styles: { fontSize: 9, cellPadding: 2 }
+    });
+
+    const y = doc.lastAutoTable.finalY + 6;
+    doc.text('Líneas: ' + $('tLineas').textContent + '  |  Cantidad total: ' + $('tCantidad').textContent, 10, y);
+
+    const name = 'INVENTARIO_AVM_' + sanitizeName(ubicacionInput ? (ubicacionInput.value || '') : '') + '_' +
+      (inventarioSelect ? inventarioSelect.value : '') + '_' + fecha + '.pdf';
+
+    if (openWindow) doc.output('dataurlnewwindow');
+    else doc.save(name);
+  }
+
+  btnExcel.addEventListener('click', () => {
+    if (body.rows.length === 0) return;
+
+    const fechaFis = new Date().toISOString().split('T')[0];
+    const ubicacionValor = ubicacionInput ? (ubicacionInput.value || '') : '';
+
+    const data = [[
+      'fechafis','idgrupo','idsubgrupo','idarticulo','descrip','codigobarra','cod_unidad','ubicacion','Bodega_5'
+    ]];
+
+    const catalogo = (window.CATALOGO_CACHE || []);
+
+    [...body.getElementsByTagName('tr')].forEach(tr => {
+      const nombreUI = tr.cells[2].innerText.trim();
+      const codInventUI = tr.cells[3].innerText.trim();
+      const codigoBarrasUI = tr.cells[1].innerText.trim();
+      const qty = parseNum(tr.querySelector('.qty').value);
+
+      let match = null;
+      if (catalogo && catalogo.length) {
+        match = catalogo.find(r => {
+          const idartCatalogo = (r[1] || '').toString().trim();
+          const codBarCatalog = (r[3] || '').toString().trim();
+          const sameCodInv = codInventUI && idartCatalogo && idartCatalogo === codInventUI;
+          const sameBar = codigoBarrasUI && codBarCatalog && codBarCatalog === codigoBarrasUI;
+          if (sameCodInv && sameBar) return true;
+          if (sameBar) return true;
+          if (sameCodInv) return true;
+          return false;
+        }) || null;
+      }
+
+      const descrip = match ? ((match[0] || '').toString().trim() || nombreUI) : nombreUI;
+      const idart = match ? ((match[1] || '').toString().trim() || codInventUI) : codInventUI;
+      const codBar = match ? ((match[3] || '').toString().trim() || codigoBarrasUI) : codigoBarrasUI;
+      const idgrupo = match ? ((match[4] || '').toString().trim()) : '';
+      const idsubgr = match ? ((match[5] || '').toString().trim()) : '';
+      const codUnidad = 6;
+
+      data.push([fechaFis, idgrupo, idsubgr, idart, descrip, codBar, codUnidad, ubicacionValor, qty]);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+
+    const fechaArchivo = new Date().toISOString().split('T')[0];
+    const nombreArchivo = 'INVENTARIO_AVM_' + sanitizeName(ubicacionValor) + '_' +
+      (inventarioSelect ? inventarioSelect.value : '') + '_' + fechaArchivo + '.xlsx';
+
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  // =========================
+  // Inventario select change
+  // =========================
+  inventarioSelect.addEventListener('change', async () => {
+    CURRENT_INVENTARIO = inventarioSelect.value;
+    localStorage.setItem('TR_AVM_CURRENT_INVENTARIO', CURRENT_INVENTARIO);
+
+    // Forzar wizard nuevo por hoja + día
+    setControlsEnabled(false);
+    lockUbicacion(false);
+    await refreshHistoryDates();
+    if (fpHistory && fpHistory.redraw) fpHistory.redraw();
+    await loadForDate(SELECTED_DATE);
+
+    // abrir wizard de nuevo
+    resetWizardVisibility();
+    await initWizardData();
+    showWizardIfNeeded();
+  });
+
+  // =========================
+  // Inicialización
+  // =========================
+  const modalInputs = [mCodigo, mNombre, mCodInv, mBodega, mVencimiento, mCantidad];
+  modalInputs.forEach((inp, idx) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (idx < modalInputs.length - 1) modalInputs[idx + 1].focus();
+        else $('btnAddManual').click();
+      }
+    });
+  });
+
+  // Cargar estado inicial (fecha seleccionada)
+  await loadForDate(SELECTED_DATE);
+
+  // Wizard: cargar data y mostrar si hace falta
+  await initWizardData();
+  showWizardIfNeeded();
 
   if (searchInput) searchInput.focus();
 });
