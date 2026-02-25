@@ -1,5 +1,69 @@
 // assets/js/inventario.js (Sesiones multiusuario sin login)
 document.addEventListener('DOMContentLoaded', async () => {
+
+  // === Wizard progresivo (según reglas de negocio) ===
+  function setWrapVisible(wrapEl, visible) {
+    if (!wrapEl) return;
+    wrapEl.classList.toggle('d-none', !visible);
+  }
+  function setControlEnabled(el, enabled) {
+    if (!el) return;
+    el.disabled = !enabled;
+  }
+
+  function updateWizardVisibility() {
+    const tipo = (wizTipo && wizTipo.value) ? String(wizTipo.value).trim() : '';
+    const isAverias = tipo === 'Averías';
+    const isAlmacen = tipo === 'Almacén';
+    const isSala    = tipo === 'Sala de venta';
+
+    // Visibilidad por tipo
+    setWrapVisible(wizAlmacenWrap, isAlmacen);
+    setWrapVisible(wizDependienteWrap, isSala);
+
+    // Progresivo: Sala aparece solo después de elegir Dependiente
+    const depOk = isSala && wizDependiente && String(wizDependiente.value || '').trim();
+    setWrapVisible(wizSalaWrap, !!depOk);
+
+    // Progresivo: Estante aparece solo después de elegir Sala
+    const salaOk = !!depOk && wizSala && String(wizSala.value || '').trim();
+    setWrapVisible(wizEstanteWrap, !!salaOk);
+
+    // Habilitar / deshabilitar controles
+    setControlEnabled(wizUbicacion, isAlmacen);
+    setControlEnabled(wizDependiente, isSala);
+    setControlEnabled(wizSala, !!depOk);
+    setControlEnabled(wizEstante, !!salaOk);
+
+    // Limpiar selecciones aguas abajo
+    if (!depOk) {
+      if (wizSala) wizSala.value = '';
+      if (wizEstante) wizEstante.value = '';
+    } else if (!salaOk) {
+      if (wizEstante) wizEstante.value = '';
+    }
+
+    // Validación de inicio
+    let canStart = false;
+    if (isAverias) {
+      canStart = true;
+    } else if (isAlmacen) {
+      canStart = !!(wizUbicacion && String(wizUbicacion.value || '').trim());
+    } else if (isSala) {
+      const estOk = salaOk && wizEstante && String(wizEstante.value || '').trim();
+      canStart = !!estOk;
+    }
+    if (wizStartBtn) wizStartBtn.disabled = !canStart;
+  }
+
+  // Hooks
+  if (wizTipo) wizTipo.addEventListener('change', () => { updateWizardVisibility(); });
+  if (wizUbicacion) wizUbicacion.addEventListener('change', () => { updateWizardVisibility(); });
+  if (wizDependiente) wizDependiente.addEventListener('change', () => { updateWizardVisibility(); });
+  if (wizSala) wizSala.addEventListener('change', () => { updateWizardVisibility(); });
+  if (wizEstante) wizEstante.addEventListener('change', () => { updateWizardVisibility(); });
+
+
   const $ = (id) => document.getElementById(id);
 
   // ===== Config tienda =====
@@ -819,7 +883,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       wizStartBtn?.addEventListener('click', onStart);
       wizardModal.show();
-    });
+    
+    try { updateWizardVisibility(); } catch (_) {}
+});
   }
 
   // ===== Sessions =====
