@@ -97,3 +97,7 @@ body {
   border-radius: 50%;
   background-color: #0d6efd;
 }
+
+
+#sessionsList .list-group-item { cursor: pointer; }
+#sessionsList .list-group-item.disabled { cursor: default; }

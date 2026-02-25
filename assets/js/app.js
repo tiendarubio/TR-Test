@@ -151,14 +151,28 @@ async function loadInventorySession(sessionId) {
 }
 
 async function listSessionsByDay(tienda, day) {
+  // NOTE: evitamos índices compuestos consultando solo por 'day' y ordenando en cliente.
   const db = await getFirestoreDb();
   try {
-    let q = db.collection('tr_inventario_sessions')
-      .where('tienda', '==', String(tienda))
-      .where('day', '==', String(day));
-    try { q = q.orderBy('createdAt', 'desc'); } catch (_) {}
-    const snap = await q.get();
-    return snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+    const snap = await db.collection('tr_inventario_sessions')
+      .where('day', '==', String(day))
+      .get();
+
+    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+
+    // Si existe el campo tienda, filtramos aquí (sin índice compuesto)
+    const filtered = tienda ? rows.filter(x => !x.tienda || String(x.tienda) === String(tienda)) : rows;
+
+    // Orden: más reciente primero (createdAtClient -> updatedAtClient -> id)
+    filtered.sort((a, b) => {
+      const ta = a.createdAtClient || a.updatedAtClient || '';
+      const tb = b.createdAtClient || b.updatedAtClient || '';
+      if (ta < tb) return 1;
+      if (ta > tb) return -1;
+      return String(b.id).localeCompare(String(a.id));
+    });
+
+    return filtered;
   } catch (err) {
     console.error('Error al listar sesiones por día:', err);
     return [];
@@ -166,15 +180,19 @@ async function listSessionsByDay(tienda, day) {
 }
 
 async function getHistoryDays(tienda, limit = 500) {
+  // NOTE: evitamos índices compuestos consultando por orden de 'day' sin filtros
+  // y deduplicando/filtrando en cliente.
   const db = await getFirestoreDb();
   try {
-    let q = db.collection('tr_inventario_sessions').where('tienda', '==', String(tienda));
-    try { q = q.orderBy('day', 'desc'); } catch (_) {}
+    let q = db.collection('tr_inventario_sessions').orderBy('day', 'desc');
     const snap = await q.limit(limit).get();
+
     const days = new Set();
     snap.docs.forEach(d => {
       const data = d.data() || {};
-      if (data.day) days.add(String(data.day));
+      if (!data.day) return;
+      if (tienda && data.tienda && String(data.tienda) !== String(tienda)) return;
+      days.add(String(data.day));
     });
     return Array.from(days);
   } catch (err) {

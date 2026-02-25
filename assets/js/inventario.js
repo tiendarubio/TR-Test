@@ -43,6 +43,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ===== Wizard modal refs =====
   const wizardEl = document.getElementById('wizardModal');
   const wizardModal = wizardEl ? new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false }) : null;
+  if (wizardEl) {
+    wizardEl.addEventListener('hide.bs.modal', () => {
+      try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch (_) {}
+    });
+  }
 
   const wizTipo       = $('wizTipo');
   const wizUbicacion  = $('wizUbicacion');
