@@ -161,7 +161,7 @@ async function listSessionsByDay(tienda, day) {
     const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
 
     // Si existe el campo tienda, filtramos aquí (sin índice compuesto)
-    const filtered = tienda ? rows.filter(x => !x.tienda || String(x.tienda) === String(tienda)) : rows;
+    const filtered = tienda ? rows.filter(x => String(x.tienda || '') === String(tienda)) : rows;
 
     // Orden: más reciente primero (createdAtClient -> updatedAtClient -> id)
     filtered.sort((a, b) => {
@@ -191,7 +191,7 @@ async function getHistoryDays(tienda, limit = 500) {
     snap.docs.forEach(d => {
       const data = d.data() || {};
       if (!data.day) return;
-      if (tienda && data.tienda && String(data.tienda) !== String(tienda)) return;
+      if (tienda && String(data.tienda || '') !== String(tienda)) return;
       days.add(String(data.day));
     });
     return Array.from(days);

@@ -2,15 +2,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = (id) => document.getElementById(id);
 
-  function _normText(s) {
-    return (s || '')
-      .toString()
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-  }
-
   // ===== Config tienda =====
   const TIENDA = 'AVENIDA MORAZÁN';
 
@@ -64,7 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const wizSala       = $('wizSala');
   const wizEstante    = $('wizEstante');
   const wizStepEstante = $('wizEstanteWrap');
-  const wizProveedorWrap = $('wizProveedorWrap');
   const wizProveedor  = $('wizProveedor');
   const wizProvSuggestions = $('wizProvSuggestions');
 
@@ -724,34 +714,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   function resetWizardSteps() {
-    // Ocultar todos los pasos (se muestran según tipo)
     wizStepAlmacen?.classList.add('d-none');
     wizStepSala?.classList.add('d-none');
     wizStepSalaSel?.classList.add('d-none');
     wizStepEstante?.classList.add('d-none');
-    wizProveedorWrap?.classList.add('d-none');
-
-    // Limpiar selects/inputs dependientes
+    if (wizEstanteLabel) wizEstanteLabel.textContent = 'Estante';
     if (wizUbicacion) wizUbicacion.value = '';
     if (wizDependiente) wizDependiente.value = '';
     if (wizSala) wizSala.value = '';
-    if (wizEstante) {
-      wizEstante.innerHTML = '<option value="">Selecciona...</option>';
-      wizEstante.value = '';
-    }
-    if (wizProveedor) {
-      wizProveedor.value = '';
-      if (wizProvSuggestions) wizProvSuggestions.innerHTML = '';
-    }
+    if (wizEstante) wizEstante.value = '';
   }
 
   function updateEstantesOptionsForSala(sala) {
     if (!ESTANTES_DATA) return;
     const s = (sala || '').trim();
     let arr = [];
-    if (s === 'Sexta Calle') arr = (ESTANTES_DATA?.estantes_sexta || []);
-    else if (s === 'Centro Comercial') arr = (ESTANTES_DATA?.estantes_cc || []);
-    else if (s === 'Avenida Morazán') arr = (ESTANTES_DATA?.estantes_avm || []);
+    if (s === 'Sexta Calle') arr = (ESTANTES_DATA?.estantes?.sextaCalle || []);
+    else if (s === 'Centro Comercial') arr = (ESTANTES_DATA?.estantes?.centroComercial || []);
+    else if (s === 'Avenida Morazán') arr = (ESTANTES_DATA?.estantes?.avenidaMorazan || []);
     arr = (arr || []).filter(Boolean);
 
     // label fijo en HTML, solo actualizamos opciones
@@ -765,7 +745,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (tipo === 'Almacén') {
       wizStepAlmacen?.classList.remove('d-none');
-      wizProveedorWrap?.classList.remove('d-none');
     } else if (tipo === 'Sala de venta') {
       wizStepSala?.classList.remove('d-none');
       wizStepSalaSel?.classList.remove('d-none');
@@ -796,23 +775,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function buildWizardConfig() {
-    const rawTipo = wizTipo ? (wizTipo.value || '').trim() : '';
-    const tipoN = _normText(rawTipo);
-    const cfg = { tipo: rawTipo };
+    const tipo = (wizTipo?.value || '').trim();
+    const cfg = { tipo };
+    if (wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
 
-    if (tipoN === 'almacen') {
-      if (wizUbicacion && (wizUbicacion.value || '').trim()) cfg.ubicacion = (wizUbicacion.value || '').trim();
-      if (wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
-    }
-
-    if (tipoN === 'sala de venta' || tipoN === 'saladeventa' || tipoN === 'sala venta' || tipoN === 'salaventa') {
-      if (wizDependiente && (wizDependiente.value || '').trim()) cfg.dependiente = (wizDependiente.value || '').trim();
-      if (wizSala && (wizSala.value || '').trim()) cfg.sala = (wizSala.value || '').trim();
-      if (wizEstante && (wizEstante.value || '').trim()) cfg.estante = (wizEstante.value || '').trim();
-    }
-
-    return cfg;
-  } else if (tipo === 'Sala de venta') {
+    if (tipo === 'Almacén') {
+      cfg.ubicacion = (wizUbicacion?.value || '').trim();
+    } else if (tipo === 'Sala de venta') {
       cfg.dependiente = (wizDependiente?.value || '').trim();
       cfg.sala = (wizSala?.value || '').trim();
       cfg.estante = (wizEstante?.value || '').trim();
