@@ -49,16 +49,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const wizDependiente= $('wizDependiente');
   const wizSala       = $('wizSala');
   const wizEstante    = $('wizEstante');
+  const wizStepEstante = $('wizEstanteWrap');
   const wizProveedor  = $('wizProveedor');
   const wizProvSuggestions = $('wizProvSuggestions');
 
-  const wizStepAlmacen = $('wizStepAlmacen');
-  const wizStepSala    = $('wizStepSala');
-  const wizStepSalaSel = $('wizStepSalaSel');
-  const wizEstanteLabel= $('wizEstanteLabel');
+  const wizStepAlmacen = $('wizAlmacenWrap');
+  const wizStepSala    = $('wizDependienteWrap');
+  const wizStepSalaSel = $('wizSalaWrap');
+  const wizEstanteLabel= null; // label no usado en HTML actual
 
   const wizStartBtn = $('wizStartBtn');
-  const wizCancelBtn = $('wizCancelBtn');
+  const wizCancelBtn = null; // wizard obligatorio
   const wizStatus = $('wizStatus');
 
   // ===== Manual product modal =====
@@ -711,6 +712,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     wizStepAlmacen?.classList.add('d-none');
     wizStepSala?.classList.add('d-none');
     wizStepSalaSel?.classList.add('d-none');
+    wizStepEstante?.classList.add('d-none');
     if (wizEstanteLabel) wizEstanteLabel.textContent = 'Estante';
     if (wizUbicacion) wizUbicacion.value = '';
     if (wizDependiente) wizDependiente.value = '';
@@ -727,7 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (s === 'Avenida Morazán') arr = (ESTANTES_DATA?.estantes?.avenidaMorazan || []);
     arr = (arr || []).filter(Boolean);
 
-    if (wizEstanteLabel) wizEstanteLabel.textContent = `Estante (${s || '—'})`;
+    // label fijo en HTML, solo actualizamos opciones
     if (wizEstante) wizEstante.innerHTML = '<option value="">Seleccione…</option>' + arr.map(x => `<option value="${x}">${x}</option>`).join('');
   }
 
@@ -741,10 +743,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (tipo === 'Sala de venta') {
       wizStepSala?.classList.remove('d-none');
       wizStepSalaSel?.classList.remove('d-none');
+      wizStepEstante?.classList.remove('d-none');
     }
   });
 
-  wizSala?.addEventListener('change', () => updateEstantesOptionsForSala(wizSala.value));
+  wizSala?.addEventListener('change', () => { wizStepEstante?.classList.remove('d-none'); updateEstantesOptionsForSala(wizSala.value); });
 
   function validateWizard() {
     const tipo = (wizTipo?.value || '').trim();
@@ -797,8 +800,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (wizTipo) wizTipo.value = '';
     if (wizProveedor) wizProveedor.value = '';
     if (wizProvSuggestions) wizProvSuggestions.innerHTML = '';
-    return new Promise((resolve, reject) => {
-      const onCancel = () => { cleanup(); wizardModal.hide(); reject(new Error('Cancelado')); };
+    return new Promise((resolve) => {
       const onStart = () => {
         const err = validateWizard();
         if (err) { Swal.fire('Faltan datos', err, 'info'); return; }
@@ -808,10 +810,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         resolve(cfg);
       };
       function cleanup() {
-        wizCancelBtn?.removeEventListener('click', onCancel);
         wizStartBtn?.removeEventListener('click', onStart);
       }
-      wizCancelBtn?.addEventListener('click', onCancel);
       wizStartBtn?.addEventListener('click', onStart);
       wizardModal.show();
     });
@@ -1078,7 +1078,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       await createNewSession();
     } catch (e) {
-      if (String(e).includes('Cancelado')) return;
       Swal.fire('Error', String(e), 'error');
     }
   });
