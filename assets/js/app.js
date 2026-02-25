@@ -68,29 +68,49 @@ function preloadEstantes() {
     });
 }
 
-// ===== Firestore helpers =====
-function getTodayString() { return new Date().toISOString().split('T')[0]; }
+// ===== Firestore helpers (Sesiones de inventario) =====
+// Estructura:
+//   tr_inventario_sessions/{sessionId}
+// sessionId = ID único (string)
+// Para filtrar por día: campo day = YYYY-MM-DD
+
+function getTodayString() {
+  return new Date().toISOString().split('T')[0];
+}
 
 let __FIREBASE_INIT_PROMISE__ = null;
 
 async function ensureFirebaseInitialized() {
-  if (typeof firebase === 'undefined' || !firebase.apps) throw new Error('Firebase no está disponible en el cliente.');
-  if (firebase.apps.length) return true;
+  try {
+    if (typeof firebase === 'undefined' || !firebase.apps) {
+      throw new Error('Firebase no está disponible en el cliente.');
+    }
+    if (firebase.apps.length) return true;
 
-  if (!__FIREBASE_INIT_PROMISE__) {
-    __FIREBASE_INIT_PROMISE__ = fetch('/api/firebase-config')
-      .then(r => {
-        if (!r.ok) throw new Error('No se pudo obtener firebase-config');
-        return r.json();
-      })
-      .then(cfg => {
-        if (!cfg || !cfg.apiKey || !cfg.projectId) throw new Error('Configuración de Firebase incompleta.');
-        firebase.initializeApp(cfg);
-        return true;
-      });
+    if (!__FIREBASE_INIT_PROMISE__) {
+      __FIREBASE_INIT_PROMISE__ = fetch('/api/firebase-config')
+        .then(r => {
+          if (!r.ok) throw new Error('No se pudo obtener firebase-config');
+          return r.json();
+        })
+        .then(cfg => {
+          if (!cfg || !cfg.apiKey || !cfg.projectId) {
+            throw new Error('Configuración de Firebase incompleta.');
+          }
+          firebase.initializeApp(cfg);
+          return true;
+        })
+        .catch(err => {
+          console.error('Firebase init error:', err);
+          throw err;
+        });
+    }
+    await __FIREBASE_INIT_PROMISE__;
+    return true;
+  } catch (e) {
+    console.error(e);
+    throw e;
   }
-  await __FIREBASE_INIT_PROMISE__;
-  return true;
 }
 
 async function getFirestoreDb() {
@@ -99,54 +119,66 @@ async function getFirestoreDb() {
   return firebase.firestore();
 }
 
-async function saveInventoryToFirestore(docId, payload, dateStr) {
-  if (!docId) throw new Error('Documento no configurado para esta hoja.');
-  const db = await getFirestoreDb();
-  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
-
-  await db.collection('tr_inventario').doc(String(docId)).collection('historial').doc(day)
-    .set(payload || {}, { merge: true });
-
-  return { ok: true, day };
+function getServerTimestamp() {
+  try { return firebase.firestore.FieldValue.serverTimestamp(); }
+  catch (_) { return new Date().toISOString(); }
 }
 
-async function loadInventoryFromFirestore(docId, dateStr) {
-  if (!docId) return {};
+async function createInventorySession(sessionId, payload) {
   const db = await getFirestoreDb();
-  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
+  const ref = db.collection('tr_inventario_sessions').doc(String(sessionId));
+  await ref.set(payload || {}, { merge: true });
+  return { ok: true, sessionId };
+}
 
+async function updateInventorySession(sessionId, payload) {
+  const db = await getFirestoreDb();
+  const ref = db.collection('tr_inventario_sessions').doc(String(sessionId));
+  await ref.set(payload || {}, { merge: true });
+  return { ok: true, sessionId };
+}
+
+async function loadInventorySession(sessionId) {
+  if (!sessionId) return null;
+  const db = await getFirestoreDb();
   try {
-    const doc = await db.collection('tr_inventario').doc(String(docId)).collection('historial').doc(day).get();
-    return doc.exists ? (doc.data() || {}) : {};
+    const doc = await db.collection('tr_inventario_sessions').doc(String(sessionId)).get();
+    return doc.exists ? (doc.data() || null) : null;
   } catch (err) {
-    console.error('Error al leer Firestore:', err);
-    return {};
+    console.error('Error al leer sesión:', err);
+    return null;
   }
 }
 
-async function getHistoryDates(docId) {
-  if (!docId) return [];
+async function listSessionsByDay(tienda, day) {
+  const db = await getFirestoreDb();
   try {
-    const db = await getFirestoreDb();
-    const snap = await db.collection('tr_inventario').doc(String(docId)).collection('historial').get();
-    return snap.docs.map(d => d.id);
+    let q = db.collection('tr_inventario_sessions')
+      .where('tienda', '==', String(tienda))
+      .where('day', '==', String(day));
+    try { q = q.orderBy('createdAt', 'desc'); } catch (_) {}
+    const snap = await q.get();
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
   } catch (err) {
-    console.error('Error al listar historial en Firestore:', err);
+    console.error('Error al listar sesiones por día:', err);
     return [];
   }
 }
 
-async function loadLatestInventoryFromFirestore(docId) {
-  if (!docId) return {};
+async function getHistoryDays(tienda, limit = 500) {
   const db = await getFirestoreDb();
   try {
-    const snap = await db.collection('tr_inventario').doc(String(docId)).collection('historial')
-      .orderBy(firebase.firestore.FieldPath.documentId(), 'desc').limit(1).get();
-    if (!snap || snap.empty) return {};
-    const d = snap.docs[0];
-    return d && d.exists ? (d.data() || {}) : {};
+    let q = db.collection('tr_inventario_sessions').where('tienda', '==', String(tienda));
+    try { q = q.orderBy('day', 'desc'); } catch (_) {}
+    const snap = await q.limit(limit).get();
+    const days = new Set();
+    snap.docs.forEach(d => {
+      const data = d.data() || {};
+      if (data.day) days.add(String(data.day));
+    });
+    return Array.from(days);
   } catch (err) {
-    console.error('Error al cargar último registro Firestore:', err);
-    return {};
+    console.error('Error al obtener días con historial:', err);
+    return [];
   }
 }

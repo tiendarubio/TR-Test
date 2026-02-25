@@ -39,43 +39,52 @@
   <main class="container-fluid py-4">
     <div class="row g-4">
 
-      <!-- PANEL IZQUIERDO: HOJA INVENTARIO -->
+      <!-- PANEL IZQUIERDO: CONTROL DE INVENTARIO -->
       <div class="col-xl-3 col-lg-4">
         <div class="card shadow-sm mb-4">
           <div class="card-header bg-white border-0 pb-0">
             <h6 class="card-title mb-1">
-              <i class="fa-solid fa-clipboard-list me-2 text-primary"></i>
-              Hoja de inventario actual
+              <i class="fa-solid fa-play me-2 text-primary"></i>
+              Inventario
             </h6>
             <p class="text-muted small mb-0">
-              Selecciona la hoja de inventario que estás llenando (1 a 10).
+              Inicia un inventario con un ID único, guarda progreso y finaliza cuando termines.
             </p>
           </div>
           <div class="card-body">
-            <!-- Selector de Inventario -->
-            <div class="mb-3">
-              <label for="inventarioSelect" class="form-label fw-semibold mb-1">Inventario</label>
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white">
-                  <i class="fa-solid fa-hashtag text-muted"></i>
-                </span>
-                <select id="inventarioSelect" class="form-select">
-                  <option value="inventario1">Inventario 1</option>
-                  <option value="inventario2">Inventario 2</option>
-                  <option value="inventario3">Inventario 3</option>
-                  <option value="inventario4">Inventario 4</option>
-                  <option value="inventario5">Inventario 5</option>
-                  <option value="inventario6">Inventario 6</option>
-                  <option value="inventario7">Inventario 7</option>
-                  <option value="inventario8">Inventario 8</option>
-                  <option value="inventario9">Inventario 9</option>
-                  <option value="inventario10">Inventario 10</option>
-                </select>
+            <div class="d-grid gap-2">
+              <button id="btnStartInventory" class="btn btn-primary btn-sm">
+                <i class="fa-solid fa-play me-1"></i> Iniciar inventario
+              </button>
+              <button id="btnSaveProgress" class="btn btn-outline-primary btn-sm" disabled>
+                <i class="fa-solid fa-floppy-disk me-1"></i> Guardar progreso
+              </button>
+              <button id="btnFinalizeInventory" class="btn btn-outline-success btn-sm" disabled>
+                <i class="fa-solid fa-circle-check me-1"></i> Finalizar inventario
+              </button>
+              <button id="btnResumeInventory" class="btn btn-outline-secondary btn-sm d-none">
+                <i class="fa-solid fa-rotate-left me-1"></i> Reanudar borrador
+              </button>
+            </div>
+
+            <hr class="my-3"/>
+
+            <div class="small">
+              <div class="d-flex justify-content-between">
+                <span class="text-muted">ID actual</span>
+                <span id="curSessionId" class="fw-semibold">—</span>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <span class="text-muted">Estado</span>
+                <span id="curSessionStatus" class="fw-semibold">—</span>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <span class="text-muted">Última actualización</span>
+                <span id="curSessionUpdated" class="fw-semibold">—</span>
               </div>
             </div>
 
-            <!-- Fecha de inventario -->
-            <div class="mb-2">
+            <div class="mb-2 mt-3">
               <div id="fechaInventario" class="small text-muted fw-semibold"></div>
             </div>
 
@@ -88,14 +97,50 @@
                 <button id="btnToday" class="btn btn-outline-secondary" type="button" title="Volver a hoy">Hoy</button>
               </div>
               <div id="historyHint" class="form-text small text-muted mt-1">
-                Los días con datos guardados aparecen con un punto. Al abrir una fecha pasada, la vista es solo lectura.
+                Los días con inventarios guardados aparecen con un punto. Selecciona una fecha para ver la lista.
               </div>
+            </div>
+
+            <div id="sessionsListWrap" class="mt-2">
+              <div class="small text-muted fw-semibold mb-1">Inventarios del día</div>
+              <div id="sessionsList" class="list-group small"></div>
             </div>
 
             <!-- Mensaje de éxito -->
             <p id="successMessage" class="text-success small mt-2 mb-0" style="display:none;"></p>
           </div>
         </div>
+
+        <!-- Indicaciones -->
+        <div class="card shadow-sm">
+          <div class="card-header bg-white border-0 pb-0">
+            <h6 class="card-title mb-1">
+              <i class="fa-solid fa-circle-info me-2 text-primary"></i>
+              Indicaciones
+            </h6>
+          </div>
+          <div class="card-body small text-muted">
+            <ul class="list-unstyled mb-0">
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-location-dot text-primary me-2 mt-1"></i>
+                <span>Inicia el inventario y completa el wizard antes de agregar ítems.</span>
+              </li>
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-magnifying-glass text-primary me-2 mt-1"></i>
+                <span>Busca productos por nombre, código de inventario o código de barras.</span>
+              </li>
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-plus text-primary me-2 mt-1"></i>
+                <span>Si el producto no está en el catálogo, agrégalo manualmente.</span>
+              </li>
+              <li class="d-flex">
+                <i class="fa-solid fa-file-export text-primary me-2 mt-1"></i>
+                <span>Exporta PDF/Excel cuando lo necesites. Finaliza al terminar.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
 
         <!-- Indicaciones -->
         <div class="card shadow-sm">
@@ -225,6 +270,9 @@
               <div class="btn-toolbar gap-2" role="toolbar" aria-label="Toolbar">
                 <button id="saveReception" class="btn btn-primary btn-sm">
                   <i class="fa-solid fa-floppy-disk me-1"></i> Guardar
+                </button>
+                <button id="finalizeReception" class="btn btn-success btn-sm">
+                  <i class="fa-solid fa-circle-check me-1"></i> Finalizar
                 </button>
                 <button id="exportPDF" class="btn btn-outline-danger btn-sm" disabled>
                   <i class="fa-solid fa-file-pdf me-1"></i> PDF
