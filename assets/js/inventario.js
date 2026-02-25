@@ -2,6 +2,15 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = (id) => document.getElementById(id);
 
+  function _normText(s) {
+    return (s || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
   // ===== Config tienda =====
   const TIENDA = 'AVENIDA MORAZÁN';
 
@@ -715,17 +724,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   function resetWizardSteps() {
+    // Ocultar todos los pasos (se muestran según tipo)
     wizStepAlmacen?.classList.add('d-none');
     wizStepSala?.classList.add('d-none');
     wizStepSalaSel?.classList.add('d-none');
     wizStepEstante?.classList.add('d-none');
     wizProveedorWrap?.classList.add('d-none');
-    if (wizProveedor) { wizProveedor.value = ''; if (wizProvSuggestions) wizProvSuggestions.innerHTML = ''; }
-    if (wizEstanteLabel) wizEstanteLabel.textContent = 'Estante';
+
+    // Limpiar selects/inputs dependientes
     if (wizUbicacion) wizUbicacion.value = '';
     if (wizDependiente) wizDependiente.value = '';
     if (wizSala) wizSala.value = '';
-    if (wizEstante) wizEstante.value = '';
+    if (wizEstante) {
+      wizEstante.innerHTML = '<option value="">Selecciona...</option>';
+      wizEstante.value = '';
+    }
+    if (wizProveedor) {
+      wizProveedor.value = '';
+      if (wizProvSuggestions) wizProvSuggestions.innerHTML = '';
+    }
   }
 
   function updateEstantesOptionsForSala(sala) {
@@ -779,13 +796,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function buildWizardConfig() {
-    const tipo = (wizTipo?.value || '').trim();
-    const cfg = { tipo };
-    if (tipo === 'Almacén' && wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
+    const rawTipo = wizTipo ? (wizTipo.value || '').trim() : '';
+    const tipoN = _normText(rawTipo);
+    const cfg = { tipo: rawTipo };
 
-    if (tipo === 'Almacén') {
-      cfg.ubicacion = (wizUbicacion?.value || '').trim();
-    } else if (tipo === 'Sala de venta') {
+    if (tipoN === 'almacen') {
+      if (wizUbicacion && (wizUbicacion.value || '').trim()) cfg.ubicacion = (wizUbicacion.value || '').trim();
+      if (wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
+    }
+
+    if (tipoN === 'sala de venta' || tipoN === 'saladeventa' || tipoN === 'sala venta' || tipoN === 'salaventa') {
+      if (wizDependiente && (wizDependiente.value || '').trim()) cfg.dependiente = (wizDependiente.value || '').trim();
+      if (wizSala && (wizSala.value || '').trim()) cfg.sala = (wizSala.value || '').trim();
+      if (wizEstante && (wizEstante.value || '').trim()) cfg.estante = (wizEstante.value || '').trim();
+    }
+
+    return cfg;
+  } else if (tipo === 'Sala de venta') {
       cfg.dependiente = (wizDependiente?.value || '').trim();
       cfg.sala = (wizSala?.value || '').trim();
       cfg.estante = (wizEstante?.value || '').trim();
