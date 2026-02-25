@@ -37,6 +37,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const manualModalEl = document.getElementById('manualModal');
   const manualModal   = new bootstrap.Modal(manualModalEl);
 
+  // En algunos móviles el foco se "pierde" al abrir el modal; lo forzamos cuando ya está visible.
+  if (manualModalEl) {
+    manualModalEl.addEventListener('shown.bs.modal', () => {
+      const tryFocus = () => {
+        if (!mCodigo) return;
+        try { mCodigo.focus({ preventScroll: true }); } catch (_) { mCodigo.focus(); }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(tryFocus));
+      setTimeout(tryFocus, 80);
+    });
+  }
+
   // Wizard modal
   const wizardModalEl = document.getElementById('wizardModal');
   const wizardModal   = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });
@@ -110,9 +122,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function lockUbicacion(lock, value) {
     if (!ubicacionInput) return;
-    ubicacionInput.disabled = !!lock;
+    const isLock = !!lock;
+    ubicacionInput.disabled = isLock;
+    if (isLock) ubicacionInput.dataset.locked = '1';
+    else delete ubicacionInput.dataset.locked;
     if (typeof value === 'string') ubicacionInput.value = value;
-    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !lock);
+    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !isLock);
   }
 
   function fillSelect(selectEl, values, placeholder='Selecciona...') {
@@ -220,6 +235,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Averías u otros
     return { ok:true };
   }
+  function updateSummaryUI(cfg) {
+    const wrap = $('wizSummary');
+    if (!wrap) return;
+
+    const tipo = (cfg && cfg.tipo) ? String(cfg.tipo) : '';
+    const ubic = (cfg && (cfg.ubicacionTexto || cfg.ubicacion)) ? String(cfg.ubicacionTexto || cfg.ubicacion) : (ubicacionInput ? (ubicacionInput.value || '') : '');
+    const dep  = (cfg && cfg.dependiente) ? String(cfg.dependiente) : '';
+    const sala = (cfg && cfg.sala) ? String(cfg.sala) : '';
+    const est  = (cfg && cfg.estante) ? String(cfg.estante) : '';
+
+    const set = (id, val) => { const el = $(id); if (el) el.textContent = val || '-'; };
+    set('sumTipo', tipo);
+    set('sumUbicacion', ubic);
+    set('sumDependiente', dep);
+    set('sumSala', sala);
+    set('sumEstante', est);
+
+    wrap.classList.remove('d-none');
+  }
+
 
   function applyWizardConfig(cfg) {
     // Guarda y aplica los bloqueos (especialmente ubicación)
@@ -228,15 +263,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Aplicar ubicación “forzada” si corresponde
     if (cfg.tipo === 'Almacén' || cfg.tipo === 'Almacen') {
+      cfg.ubicacionTexto = cfg.ubicacion || '';
       lockUbicacion(true, cfg.ubicacion || '');
     } else if (cfg.tipo === 'Sala de venta') {
       // Ubicación la definimos como: "Sala - Estante"
       const ub = [cfg.sala, cfg.estante].filter(Boolean).join(' — ');
+      cfg.ubicacionTexto = ub;
       lockUbicacion(true, ub);
     } else {
       // Averías u otros: libre
       lockUbicacion(false);
     }
+
+    updateSummaryUI(cfg);
 
     setControlsEnabled(true);
     wizardModal.hide();
@@ -797,7 +836,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       else mNombre.value = q;
     }
     manualModal.show();
-    setTimeout(() => mCodigo.focus(), 200);
   }
 
   const btnOpenManual = document.getElementById('btnOpenManual');
@@ -1034,8 +1072,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return [i + 1, tr.cells[1].innerText, tr.cells[2].innerText, tr.cells[3].innerText, bodega, qty, fechaV];
     });
 
+    const startTableY = (typeof yInfo === 'number' ? (yInfo + 6) : 40);
+
     doc.autoTable({
-      startY: 40,
+      startY: startTableY,
       head: [['#','Código barras','Producto','Cod. Inv.','Bodega','Cant.','F. vencimiento']],
       body: rows,
       styles: { fontSize: 9, cellPadding: 2 }
