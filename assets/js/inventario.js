@@ -56,6 +56,79 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Wizard modal
   const wizardModalEl = document.getElementById('wizardModal');
+  const wizProveedor = $('wizProveedor');
+  const wizProvSuggestions = $('wizProvSuggestions');
+  let wizProvFocus = -1;
+
+  function bindWizardProveedorAutocomplete() {
+    if (!wizProveedor || !wizProvSuggestions) return;
+
+    wizProveedor.addEventListener('input', () => {
+      const q = (wizProveedor.value || '').trim().toLowerCase();
+      wizProvSuggestions.innerHTML = '';
+      wizProvFocus = -1;
+      if (!q) return;
+
+      loadProvidersFromGoogleSheets().then(list => {
+        (list || [])
+          .filter(p => p.toLowerCase().includes(q))
+          .slice(0, 50)
+          .forEach(name => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.textContent = name;
+            li.addEventListener('click', () => {
+              wizProveedor.value = name;
+              wizProvSuggestions.innerHTML = '';
+            });
+            wizProvSuggestions.appendChild(li);
+          });
+
+        if (!wizProvSuggestions.children.length) {
+          const li = document.createElement('li');
+          li.className = 'list-group-item list-group-item-light no-results';
+          li.textContent = 'Sin resultados. Escriba el nombre completo del proveedor.';
+          wizProvSuggestions.appendChild(li);
+        }
+      }).catch(() => {});
+    });
+
+    wizProveedor.addEventListener('keydown', (e) => {
+      const items = wizProvSuggestions.getElementsByTagName('li');
+      if (e.key === 'ArrowDown') { wizProvFocus++; addActiveWizardProv(items); }
+      else if (e.key === 'ArrowUp') { wizProvFocus--; addActiveWizardProv(items); }
+      else if (e.key === 'Enter') {
+        if (wizProvFocus > -1 && items[wizProvFocus]) {
+          e.preventDefault();
+          items[wizProvFocus].click();
+        }
+      }
+    });
+
+    function addActiveWizardProv(items) {
+      if (!items || !items.length) return;
+      [...items].forEach(x => x.classList.remove('active'));
+      if (wizProvFocus >= items.length) wizProvFocus = 0;
+      if (wizProvFocus < 0) wizProvFocus = items.length - 1;
+      items[wizProvFocus].classList.add('active');
+      items[wizProvFocus].scrollIntoView({ block: 'nearest' });
+    }
+
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t === wizProveedor || wizProvSuggestions.contains(t)) return;
+      wizProvSuggestions.innerHTML = '';
+      wizProvFocus = -1;
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        wizProvSuggestions.innerHTML = '';
+        wizProvFocus = -1;
+      }
+    });
+  }
+
+
   const wizardModal   = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });
 
   const wizTipo = $('wizTipo');
@@ -253,6 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const set = (id, val) => { const el = $(id); if (el) el.textContent = val || '-'; };
     set('sumTipo', tipo);
     set('sumUbicacion', ubic);
+    set('sumProveedor', (cfg && cfg.proveedor) ? String(cfg.proveedor) : '');
     set('sumDependiente', dep);
     set('sumSala', sala);
     set('sumEstante', est);
@@ -672,35 +746,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await (typeof preloadCatalog === 'function' ? preloadCatalog().catch(() => {}) : Promise.resolve());
 
   // Proveedores autocompletar
-  if (proveedorInput && provSuggestions) {
-  let provFocus = -1;
-  proveedorInput.addEventListener('input', () => {
-    const q = (proveedorInput.value || '').trim().toLowerCase();
-    provSuggestions.innerHTML = '';
-    provFocus = -1;
-    if (!q) return;
-
-    loadProvidersFromGoogleSheets().then(list => {
-      (list || [])
-        .filter(p => p.toLowerCase().includes(q))
-        .slice(0, 50)
-        .forEach(name => {
-          const li = document.createElement('li');
-          li.className = 'list-group-item';
-          li.textContent = name;
-          li.addEventListener('click', () => {
-            proveedorInput.value = name;
-            provSuggestions.innerHTML = '';
-          });
-          provSuggestions.appendChild(li);
-        });
-
-      if (!provSuggestions.children.length) {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-light no-results';
-        li.textContent = 'Sin resultados. Escriba el nombre completo del proveedor.';
-        provSuggestions.appendChild(li);
-      }
     }).catch(() => {});
   });
 
@@ -1074,6 +1119,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const wizCfgPdf = getWizardConfig();
     const ubicPdf = (wizCfgPdf.ubicacionTexto || wizCfgPdf.ubicacion || '').toString().trim() || '-';
     doc.text('Ubicación: ' + ubicPdf, 10, 18);
+    const provPdf = (wizCfgPdf.proveedor || '').toString().trim();
+    if (provPdf) doc.text('Proveedor: ' + provPdf, 10, 26);
     if (proveedorInput.value.trim()) doc.text('Proveedor: ' + proveedorInput.value, 10, 26);
     doc.text('Hoja de inventario: ' + (inventarioSelect ? inventarioSelect.value : ''), 10, 34);
 
