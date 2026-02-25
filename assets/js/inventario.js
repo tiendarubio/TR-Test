@@ -147,6 +147,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     return isNaN(n) ? 0 : n;
   }
 
+  
+  function getEstantesColumnForSala(sala) {
+    const s = String(sala || '').toLowerCase();
+    if (s.includes('avenida') || s.includes('moraz')) return 'A';
+    if (s.includes('sexta')) return 'B';
+    if (s.includes('centro')) return 'C';
+    return null;
+  }
+
+  async function loadEstantesForSalaColumn(col) {
+    if (!col) {
+      if (wizEstante) wizEstante.innerHTML = '<option value="">Seleccione estante</option>';
+      return;
+    }
+    try {
+      const values = await loadEstantesFromGoogleSheets(); // array de filas
+      const idx = ({ A:0, B:1, C:2 }[col] ?? null);
+      if (idx === null) return;
+
+      const list = [];
+      (values || []).forEach(r => {
+        const v = (r && r[idx]) ? String(r[idx]).trim() : '';
+        if (v) list.push(v);
+      });
+
+      const uniq = Array.from(new Set(list));
+      if (wizEstante) {
+        wizEstante.innerHTML = '<option value="">Seleccione estante</option>' +
+          uniq.map(x => `<option value="${x}">${x}</option>`).join('');
+      }
+    } catch (e) {
+      console.error('Error cargando estantes por sala:', e);
+    }
+  }
+
+
   function sanitizeName(s) {
     return (s || '').toString().trim()
       .replace(/\s+/g, '_')

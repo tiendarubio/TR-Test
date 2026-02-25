@@ -48,6 +48,34 @@ function preloadProviders() {
 }
 function loadProvidersFromGoogleSheets() { return preloadProviders(); }
 
+// --- Estantes (Google Sheets -> /api/estantes) ---
+let ESTANTES_CACHE = null;
+
+function preloadEstantes() {
+  if (ESTANTES_CACHE) return Promise.resolve(ESTANTES_CACHE);
+
+  return fetch('/api/estantes')
+    .then(r => {
+      if (!r.ok) throw new Error('Error estantes: ' + r.statusText);
+      return r.json();
+    })
+    .then(data => {
+      ESTANTES_CACHE = Array.isArray(data.values) ? data.values : [];
+      try { window.ESTANTES_CACHE = ESTANTES_CACHE; } catch (_) {}
+      return ESTANTES_CACHE;
+    })
+    .catch(err => {
+      console.error('Error al cargar estantes:', err);
+      ESTANTES_CACHE = [];
+      try { window.ESTANTES_CACHE = ESTANTES_CACHE; } catch (_) {}
+      return ESTANTES_CACHE;
+    });
+}
+
+function loadEstantesFromGoogleSheets() {
+  return preloadEstantes();
+}
+
 // --- Estantes (Wizard) ---
 function preloadEstantes() {
   if (ESTANTES_CACHE) return Promise.resolve(ESTANTES_CACHE);
