@@ -2,6 +2,11 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = (id) => document.getElementById(id);
 
+  function getWizardConfig() {
+    try { return JSON.parse(localStorage.getItem('TR_AVM_WIZARD_CONFIG') || '{}') || {}; }
+    catch (_) { return {}; }
+  }
+
   // =========================
   // Elementos principales (DECLARAR ANTES DE USAR)
   // =========================
@@ -412,7 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnPDF.disabled   = !hasRows;
     btnPrint.disabled = !hasRows;
     btnExcel.disabled = !hasRows;
-    btnClear.disabled = !hasRows && !(proveedorInput.value.trim() || (ubicacionInput && ubicacionInput.value.trim()));
+    btnClear.disabled = !hasRows;
   }
 
   function renumber() {
@@ -667,6 +672,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await (typeof preloadCatalog === 'function' ? preloadCatalog().catch(() => {}) : Promise.resolve());
 
   // Proveedores autocompletar
+  if (proveedorInput && provSuggestions) {
   let provFocus = -1;
   proveedorInput.addEventListener('input', () => {
     const q = (proveedorInput.value || '').trim().toLowerCase();
@@ -824,6 +830,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Manual modal (+)
+  }
+
   function openManualModalFromSearch(rawQuery) {
     const q = (rawQuery || '').trim();
     mCodigo.value = '';
@@ -953,8 +961,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Guardar / limpiar / exportar
   // =========================
   btnSave.addEventListener('click', async () => {
-    if (!ubicacionInput || !ubicacionInput.value.trim()) {
-      Swal.fire('Ubicación requerida', 'Ingrese la ubicación del producto.', 'info');
+    const wizCfgNow = getWizardConfig();
+    const ubicWizard = (wizCfgNow.ubicacionTexto || wizCfgNow.ubicacion || '').toString().trim();
+    if (!ubicWizard) {
+      Swal.fire('Ubicación requerida', 'Complete el asistente inicial para definir la ubicación.', 'info');
       return;
     }
     if (body.rows.length === 0) {
@@ -981,8 +991,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const payload = {
       meta: {
         tienda: 'AVENIDA MORAZÁN',
-        proveedor: proveedorInput.value.trim(),
-        ubicacion: ubicacionInput.value.trim(),
+        proveedor: (getWizardConfig().proveedor || '').toString().trim(),
+        ubicacion: ( (getWizardConfig().ubicacionTexto || getWizardConfig().ubicacion || '') ).toString().trim(),
         hoja_inventario: CURRENT_INVENTARIO,
         fechaInventario: new Date().toISOString(),
         wizard: wizCfg || {}
@@ -1061,7 +1071,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     doc.setFontSize(12);
     doc.text('Tienda: AVENIDA MORAZÁN', 10, 10);
-    doc.text('Ubicación: ' + (ubicacionInput ? (ubicacionInput.value || '-') : '-'), 10, 18);
+    const wizCfgPdf = getWizardConfig();
+    const ubicPdf = (wizCfgPdf.ubicacionTexto || wizCfgPdf.ubicacion || '').toString().trim() || '-';
+    doc.text('Ubicación: ' + ubicPdf, 10, 18);
     if (proveedorInput.value.trim()) doc.text('Proveedor: ' + proveedorInput.value, 10, 26);
     doc.text('Hoja de inventario: ' + (inventarioSelect ? inventarioSelect.value : ''), 10, 34);
 
@@ -1095,7 +1107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (body.rows.length === 0) return;
 
     const fechaFis = new Date().toISOString().split('T')[0];
-    const ubicacionValor = ubicacionInput ? (ubicacionInput.value || '') : '';
+    const wizCfgX = getWizardConfig();
+    const ubicacionValor = (wizCfgX.ubicacionTexto || wizCfgX.ubicacion || '').toString();
 
     const data = [[
       'fechafis','idgrupo','idsubgrupo','idarticulo','descrip','codigobarra','cod_unidad','ubicacion','Bodega_5'
