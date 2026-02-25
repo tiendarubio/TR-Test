@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const wizSala       = $('wizSala');
   const wizEstante    = $('wizEstante');
   const wizStepEstante = $('wizEstanteWrap');
+  const wizProveedorWrap = $('wizProveedorWrap');
   const wizProveedor  = $('wizProveedor');
   const wizProvSuggestions = $('wizProvSuggestions');
 
@@ -718,6 +719,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     wizStepSala?.classList.add('d-none');
     wizStepSalaSel?.classList.add('d-none');
     wizStepEstante?.classList.add('d-none');
+    wizProveedorWrap?.classList.add('d-none');
+    if (wizProveedor) { wizProveedor.value = ''; if (wizProvSuggestions) wizProvSuggestions.innerHTML = ''; }
     if (wizEstanteLabel) wizEstanteLabel.textContent = 'Estante';
     if (wizUbicacion) wizUbicacion.value = '';
     if (wizDependiente) wizDependiente.value = '';
@@ -729,9 +732,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!ESTANTES_DATA) return;
     const s = (sala || '').trim();
     let arr = [];
-    if (s === 'Sexta Calle') arr = (ESTANTES_DATA?.estantes?.sextaCalle || []);
-    else if (s === 'Centro Comercial') arr = (ESTANTES_DATA?.estantes?.centroComercial || []);
-    else if (s === 'Avenida Morazán') arr = (ESTANTES_DATA?.estantes?.avenidaMorazan || []);
+    if (s === 'Sexta Calle') arr = (ESTANTES_DATA?.estantes_sexta || []);
+    else if (s === 'Centro Comercial') arr = (ESTANTES_DATA?.estantes_cc || []);
+    else if (s === 'Avenida Morazán') arr = (ESTANTES_DATA?.estantes_avm || []);
     arr = (arr || []).filter(Boolean);
 
     // label fijo en HTML, solo actualizamos opciones
@@ -745,6 +748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (tipo === 'Almacén') {
       wizStepAlmacen?.classList.remove('d-none');
+      wizProveedorWrap?.classList.remove('d-none');
     } else if (tipo === 'Sala de venta') {
       wizStepSala?.classList.remove('d-none');
       wizStepSalaSel?.classList.remove('d-none');
@@ -777,7 +781,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function buildWizardConfig() {
     const tipo = (wizTipo?.value || '').trim();
     const cfg = { tipo };
-    if (wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
+    if (tipo === 'Almacén' && wizProveedor && (wizProveedor.value || '').trim()) cfg.proveedor = (wizProveedor.value || '').trim();
 
     if (tipo === 'Almacén') {
       cfg.ubicacion = (wizUbicacion?.value || '').trim();
