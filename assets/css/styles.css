@@ -101,5 +101,3 @@ body {
 
 #sessionsList .list-group-item { cursor: pointer; }
 #sessionsList .list-group-item.disabled { cursor: default; }
-
-#wizProveedorWrap { position: relative; }
