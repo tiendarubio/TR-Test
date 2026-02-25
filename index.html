@@ -141,6 +141,27 @@
           </div>
           <div class="card-body border-top">
             <div class="row g-3">
+              <!-- Resumen de configuración (Wizard) -->
+              <div class="col-12">
+                <div class="p-2 rounded border bg-white">
+                  <div class="small text-muted mb-1 fw-semibold">Resumen</div>
+                  <div class="row g-2 small">
+                    <div class="col-md-3"><span class="text-muted">Tipo:</span> <span id="sumTipo" class="fw-semibold">-</span></div>
+                    <div class="col-md-3"><span class="text-muted">Proveedor:</span> <span id="sumProveedor" class="fw-semibold">-</span></div>
+                    <div class="col-md-6"><span class="text-muted">Ubicación:</span> <span id="sumUbicacion" class="fw-semibold">-</span></div>
+                    <div class="col-md-4"><span class="text-muted">Dependiente:</span> <span id="sumDependiente" class="fw-semibold">-</span></div>
+                    <div class="col-md-4"><span class="text-muted">Sala:</span> <span id="sumSala" class="fw-semibold">-</span></div>
+                    <div class="col-md-4"><span class="text-muted">Estante:</span> <span id="sumEstante" class="fw-semibold">-</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Ubicación/Proveedor (inputs ocultos, se usan para guardar/exportar) -->
+              <div class="col-12 d-none">
+                <input id="ubicacionInput" type="text" class="form-control form-control-sm" placeholder="Ej. Bodega, pasillo 3, góndola A">
+                <input id="proveedorInput" type="text" class="form-control form-control-sm" placeholder="Proveedor">
+              </div>
+
               <!-- Buscador de productos -->
               <div class="col-12 position-relative">
                 <label class="form-label fw-semibold mb-1">Buscar producto (catálogo)</label>
@@ -159,22 +180,6 @@
                 <ul id="suggestions" class="list-group search-suggestions"></ul>
                 <div class="form-text small text-muted mt-1">
                   Si no se encuentra en el catálogo, puedes agregarlo manualmente con el botón <strong>+</strong>.
-                </div>
-              </div>
-            </div>
-
-            <!-- Resumen de inventario (wizard) -->
-            <div class="row mt-2">
-              <div class="col-12">
-                <div id="wizSummary" class="alert alert-light border small mb-0 d-none">
-                  <div class="d-flex flex-wrap gap-3 align-items-center">
-                    <div><span class="text-muted">Tipo:</span> <strong id="sumTipo">-</strong></div>
-                    <div><span class="text-muted">Ubicación:</span> <strong id="sumUbicacion">-</strong></div>
-                    <div><span class="text-muted">Proveedor:</span> <strong id="sumProveedor">-</strong></div>
-                    <div><span class="text-muted">Dependiente:</span> <strong id="sumDependiente">-</strong></div>
-                    <div><span class="text-muted">Sala:</span> <strong id="sumSala">-</strong></div>
-                    <div><span class="text-muted">Estante:</span> <strong id="sumEstante">-</strong></div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -343,7 +348,13 @@
               </select>
             </div>
 
-            <div class="col-md-6 d-none" id="wizAlmacenWrap">
+            
+            <div class="col-md-6 position-relative">
+              <label class="form-label fw-semibold">Proveedor (opcional)</label>
+              <input id="wizProveedor" type="text" class="form-control" placeholder="Escriba para buscar proveedor...">
+              <ul id="wizProvSuggestions" class="list-group search-suggestions"></ul>
+            </div>
+<div class="col-md-6 d-none" id="wizAlmacenWrap">
               <label class="form-label fw-semibold">Ubicación (Almacén)</label>
               <select id="wizUbicacion" class="form-select">
                 <option value="">Selecciona...</option>
@@ -356,12 +367,6 @@
                 <option value="">Selecciona...</option>
               </select>
             </div>
-              <div class="mt-3 position-relative">
-                <label class="form-label fw-semibold mb-1">Proveedor (opcional)</label>
-                <input id="wizProveedor" type="text" class="form-control form-control-sm" placeholder="Escriba para buscar proveedor...">
-                <ul id="wizProvSuggestions" class="list-group search-suggestions"></ul>
-              </div>
-
 
             <div class="col-md-6 d-none" id="wizSalaWrap">
               <label class="form-label fw-semibold">Sala de venta</label>

@@ -2,11 +2,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = (id) => document.getElementById(id);
 
-  function getWizardConfig() {
-    try { return JSON.parse(localStorage.getItem('TR_AVM_WIZARD_CONFIG') || '{}') || {}; }
-    catch (_) { return {}; }
-  }
-
   // =========================
   // Elementos principales (DECLARAR ANTES DE USAR)
   // =========================
@@ -40,99 +35,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mVencimiento  = $('mVencimiento');
   const mCantidad     = $('mCantidad');
   const manualModalEl = document.getElementById('manualModal');
-  const manualModal   = new bootstrap.Modal(manualModalEl);
+  const manualModal   = new bootstrap.Modal(manualModalEl, { focus: false });
 
-  // En algunos móviles el foco se "pierde" al abrir el modal; lo forzamos cuando ya está visible.
   if (manualModalEl) {
     manualModalEl.addEventListener('shown.bs.modal', () => {
-      const tryFocus = () => {
-        if (!mCodigo) return;
-        try { mCodigo.focus({ preventScroll: true }); } catch (_) { mCodigo.focus(); }
-      };
-      requestAnimationFrame(() => requestAnimationFrame(tryFocus));
-      setTimeout(tryFocus, 80);
+      const target = mCodigo;
+      if (!target) return;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+        }, 0);
+        setTimeout(() => {
+          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+        }, 120);
+      });
     });
   }
 
   // Wizard modal
   const wizardModalEl = document.getElementById('wizardModal');
-  const wizProveedor = $('wizProveedor');
-  const wizProvSuggestions = $('wizProvSuggestions');
-  let wizProvFocus = -1;
-
-  function bindWizardProveedorAutocomplete() {
-    if (!wizProveedor || !wizProvSuggestions) return;
-
-    wizProveedor.addEventListener('input', () => {
-      const q = (wizProveedor.value || '').trim().toLowerCase();
-      wizProvSuggestions.innerHTML = '';
-      wizProvFocus = -1;
-      if (!q) return;
-
-      loadProvidersFromGoogleSheets().then(list => {
-        (list || [])
-          .filter(p => p.toLowerCase().includes(q))
-          .slice(0, 50)
-          .forEach(name => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item';
-            li.textContent = name;
-            li.addEventListener('click', () => {
-              wizProveedor.value = name;
-              wizProvSuggestions.innerHTML = '';
-            });
-            wizProvSuggestions.appendChild(li);
-          });
-
-        if (!wizProvSuggestions.children.length) {
-          const li = document.createElement('li');
-          li.className = 'list-group-item list-group-item-light no-results';
-          li.textContent = 'Sin resultados. Escriba el nombre completo del proveedor.';
-          wizProvSuggestions.appendChild(li);
-        }
-      }).catch(() => {});
-    });
-
-    wizProveedor.addEventListener('keydown', (e) => {
-      const items = wizProvSuggestions.getElementsByTagName('li');
-      if (e.key === 'ArrowDown') { wizProvFocus++; addActiveWizardProv(items); }
-      else if (e.key === 'ArrowUp') { wizProvFocus--; addActiveWizardProv(items); }
-      else if (e.key === 'Enter') {
-        if (wizProvFocus > -1 && items[wizProvFocus]) {
-          e.preventDefault();
-          items[wizProvFocus].click();
-        }
-      }
-    });
-
-    function addActiveWizardProv(items) {
-      if (!items || !items.length) return;
-      [...items].forEach(x => x.classList.remove('active'));
-      if (wizProvFocus >= items.length) wizProvFocus = 0;
-      if (wizProvFocus < 0) wizProvFocus = items.length - 1;
-      items[wizProvFocus].classList.add('active');
-      items[wizProvFocus].scrollIntoView({ block: 'nearest' });
-    }
-
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      if (t === wizProveedor || wizProvSuggestions.contains(t)) return;
-      wizProvSuggestions.innerHTML = '';
-      wizProvFocus = -1;
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        wizProvSuggestions.innerHTML = '';
-        wizProvFocus = -1;
-      }
-    });
-  }
-
-
   const wizardModal   = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });
 
   const wizTipo = $('wizTipo');
   const wizUbicacion = $('wizUbicacion');
+  const wizProveedor = $('wizProveedor');
+  const wizProvSuggestions = $('wizProvSuggestions');
+
+  // Resumen UI
+  const sumTipo = $('sumTipo');
+  const sumProveedor = $('sumProveedor');
+  const sumUbicacion = $('sumUbicacion');
+  const sumDependiente = $('sumDependiente');
+  const sumSala = $('sumSala');
+  const sumEstante = $('sumEstante');
+
   const wizDependiente = $('wizDependiente');
   const wizSala = $('wizSala');
   const wizEstante = $('wizEstante');
@@ -200,12 +136,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function lockUbicacion(lock, value) {
     if (!ubicacionInput) return;
-    const isLock = !!lock;
-    ubicacionInput.disabled = isLock;
-    if (isLock) ubicacionInput.dataset.locked = '1';
-    else delete ubicacionInput.dataset.locked;
+    ubicacionInput.disabled = !!lock;
+    ubicacionInput.dataset.locked = lock ? '1' : '';
     if (typeof value === 'string') ubicacionInput.value = value;
-    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !isLock);
+    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !lock);
   }
 
   function fillSelect(selectEl, values, placeholder='Selecciona...') {
@@ -313,27 +247,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Averías u otros
     return { ok:true };
   }
-  function updateSummaryUI(cfg) {
-    const wrap = $('wizSummary');
-    if (!wrap) return;
-
-    const tipo = (cfg && cfg.tipo) ? String(cfg.tipo) : '';
-    const ubic = (cfg && (cfg.ubicacionTexto || cfg.ubicacion)) ? String(cfg.ubicacionTexto || cfg.ubicacion) : (ubicacionInput ? (ubicacionInput.value || '') : '');
-    const dep  = (cfg && cfg.dependiente) ? String(cfg.dependiente) : '';
-    const sala = (cfg && cfg.sala) ? String(cfg.sala) : '';
-    const est  = (cfg && cfg.estante) ? String(cfg.estante) : '';
-
-    const set = (id, val) => { const el = $(id); if (el) el.textContent = val || '-'; };
-    set('sumTipo', tipo);
-    set('sumUbicacion', ubic);
-    set('sumProveedor', (cfg && cfg.proveedor) ? String(cfg.proveedor) : '');
-    set('sumDependiente', dep);
-    set('sumSala', sala);
-    set('sumEstante', est);
-
-    wrap.classList.remove('d-none');
-  }
-
 
   function applyWizardConfig(cfg) {
     // Guarda y aplica los bloqueos (especialmente ubicación)
@@ -342,19 +255,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Aplicar ubicación “forzada” si corresponde
     if (cfg.tipo === 'Almacén' || cfg.tipo === 'Almacen') {
-      cfg.ubicacionTexto = cfg.ubicacion || '';
       lockUbicacion(true, cfg.ubicacion || '');
     } else if (cfg.tipo === 'Sala de venta') {
       // Ubicación la definimos como: "Sala - Estante"
       const ub = [cfg.sala, cfg.estante].filter(Boolean).join(' — ');
-      cfg.ubicacionTexto = ub;
       lockUbicacion(true, ub);
     } else {
       // Averías u otros: libre
       lockUbicacion(false);
     }
+    // proveedor (input oculto + resumen)
+    if (proveedorInput) {
+      proveedorInput.value = (cfg.proveedor || '').toString().trim();
+    }
 
-    updateSummaryUI(cfg);
+    // Actualizar resumen visible
+    if (sumTipo) sumTipo.textContent = cfg.tipo || '-';
+    if (sumProveedor) sumProveedor.textContent = (cfg.proveedor || '-') || '-';
+    if (sumDependiente) sumDependiente.textContent = cfg.dependiente || '-';
+    if (sumSala) sumSala.textContent = cfg.sala || '-';
+    if (sumEstante) sumEstante.textContent = cfg.estante || '-';
+    if (sumUbicacion && ubicacionInput) sumUbicacion.textContent = (ubicacionInput.value || '-') || '-';
+
 
     setControlsEnabled(true);
     wizardModal.hide();
@@ -381,6 +303,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Eventos wizard
+  // Autocompletar proveedor en wizard (usa cache /api/proveedores)
+  let wizProvFocus = -1;
+
+  function renderWizardProvSuggestions(query) {
+    if (!wizProvSuggestions) return;
+    const q = (query || '').trim().toLowerCase();
+    wizProvSuggestions.innerHTML = '';
+    wizProvFocus = -1;
+    if (!q) return;
+
+    loadProvidersFromGoogleSheets().then(list => {
+      (list || [])
+        .filter(p => p.toLowerCase().includes(q))
+        .slice(0, 50)
+        .forEach(name => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
+          li.textContent = name;
+          li.addEventListener('click', () => {
+            wizProveedor.value = name;
+            wizProvSuggestions.innerHTML = '';
+          });
+          wizProvSuggestions.appendChild(li);
+        });
+
+      if (!wizProvSuggestions.children.length) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-light no-results';
+        li.textContent = 'Sin resultados. Escriba el nombre completo del proveedor.';
+        wizProvSuggestions.appendChild(li);
+      }
+    }).catch(() => {});
+  }
+
+  if (wizProveedor) {
+    wizProveedor.addEventListener('input', () => renderWizardProvSuggestions(wizProveedor.value));
+    wizProveedor.addEventListener('keydown', (e) => {
+      const items = wizProvSuggestions ? wizProvSuggestions.getElementsByTagName('li') : [];
+      if (e.key === 'ArrowDown') { wizProvFocus++; addActiveWizProv(items); }
+      else if (e.key === 'ArrowUp') { wizProvFocus--; addActiveWizProv(items); }
+      else if (e.key === 'Enter') {
+        if (wizProvFocus > -1 && items[wizProvFocus]) {
+          e.preventDefault();
+          items[wizProvFocus].click();
+        }
+      }
+    });
+  }
+
+  function addActiveWizProv(items) {
+    if (!items || !items.length) return;
+    [...items].forEach(x => x.classList.remove('active'));
+    if (wizProvFocus >= items.length) wizProvFocus = 0;
+    if (wizProvFocus < 0) wizProvFocus = items.length - 1;
+    items[wizProvFocus].classList.add('active');
+    items[wizProvFocus].scrollIntoView({ block: 'nearest' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!wizProvSuggestions || !wizProveedor) return;
+    if (target === wizProveedor || wizProvSuggestions.contains(target)) return;
+    wizProvSuggestions.innerHTML = '';
+    wizProvFocus = -1;
+  });
+
   wizTipo.addEventListener('change', () => {
     updateWizardByTipo();
   });
@@ -396,6 +384,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const tipo = (wizTipo.value || '').trim();
     const cfg = { tipo };
+
+    // Proveedor opcional
+    if (wizProveedor && (wizProveedor.value || '').trim()) {
+      cfg.proveedor = (wizProveedor.value || '').trim();
+    }
 
     if (tipo === 'Almacén' || tipo === 'Almacen') {
       cfg.ubicacion = (wizUbicacion.value || '').trim();
@@ -491,7 +484,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnPDF.disabled   = !hasRows;
     btnPrint.disabled = !hasRows;
     btnExcel.disabled = !hasRows;
-    btnClear.disabled = !hasRows;
+    btnClear.disabled = !hasRows && !(proveedorInput.value.trim() || (ubicacionInput && ubicacionInput.value.trim()));
   }
 
   function renumber() {
@@ -646,6 +639,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     recalcTotals();
     updateButtons();
+
+    // reset resumen visible (evita datos viejos mientras carga)
+    if (sumTipo) sumTipo.textContent = '-';
+    if (sumProveedor) sumProveedor.textContent = '-';
+    if (sumUbicacion) sumUbicacion.textContent = '-';
+    if (sumDependiente) sumDependiente.textContent = '-';
+    if (sumSala) sumSala.textContent = '-';
+    if (sumEstante) sumEstante.textContent = '-';
   }
 
   function addRowAndFocus({ barcode, nombre, codInvent, bodega, fechaVenc }) {
@@ -673,6 +674,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ubicacionInput && !ubicacionInput.dataset.locked) ubicacionInput.value = '';
     recalcTotals();
     updateButtons();
+
+    // reset resumen visible (evita datos viejos mientras carga)
+    if (sumTipo) sumTipo.textContent = '-';
+    if (sumProveedor) sumProveedor.textContent = '-';
+    if (sumUbicacion) sumUbicacion.textContent = '-';
+    if (sumDependiente) sumDependiente.textContent = '-';
+    if (sumSala) sumSala.textContent = '-';
+    if (sumEstante) sumEstante.textContent = '-';
 
     const isHistory = day !== getToday();
     setReadOnlyMode(isHistory);
@@ -745,8 +754,104 @@ document.addEventListener('DOMContentLoaded', async () => {
   await (typeof preloadProviders === 'function' ? preloadProviders().catch(() => {}) : Promise.resolve());
   await (typeof preloadCatalog === 'function' ? preloadCatalog().catch(() => {}) : Promise.resolve());
 
-  // Proveedores: ahora se capturan en el Wizard (paso Almacén). No se usa autocomplete aquí.
+  // Catálogo sugerencias
+  let currentFocus = -1;
 
+  searchInput.addEventListener('input', () => {
+    const raw = (searchInput.value || '').replace(/\r|\n/g, '').trim();
+    const q = raw.toLowerCase();
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+    if (!q) return;
+
+    loadProductsFromGoogleSheets().then(rows => {
+      const filtered = (rows || []).filter(r => {
+        const nombre = (r[0] || '').toLowerCase();
+        const codInvent = (r[1] || '').toLowerCase();
+        const barcode = (r[3] || '').toLowerCase();
+        return nombre.includes(q) || barcode.includes(q) || codInvent.includes(q);
+      });
+
+      if (!filtered.length) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-light no-results';
+        li.innerHTML = '<strong>Sin resultados</strong>. Usa el botón + para agregar producto manual.';
+        suggestions.appendChild(li);
+        return;
+      }
+
+      filtered.slice(0, 50).forEach(prod => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        const nombre = prod[0] || '';
+        const codInvent = prod[1] || 'N/A';
+        const bodega = prod[2] || '';
+        const barcode = prod[3] || 'sin código';
+        li.textContent = nombre + ' (' + barcode + ') [' + codInvent + '] — ' + bodega;
+        li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent, bodega }));
+        suggestions.appendChild(li);
+      });
+    }).catch(() => {});
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    const items = suggestions.getElementsByTagName('li');
+    if (e.key === 'ArrowDown') { currentFocus++; addActive(items); }
+    else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+
+      if (currentFocus > -1 && items[currentFocus]) {
+        items[currentFocus].click();
+        return;
+      }
+
+      const raw = (searchInput.value || '').replace(/\r|\n/g, '').trim();
+      if (!raw) return;
+
+      const rows = (window.CATALOGO_CACHE || []);
+      let match = null;
+      for (const r of rows) {
+        const barcode = r[3] ? String(r[3]).trim() : '';
+        const codInvent = r[1] ? String(r[1]).trim() : '';
+        if (barcode === raw || codInvent === raw) { match = r; break; }
+      }
+      if (match) {
+        const nombre = match[0] || '';
+        const codInvent = match[1] || 'N/A';
+        const bodega = match[2] || '';
+        const barcode = match[3] || raw;
+        addRowAndFocus({ barcode, nombre, codInvent, bodega });
+      }
+    }
+  });
+
+  function addActive(items) {
+    if (!items || !items.length) return;
+    [...items].forEach(x => x.classList.remove('active'));
+    if (currentFocus >= items.length) currentFocus = 0;
+    if (currentFocus < 0) currentFocus = items.length - 1;
+    items[currentFocus].classList.add('active');
+    items[currentFocus].scrollIntoView({ block: 'nearest' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target === searchInput || suggestions.contains(target)) return;
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      suggestions.innerHTML = '';
+      provSuggestions.innerHTML = '';
+      currentFocus = -1;
+      provFocus = -1;
+    }
+  });
+
+  // Manual modal (+)
   function openManualModalFromSearch(rawQuery) {
     const q = (rawQuery || '').trim();
     mCodigo.value = '';
@@ -759,6 +864,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       else mNombre.value = q;
     }
     manualModal.show();
+    // Foco manejado en shown.bs.modal para evitar que se pierda en móvil.
+
   }
 
   const btnOpenManual = document.getElementById('btnOpenManual');
@@ -876,10 +983,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Guardar / limpiar / exportar
   // =========================
   btnSave.addEventListener('click', async () => {
-    const wizCfgNow = getWizardConfig();
-    const ubicWizard = (wizCfgNow.ubicacionTexto || wizCfgNow.ubicacion || '').toString().trim();
-    if (!ubicWizard) {
-      Swal.fire('Ubicación requerida', 'Complete el asistente inicial para definir la ubicación.', 'info');
+    if (!ubicacionInput || !ubicacionInput.value.trim()) {
+      Swal.fire('Ubicación requerida', 'Ingrese la ubicación del producto.', 'info');
       return;
     }
     if (body.rows.length === 0) {
@@ -906,8 +1011,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const payload = {
       meta: {
         tienda: 'AVENIDA MORAZÁN',
-        proveedor: (getWizardConfig().proveedor || '').toString().trim(),
-        ubicacion: ( (getWizardConfig().ubicacionTexto || getWizardConfig().ubicacion || '') ).toString().trim(),
+        proveedor: proveedorInput.value.trim(),
+        ubicacion: ubicacionInput.value.trim(),
         hoja_inventario: CURRENT_INVENTARIO,
         fechaInventario: new Date().toISOString(),
         wizard: wizCfg || {}
@@ -986,11 +1091,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     doc.setFontSize(12);
     doc.text('Tienda: AVENIDA MORAZÁN', 10, 10);
-    const wizCfgPdf = getWizardConfig();
-    const ubicPdf = (wizCfgPdf.ubicacionTexto || wizCfgPdf.ubicacion || '').toString().trim() || '-';
-    doc.text('Ubicación: ' + ubicPdf, 10, 18);
-    const provPdf = (wizCfgPdf.proveedor || '').toString().trim();
-    if (provPdf) doc.text('Proveedor: ' + provPdf, 10, 26);
+    doc.text('Ubicación: ' + (ubicacionInput ? (ubicacionInput.value || '-') : '-'), 10, 18);
     if (proveedorInput.value.trim()) doc.text('Proveedor: ' + proveedorInput.value, 10, 26);
     doc.text('Hoja de inventario: ' + (inventarioSelect ? inventarioSelect.value : ''), 10, 34);
 
@@ -1001,10 +1102,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return [i + 1, tr.cells[1].innerText, tr.cells[2].innerText, tr.cells[3].innerText, bodega, qty, fechaV];
     });
 
-    const startTableY = (typeof yInfo === 'number' ? (yInfo + 6) : 40);
-
     doc.autoTable({
-      startY: startTableY,
+      startY: 60,
       head: [['#','Código barras','Producto','Cod. Inv.','Bodega','Cant.','F. vencimiento']],
       body: rows,
       styles: { fontSize: 9, cellPadding: 2 }
@@ -1024,8 +1123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (body.rows.length === 0) return;
 
     const fechaFis = new Date().toISOString().split('T')[0];
-    const wizCfgX = getWizardConfig();
-    const ubicacionValor = (wizCfgX.ubicacionTexto || wizCfgX.ubicacion || '').toString();
+    const ubicacionValor = ubicacionInput ? (ubicacionInput.value || '') : '';
 
     const data = [[
       'fechafis','idgrupo','idsubgrupo','idarticulo','descrip','codigobarra','cod_unidad','ubicacion','Bodega_5'
