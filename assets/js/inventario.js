@@ -8,8 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const body           = $('recepcionBody');
   const proveedorInput = $('proveedorInput');
   const ubicacionInput = $('ubicacionInput');
-  const ubicacionLockHint = $('ubicacionLockHint');
-
   const btnSave        = $('saveReception');
   const btnPDF         = $('exportPDF');
   const btnPrint       = $('printPDF');
@@ -25,8 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fileScan      = $('fileScan');
 
   const suggestions   = $('suggestions');
-  const provSuggestions = $('provSuggestions');
-
   // Modal manual
   const mCodigo       = $('mCodigo');
   const mNombre       = $('mNombre');
@@ -139,8 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ubicacionInput.disabled = !!lock;
     ubicacionInput.dataset.locked = lock ? '1' : '';
     if (typeof value === 'string') ubicacionInput.value = value;
-    if (ubicacionLockHint) ubicacionLockHint.classList.toggle('d-none', !lock);
-  }
+}
 
   function fillSelect(selectEl, values, placeholder='Selecciona...') {
     if (!selectEl) return;
@@ -845,10 +840,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       suggestions.innerHTML = '';
-      provSuggestions.innerHTML = '';
       currentFocus = -1;
-      provFocus = -1;
-    }
+}
   });
 
   // Manual modal (+)
