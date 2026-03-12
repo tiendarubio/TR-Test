@@ -6,3 +6,6 @@ Cambios incluidos:
   - assets/js
   - assets/css
   - api
+
+- Ajuste extra: se habilitó experimentalAutoDetectLongPolling en Firestore para reducir errores de WebChannel en navegadores/extensiones que bloquean requests.
+- Ajuste extra: se agregó favicon inline para evitar el 404 de /favicon.ico.
