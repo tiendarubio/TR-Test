@@ -1,7 +1,7 @@
 {
-  "name": "trinventario-firebase",
+  "name": "trlista-firebase-historial",
   "private": true,
   "type": "module",
   "version": "1.0.0",
-  "description": "TRInventario con Firestore (sin JSONBin), catálogo/proveedores vía Google Sheets (proxy en Vercel)."
+  "description": "TRLista con Firestore + hist\u00f3rico por d\u00eda (flatpickr) y cat\u00e1logo/proveedores v\u00eda Google Sheets (proxy en Vercel)."
 }

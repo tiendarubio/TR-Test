@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TRInventario — Avenida Morazán</title>
+  <title>TRLista2.0 — Solicitudes a Bodega</title>
 
   <!-- Bootstrap & FontAwesome -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -12,106 +12,78 @@
   <!-- Estilos propios -->
   <link href="assets/css/styles.css" rel="stylesheet">
 
-  <!-- Librerías externas -->
+  <!-- Flatpickr (histórico) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+  <!-- Librerías JS externas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- Calendario para historial -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body class="bg-light">
 
-  <!-- NAVBAR SUPERIOR -->
+  <!-- TOP NAVBAR -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container-fluid">
       <a class="navbar-brand d-flex align-items-center gap-2" href="#">
         <img src="assets/img/trlogo.png" alt="Logo TR" class="logo-navbar">
-        <span class="fw-semibold">TRInventario</span>
+        <span class="fw-semibold">TRLista2.0</span>
       </a>
-      <div class="ms-auto text-white-50 small d-none d-md-block">
-        Avenida Morazán — Control de inventario
+
+      <div class="d-flex align-items-center gap-3 ms-auto">
+        <span class="text-white-50 small d-none d-md-inline">Solicitudes a bodega</span>
+        <span class="badge bg-secondary" id="lastSaved">
+          <i class="fa-solid fa-clock-rotate-left me-1"></i>
+          Aún no guardado.
+        </span>
       </div>
     </div>
   </nav>
 
-  <!-- CONTENIDO PRINCIPAL -->
+  <!-- MAIN CONTENT -->
   <main class="container-fluid py-4">
     <div class="row g-4">
 
-      <!-- PANEL IZQUIERDO: CONTROL DE INVENTARIO -->
+      <!-- PANEL IZQUIERDO: Configuración -->
       <div class="col-xl-3 col-lg-4">
+        <!-- Card: Configuración de tienda -->
         <div class="card shadow-sm mb-4">
           <div class="card-header bg-white border-0 pb-0">
             <h6 class="card-title mb-1">
-              <i class="fa-solid fa-play me-2 text-primary"></i>
-              Inventario
+              <i class="fa-solid fa-sliders me-2 text-primary"></i>
+              Configuración
             </h6>
-            <p class="text-muted small mb-0">
-              Inicia un inventario con un ID único, guarda progreso y finaliza cuando termines.
-            </p>
+            <p class="text-muted small mb-0">Selecciona la tienda y la versión de lista.</p>
           </div>
           <div class="card-body">
-            <div class="d-grid gap-2">
-              <button id="btnStartInventory" class="btn btn-primary btn-sm">
-                <i class="fa-solid fa-play me-1"></i> Iniciar inventario
-              </button>
-              <button id="btnSaveProgress" class="btn btn-outline-primary btn-sm" disabled>
-                <i class="fa-solid fa-floppy-disk me-1"></i> Guardar progreso
-              </button>
-              <button id="btnFinalizeInventory" class="btn btn-outline-success btn-sm" disabled>
-                <i class="fa-solid fa-circle-check me-1"></i> Finalizar inventario
-              </button>
-              <button id="btnResumeInventory" class="btn btn-outline-secondary btn-sm d-none">
-                <i class="fa-solid fa-rotate-left me-1"></i> Reanudar borrador
-              </button>
+            <div class="mb-3">
+              <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
+              <select id="storeSelect" class="form-select form-select-sm">
+                <option value="lista_sexta_calle">Sexta Calle</option>
+                <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
+                <option value="lista_centro_comercial">Centro Comercial</option>
+              </select>
             </div>
 
-            <hr class="my-3"/>
-
-            <div class="small">
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">ID actual</span>
-                <span id="curSessionId" class="fw-semibold">—</span>
-              </div>
-              <div class="d-flex justify-content-between mt-1">
-                <span class="text-muted">Estado</span>
-                <span id="curSessionStatus" class="fw-semibold">—</span>
-              </div>
-              <div class="d-flex justify-content-between mt-1">
-                <span class="text-muted">Última actualización</span>
-                <span id="curSessionUpdated" class="fw-semibold">—</span>
-              </div>
+            <div class="mb-3">
+              <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
+              <select id="versionSelect" class="form-select form-select-sm">
+                <option value="base" selected>Principal</option>
+                <option value="alterna">Alterna</option>
+              </select>
             </div>
 
-            <div class="mb-2 mt-3">
-              <div id="fechaInventario" class="small text-muted fw-semibold"></div>
+            <div class="mt-2 text-center">
+              <span id="storeBadge" class="badge-store badge-morazan">
+                <i class="fa-solid fa-store"></i>
+                <span id="storeBadgeText">Avenida Morazán</span>
+              </span>
             </div>
-
-            <!-- Historial por día -->
-            <div class="mb-2">
-              <label for="historyDate" class="form-label fw-semibold mb-1">Historial</label>
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white"><i class="fa-solid fa-calendar-days text-muted"></i></span>
-                <input id="historyDate" type="text" class="form-control" placeholder="Selecciona una fecha" autocomplete="off">
-                <button id="btnToday" class="btn btn-outline-secondary" type="button" title="Volver a hoy">Hoy</button>
-              </div>
-              <div id="historyHint" class="form-text small text-muted mt-1">
-                Los días con inventarios guardados aparecen con un punto. Selecciona una fecha para ver la lista.
-              </div>
-            </div>
-
-            <div id="sessionsListWrap" class="mt-2">
-              <div class="small text-muted fw-semibold mb-1">Inventarios del día</div>
-              <div id="sessionsList" class="list-group small"></div>
-            </div>
-
-            <!-- Mensaje de éxito -->
-            <p id="successMessage" class="text-success small mt-2 mb-0" style="display:none;"></p>
           </div>
         </div>
 
-        <!-- Indicaciones -->
+        <!-- Card: Indicaciones -->
         <div class="card shadow-sm">
           <div class="card-header bg-white border-0 pb-0">
             <h6 class="card-title mb-1">
@@ -122,171 +94,168 @@
           <div class="card-body small text-muted">
             <ul class="list-unstyled mb-0">
               <li class="mb-2 d-flex">
-                <i class="fa-solid fa-location-dot text-primary me-2 mt-1"></i>
-                <span>Inicia el inventario y completa el wizard antes de agregar ítems.</span>
-              </li>
-              <li class="mb-2 d-flex">
                 <i class="fa-solid fa-magnifying-glass text-primary me-2 mt-1"></i>
-                <span>Busca productos por nombre, código de inventario o código de barras.</span>
+                <span>Busca por nombre, código de inventario o código de barras.</span>
               </li>
               <li class="mb-2 d-flex">
-                <i class="fa-solid fa-plus text-primary me-2 mt-1"></i>
-                <span>Si el producto no está en el catálogo, agrégalo manualmente.</span>
+                <i class="fa-solid fa-barcode text-primary me-2 mt-1"></i>
+                <span>Usa el escáner para capturar códigos desde la cámara o una imagen.</span>
+              </li>
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-calendar-days text-primary me-2 mt-1"></i>
+                <span>Consulta el histórico por día (solo lectura) y vuelve a hoy para editar.</span>
               </li>
               <li class="d-flex">
-                <i class="fa-solid fa-file-export text-primary me-2 mt-1"></i>
-                <span>Exporta PDF/Excel cuando lo necesites. Finaliza al terminar.</span>
+                <i class="fa-solid fa-truck-ramp-box text-primary me-2 mt-1"></i>
+                <span>Marca cada ítem como <strong>Revisado</strong> y <strong>Despachado</strong> según corresponda.</span>
               </li>
             </ul>
           </div>
         </div>
       </div>
 
-
-
-      <!-- PANEL DERECHO: DATOS + DETALLE -->
+      <!-- PANEL DERECHO: Búsqueda + Checklist -->
       <div class="col-xl-9 col-lg-8">
 
-        <!-- Card: Datos de proveedor / ubicación y productos -->
+        <!-- Card: Búsqueda, histórico y escáner -->
         <div class="card shadow-sm mb-4">
           <div class="card-header bg-white border-0">
-            <h6 class="card-title mb-1">
-              <i class="fa-solid fa-address-card me-2 text-primary"></i>
-              Datos y búsqueda de productos
-            </h6>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <h6 class="card-title mb-1">
+                  <i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>
+                  Buscar producto
+                </h6>
+                <p class="text-muted small mb-0">Catálogo centralizado por Google Sheets.</p>
+              </div>
+              <button id="btnScan" class="btn btn-outline-primary btn-sm" type="button" title="Escanear código de barras">
+                <i class="fa-solid fa-barcode me-1"></i> Escanear
+              </button>
+            </div>
           </div>
+
           <div class="card-body border-top">
-            <div class="row g-3">
-              <!-- Resumen de configuración (Wizard) -->
-              <div class="col-12">
-                <div class="p-2 rounded border bg-white">
-                  <div class="small text-muted mb-1 fw-semibold">Resumen</div>
-                  <div class="row g-2 small">
-                    <div class="col-md-3"><span class="text-muted">Tipo:</span> <span id="sumTipo" class="fw-semibold">-</span></div>
-                    <div class="col-md-3"><span class="text-muted">Proveedor:</span> <span id="sumProveedor" class="fw-semibold">-</span></div>
-                    <div class="col-md-6"><span class="text-muted">Ubicación:</span> <span id="sumUbicacion" class="fw-semibold">-</span></div>
-                    <div class="col-md-4"><span class="text-muted">Dependiente:</span> <span id="sumDependiente" class="fw-semibold">-</span></div>
-                    <div class="col-md-4"><span class="text-muted">Sala:</span> <span id="sumSala" class="fw-semibold">-</span></div>
-                    <div class="col-md-4"><span class="text-muted">Estante:</span> <span id="sumEstante" class="fw-semibold">-</span></div>
-                  </div>
-                </div>
+            <!-- Buscador -->
+            <div class="position-relative mb-3">
+              <label class="form-label fw-semibold mb-1" for="searchInput">
+                Barra de búsqueda
+              </label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white">
+                  <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                </span>
+                <input
+                  id="searchInput"
+                  type="text"
+                  class="form-control"
+                  placeholder="Nombre, código inventario o código de barras"
+                  autocomplete="off"
+                >
               </div>
 
-              <!-- Ubicación/Proveedor (inputs ocultos, se usan para guardar/exportar) -->
-              <div class="col-12 d-none">
-                <input id="ubicacionInput" type="text" class="form-control form-control-sm" placeholder="Ej. Bodega, pasillo 3, góndola A">
-                <input id="proveedorInput" type="text" class="form-control form-control-sm" placeholder="Proveedor">
-              </div>
+              <!-- Lista de sugerencias -->
+              <ul id="suggestions" class="list-group shadow-sm search-suggestions"></ul>
+            </div>
 
-              <!-- Buscador de productos -->
-              <div class="col-12 position-relative">
-                <label class="form-label fw-semibold mb-1">Buscar producto (catálogo)</label>
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text bg-white">
-                    <i class="fa-solid fa-magnifying-glass text-muted"></i>
-                  </span>
-                  <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código inventario o código de barras" autocomplete="off">
-                  <button id="btnScan" class="btn btn-outline-secondary" type="button" title="Escanear código de barras">
-                    <i class="fa-solid fa-barcode"></i>
-                  </button>
-                  <button id="btnOpenManual" class="btn btn-outline-secondary" type="button" title="Agregar producto manual">
-                    <i class="fa-solid fa-plus"></i>
-                  </button>
+            <!-- Histórico diario -->
+            <div class="row mt-2">
+              <div class="col-12 col-md-6 hist-date-wrapper">
+                <label class="form-label fw-semibold mb-1">Consultar histórico por día</label>
+                <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha">
+                <div class="form-text small text-muted">
+                  Los días con checklist guardado se marcarán con un punto azul en el calendario.
                 </div>
-                <ul id="suggestions" class="list-group search-suggestions"></ul>
-                <div class="form-text small text-muted mt-1">
-                  Si no se encuentra en el catálogo, puedes agregarlo manualmente con el botón <strong>+</strong>.
+                <div class="form-text small" id="histViewModeText">
+                  Modo: checklist del día actual (editable).
+                </div>
+
+                <div class="d-grid gap-2 mt-2">
+                  <button type="button" id="btnHistToday" class="btn btn-outline-secondary btn-sm w-100">
+                    Ver checklist actual (hoy)
+                  </button>
+
+                  <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm w-100 d-none">
+                    <i class="fa-solid fa-unlock-keyhole me-1"></i>
+                    Desbloquear controles
+                  </button>
                 </div>
               </div>
             </div>
 
-            <!-- Scanner de código de barras -->
-            <div class="row mt-2">
-              <div class="col-12">
-                <div id="scanWrap" class="scan-wrap">
-                  <div class="scanner">
-                    <video id="scanVideo" playsinline></video>
-                    <div class="scan-overlay"></div>
-                    <div class="scan-msg">Apunta al código de barras…</div>
-                  </div>
-                  <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
-                    <button id="btnScanStop" class="btn btn-sm btn-outline-danger">
-                      <i class="fa-solid fa-stop"></i> Detener
-                    </button>
-                    <input id="fileScan" class="form-control form-control-sm" type="file" accept="image/*" capture="environment" style="max-width:280px;">
-                    <small class="text-muted ms-1">
-                      En dispositivos sin escaneo en vivo, usa la opción de <strong>archivo</strong> o la pistola de códigos.
-                    </small>
-                  </div>
-                </div>
+            <!-- Área de escáner -->
+            <div id="scanWrap" class="scanner-wrap mt-3">
+              <div class="scanner">
+                <video id="scanVideo" playsinline></video>
+                <div class="scan-overlay"></div>
+                <div class="scan-msg">Apunta al código de barras…</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button id="btnScanStop" class="btn btn-sm btn-outline-danger">
+                  <i class="fa-solid fa-stop me-1"></i> Detener
+                </button>
+                <input
+                  id="fileScan"
+                  class="form-control form-control-sm"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style="max-width:280px;"
+                >
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Card: Detalle de inventario -->
+        <!-- Card: Checklist -->
         <div class="card shadow-sm">
           <div class="card-header bg-white border-0">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
               <div>
                 <h6 class="card-title mb-1">
                   <i class="fa-solid fa-list-check me-2 text-primary"></i>
-                  Detalle de inventario
+                  Checklist de productos
                 </h6>
-                <p class="text-muted small mb-0">
-                  Conteo de líneas de inventario por producto.
-                </p>
+                <p class="text-muted small mb-0">Control de revisión y despacho por bodega.</p>
               </div>
+
               <!-- Toolbar -->
               <div class="btn-toolbar gap-2" role="toolbar" aria-label="Toolbar">
-                <button id="saveReception" class="btn btn-primary btn-sm">
+                <button id="btnSave" class="btn btn-primary btn-sm">
                   <i class="fa-solid fa-floppy-disk me-1"></i> Guardar
                 </button>
-                <button id="finalizeReception" class="btn btn-success btn-sm">
-                  <i class="fa-solid fa-circle-check me-1"></i> Finalizar
-                </button>
-                <button id="exportPDF" class="btn btn-outline-danger btn-sm" disabled>
+                <button id="btnPDF" class="btn btn-outline-danger btn-sm">
                   <i class="fa-solid fa-file-pdf me-1"></i> PDF
                 </button>
-                <button id="printPDF" class="btn btn-outline-info btn-sm" disabled>
-                  <i class="fa-solid fa-print me-1"></i> Imprimir
-                </button>
-                <button id="exportExcel" class="btn btn-outline-success btn-sm" disabled>
+                <button id="btnExcel" class="btn btn-outline-success btn-sm">
                   <i class="fa-solid fa-file-excel me-1"></i> Excel
                 </button>
-                <button id="clearReception" class="btn btn-outline-secondary btn-sm" disabled>
+                <button id="btnClear" class="btn btn-outline-secondary btn-sm">
                   <i class="fa-solid fa-trash-can me-1"></i> Limpiar
                 </button>
               </div>
             </div>
           </div>
+
           <div class="card-body border-top">
             <div class="table-responsive table-checklist-wrapper">
-              <table class="table table-sm table-bordered align-middle mb-0" id="recepcionTable">
+              <table class="table table-sm table-bordered align-middle mb-0" id="chkTable">
                 <thead class="table-light">
                   <tr>
                     <th class="text-center" style="width: 48px;">#</th>
-                    <th>Código de barras</th>
+                    <th>Cód. barras</th>
                     <th>Nombre</th>
-                    <th>Código inventario</th>
-                    <th>Bodega</th>
-                    <th class="text-center text-nowrap">Cantidad</th>
-                    <th class="text-center text-nowrap">Fecha vencimiento</th>
+                    <th class="text-nowrap">Cód. inventario</th>
+                    <th id="thBodega" style="cursor:pointer;">
+                      Bodega <i class="fa-solid fa-arrow-up-wide-short ms-1 text-muted"></i>
+                    </th>
+                    <th class="text-center text-nowrap">Cant.</th>
+                    <th class="text-center text-nowrap">Revisado</th>
+                    <th class="text-center text-nowrap">Despachado</th>
                     <th class="text-center text-nowrap">Acciones</th>
                   </tr>
                 </thead>
-                <tbody id="recepcionBody"></tbody>
+                <tbody id="chkBody"></tbody>
               </table>
-            </div>
-
-            <!-- Totales -->
-            <div class="row mt-3 g-2 small fw-semibold">
-              <div class="col-md-6">
-                Líneas: <span id="tLineas">0</span>
-              </div>
-              <div class="col-md-6">
-                Cantidad total: <span id="tCantidad">0</span>
-              </div>
             </div>
           </div>
         </div>
@@ -295,150 +264,33 @@
     </div><!-- /row -->
   </main>
 
-  <!-- Modal para agregar producto manual -->
-  <div class="modal fade" id="manualModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Agregar producto manual</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label">Código de barras</label>
-              <input id="mCodigo" type="text" class="form-control" placeholder="Código de barras">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Nombre del producto</label>
-              <input id="mNombre" type="text" class="form-control" placeholder="Nombre del producto">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Código inventario</label>
-              <input id="mCodInv" type="text" class="form-control" value="N/A">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Bodega</label>
-              <input id="mBodega" type="text" class="form-control" placeholder="Ej. Bodega principal">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Fecha de vencimiento</label>
-              <input id="mVencimiento" type="date" class="form-control">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Cantidad</label>
-              <input id="mCantidad" type="number" class="form-control" placeholder="Cantidad" min="0" step="1">
-            </div>
-          </div>
-          <div class="mt-3 small text-muted">
-            Este producto se guardará únicamente en la hoja de inventario actual (no se agrega al catálogo maestro).
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" id="btnAddManual" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Agregar al inventario
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Wizard: Inicio de Inventario (Obligatorio) -->
-  <div class="modal fade" id="wizardModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">
-            <i class="fa-solid fa-clipboard-check me-2 text-primary"></i>
-            Configurar inventario
-          </h5>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted small mb-3">
-            Selecciona el tipo de inventario y los datos requeridos para iniciar.
-          </p>
-
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Tipo de inventario</label>
-              <select id="wizTipo" class="form-select">
-                <option value="">Cargando...</option>
-              </select>
-            </div>
-
-            
-            <div class="col-md-6 position-relative">
-              <label class="form-label fw-semibold">Proveedor (opcional)</label>
-              <input id="wizProveedor" type="text" class="form-control" placeholder="Escriba para buscar proveedor...">
-              <ul id="wizProvSuggestions" class="list-group search-suggestions"></ul>
-            </div>
-<div class="col-md-6 d-none" id="wizAlmacenWrap">
-              <label class="form-label fw-semibold">Ubicación (Almacén)</label>
-              <select id="wizUbicacion" class="form-select">
-                <option value="">Selecciona...</option>
-              </select>
-            </div>
-        <div class="mt-2">
-          <label class="form-label fw-semibold mb-1">Proveedor (Opcional)</label>
-          <input id="wizProveedorAlmacen" type="text" class="form-control form-control-sm" placeholder="Buscar proveedor...">
-        </div>
-
-            <div class="col-md-6 d-none" id="wizDependienteWrap">
-              <label class="form-label fw-semibold">Dependiente responsable</label>
-              <select id="wizDependiente" class="form-select">
-                <option value="">Selecciona...</option>
-              </select>
-            </div>
-
-            <div class="col-md-6 d-none" id="wizSalaWrap">
-              <label class="form-label fw-semibold">Sala de venta</label>
-              <select id="wizSala" class="form-select">
-                <option value="">Selecciona...</option>
-                <option value="Sexta Calle">Sexta Calle</option>
-                <option value="Centro Comercial">Centro Comercial</option>
-                <option value="Avenida Morazán">Avenida Morazán</option>
-              </select>
-            </div>
-
-            <div class="col-md-12 d-none" id="wizEstanteWrap">
-              <label class="form-label fw-semibold">Estante</label>
-              <select id="wizEstante" class="form-select">
-                <option value="">Selecciona...</option>
-              </select>
-              <div class="form-text small text-muted mt-1">
-                La lista de estantes depende de la sala seleccionada.
-              </div>
-            </div>
-          </div>
-
-          <div class="alert alert-info small mt-3 mb-0">
-            <i class="fa-solid fa-circle-info me-2"></i>
-            Para <strong>Sala de venta</strong>: primero elige dependiente, luego sala y estante.
-          </div>
-        </div>
-        <div class="modal-footer">
-          <span class="me-auto small text-muted" id="wizStatus"></span>
-          <button type="button" class="btn btn-primary" id="wizStartBtn" disabled>
-            <i class="fa-solid fa-play me-1"></i> Iniciar inventario
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- JS -->
+  <!-- Bootstrap + SweetAlert -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 
-  <!-- Firebase (Firestore) - compat -->
+  <!-- Firebase (Firestore) -->
   <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+  <script>
+    // Inicializar Firebase solo una vez (misma configuración que TR-Inventario)
+    if (typeof firebase !== 'undefined' && firebase.apps && !firebase.apps.length) {
+      const firebaseConfig = {
+        apiKey: "AIzaSyBeMLx42bljbL3IrYeFhPFsGXNUwfqkbEg",
+        authDomain: "tr-db-4e235.firebaseapp.com",
+        projectId: "tr-db-4e235",
+        storageBucket: "tr-db-4e235.firebasestorage.app",
+        messagingSenderId: "21241790572",
+        appId: "1:21241790572:web:6fcd35853e44201badd849"
+      };
+      firebase.initializeApp(firebaseConfig);
+    }
+  </script>
+
+  <!-- Flatpickr -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
   <!-- App -->
   <script src="assets/js/app.js"></script>
-  <script src="assets/js/inventario.js"></script>
+  <script src="assets/js/checklist.js"></script>
 </body>
 </html>

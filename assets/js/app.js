@@ -1,10 +1,20 @@
-// assets/js/app.js — Helpers para TRInventario (Vercel) usando Firestore + Google Sheets
+// app.js — Config & helpers para TRLista (Vercel)
+
+// BINS por tienda (principal y alterna) — se reutilizan como docId en Firestore
+const STORE_BINS = {
+  lista_sexta_calle:      { base:'68c5b46ed0ea881f407ce556', alterna:'69174e9943b1c97be9ad5f6b' },
+  lista_centro_comercial: { base:'68c5b4add0ea881f407ce586', alterna:'69174eb7d0ea881f40e85786' },
+  lista_avenida_morazan:  { base:'68c5b4e043b1c97be941f83f', alterna:'69174e1ad0ea881f40e8565f' }
+};
+
+function getBinId(storeKey, versionKey = 'base') {
+  const rec = STORE_BINS[storeKey];
+  if (!rec) return null;
+  return rec[versionKey] || rec.base;
+}
 
 let CATALOGO_CACHE = null;
-let PROVIDERS_CACHE = null;
-let ESTANTES_CACHE = null;
 
-// --- Catálogo ---
 function preloadCatalog() {
   if (CATALOGO_CACHE) return Promise.resolve(CATALOGO_CACHE);
 
@@ -18,185 +28,105 @@ function preloadCatalog() {
       try { window.CATALOGO_CACHE = CATALOGO_CACHE; } catch (_) {}
       return CATALOGO_CACHE;
     })
-    .catch(err => {
-      console.error('Error al cargar catálogo:', err);
+    .catch(e => {
+      console.error('Sheets catálogo error:', e);
       CATALOGO_CACHE = [];
       try { window.CATALOGO_CACHE = CATALOGO_CACHE; } catch (_) {}
       return CATALOGO_CACHE;
     });
 }
-function loadProductsFromGoogleSheets() { return preloadCatalog(); }
 
-// --- Proveedores ---
-function preloadProviders() {
-  if (PROVIDERS_CACHE) return Promise.resolve(PROVIDERS_CACHE);
-
-  return fetch('/api/proveedores')
-    .then(r => {
-      if (!r.ok) throw new Error('Error proveedores: ' + r.statusText);
-      return r.json();
-    })
-    .then(data => {
-      PROVIDERS_CACHE = Array.isArray(data.providers) ? data.providers : [];
-      return PROVIDERS_CACHE;
-    })
-    .catch(err => {
-      console.error('Error al cargar proveedores:', err);
-      PROVIDERS_CACHE = [];
-      return PROVIDERS_CACHE;
-    });
-}
-function loadProvidersFromGoogleSheets() { return preloadProviders(); }
-
-// --- Estantes (Wizard) ---
-function preloadEstantes() {
-  if (ESTANTES_CACHE) return Promise.resolve(ESTANTES_CACHE);
-
-  return fetch('/api/estantes')
-    .then(r => {
-      if (!r.ok) throw new Error('Error estantes: ' + r.statusText);
-      return r.json();
-    })
-    .then(data => {
-      ESTANTES_CACHE = data || {};
-      return ESTANTES_CACHE;
-    })
-    .catch(err => {
-      console.error('Error al cargar estantes:', err);
-      ESTANTES_CACHE = {};
-      return ESTANTES_CACHE;
-    });
+function loadProductsFromGoogleSheets() {
+  return preloadCatalog();
 }
 
-// ===== Firestore helpers (Sesiones de inventario) =====
-// Estructura:
-//   tr_inventario_sessions/{sessionId}
-// sessionId = ID único (string)
-// Para filtrar por día: campo day = YYYY-MM-DD
-
+// === Firestore helpers (histórico por día) ===
+// Estructura (igual patrón que TR-Inventario):
+//   tr_lista/{docId}/historial/{YYYY-MM-DD}
 function getTodayString() {
   return new Date().toISOString().split('T')[0];
 }
 
-let __FIREBASE_INIT_PROMISE__ = null;
+function saveChecklistToFirestore(docId, payload, dateStr) {
+  if (!docId) {
+    return Promise.reject(new Error('Documento no configurado para esta tienda/lista.'));
+  }
+  if (typeof firebase === 'undefined' || !firebase.firestore) {
+    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
+  }
 
-async function ensureFirebaseInitialized() {
+  const db  = firebase.firestore();
+  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
+
+  return db
+    .collection('tr_lista')
+    .doc(String(docId))
+    .collection('historial')
+    .doc(day)
+    .set(payload || {}, { merge: true })
+    .then(() => ({ ok: true, day }))
+    .catch(err => {
+      console.error('Error al guardar en Firestore:', err);
+      throw err;
+    });
+}
+
+function loadChecklistFromFirestore(docId, dateStr) {
+  if (!docId) return Promise.resolve({});
+  if (typeof firebase === 'undefined' || !firebase.firestore) {
+    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
+  }
+
+  const db  = firebase.firestore();
+  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
+
+  return db
+    .collection('tr_lista')
+    .doc(String(docId))
+    .collection('historial')
+    .doc(day)
+    .get()
+    .then(doc => (doc.exists ? (doc.data() || {}) : {}))
+    .catch(err => {
+      console.error('Error al leer Firestore:', err);
+      return {};
+    });
+}
+
+function getHistoryDates(docId) {
+  if (!docId) return Promise.resolve([]);
+  if (typeof firebase === 'undefined' || !firebase.firestore) {
+    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
+  }
+
+  const db = firebase.firestore();
+  return db
+    .collection('tr_lista')
+    .doc(String(docId))
+    .collection('historial')
+    .get()
+    .then(snap => snap.docs.map(d => d.id))
+    .catch(err => {
+      console.error('Error al listar historial en Firestore:', err);
+      return [];
+    });
+}
+
+// Formatear fecha/hora a formato ES-SV
+function formatSV(iso) {
+  if (!iso) return 'Aún no guardado.';
   try {
-    if (typeof firebase === 'undefined' || !firebase.apps) {
-      throw new Error('Firebase no está disponible en el cliente.');
-    }
-    if (firebase.apps.length) return true;
-
-    if (!__FIREBASE_INIT_PROMISE__) {
-      __FIREBASE_INIT_PROMISE__ = fetch('/api/firebase-config')
-        .then(r => {
-          if (!r.ok) throw new Error('No se pudo obtener firebase-config');
-          return r.json();
-        })
-        .then(cfg => {
-          if (!cfg || !cfg.apiKey || !cfg.projectId) {
-            throw new Error('Configuración de Firebase incompleta.');
-          }
-          firebase.initializeApp(cfg);
-          return true;
-        })
-        .catch(err => {
-          console.error('Firebase init error:', err);
-          throw err;
-        });
-    }
-    await __FIREBASE_INIT_PROMISE__;
-    return true;
+    const dt = new Date(iso);
+    return dt.toLocaleString('es-SV', {
+      timeZone: 'America/El_Salvador',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   } catch (e) {
-    console.error(e);
-    throw e;
-  }
-}
-
-async function getFirestoreDb() {
-  await ensureFirebaseInitialized();
-  if (!firebase.firestore) throw new Error('Firestore no está disponible.');
-  return firebase.firestore();
-}
-
-function getServerTimestamp() {
-  try { return firebase.firestore.FieldValue.serverTimestamp(); }
-  catch (_) { return new Date().toISOString(); }
-}
-
-async function createInventorySession(sessionId, payload) {
-  const db = await getFirestoreDb();
-  const ref = db.collection('tr_inventario_sessions').doc(String(sessionId));
-  await ref.set(payload || {}, { merge: true });
-  return { ok: true, sessionId };
-}
-
-async function updateInventorySession(sessionId, payload) {
-  const db = await getFirestoreDb();
-  const ref = db.collection('tr_inventario_sessions').doc(String(sessionId));
-  await ref.set(payload || {}, { merge: true });
-  return { ok: true, sessionId };
-}
-
-async function loadInventorySession(sessionId) {
-  if (!sessionId) return null;
-  const db = await getFirestoreDb();
-  try {
-    const doc = await db.collection('tr_inventario_sessions').doc(String(sessionId)).get();
-    return doc.exists ? (doc.data() || null) : null;
-  } catch (err) {
-    console.error('Error al leer sesión:', err);
-    return null;
-  }
-}
-
-async function listSessionsByDay(tienda, day) {
-  // NOTE: evitamos índices compuestos consultando solo por 'day' y ordenando en cliente.
-  const db = await getFirestoreDb();
-  try {
-    const snap = await db.collection('tr_inventario_sessions')
-      .where('day', '==', String(day))
-      .get();
-
-    const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-
-    // Si existe el campo tienda, filtramos aquí (sin índice compuesto)
-    const filtered = tienda ? rows.filter(x => String(x.tienda || '') === String(tienda)) : rows;
-
-    // Orden: más reciente primero (createdAtClient -> updatedAtClient -> id)
-    filtered.sort((a, b) => {
-      const ta = a.createdAtClient || a.updatedAtClient || '';
-      const tb = b.createdAtClient || b.updatedAtClient || '';
-      if (ta < tb) return 1;
-      if (ta > tb) return -1;
-      return String(b.id).localeCompare(String(a.id));
-    });
-
-    return filtered;
-  } catch (err) {
-    console.error('Error al listar sesiones por día:', err);
-    return [];
-  }
-}
-
-async function getHistoryDays(tienda, limit = 500) {
-  // NOTE: evitamos índices compuestos consultando por orden de 'day' sin filtros
-  // y deduplicando/filtrando en cliente.
-  const db = await getFirestoreDb();
-  try {
-    let q = db.collection('tr_inventario_sessions').orderBy('day', 'desc');
-    const snap = await q.limit(limit).get();
-
-    const days = new Set();
-    snap.docs.forEach(d => {
-      const data = d.data() || {};
-      if (!data.day) return;
-      if (tienda && String(data.tienda || '') !== String(tienda)) return;
-      days.add(String(data.day));
-    });
-    return Array.from(days);
-  } catch (err) {
-    console.error('Error al obtener días con historial:', err);
-    return [];
+    return 'Aún no guardado.';
   }
 }

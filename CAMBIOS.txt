@@ -1,0 +1,8 @@
+Cambios incluidos:
+- Botón para desbloquear/bloquear controles del histórico con contraseña.
+- Validación segura en backend mediante Google Sheets (estantes!G2).
+- Guardado, limpieza y movimiento entre listas respetan la fecha histórica seleccionada.
+- Estructura normalizada para despliegue en Vercel:
+  - assets/js
+  - assets/css
+  - api
