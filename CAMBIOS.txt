@@ -14,3 +14,13 @@ TRLista2.0 — Ajustes adicionales (2026-03-12)
 3. Funcionalidad existente conservada
 - Desbloqueo/bloqueo de listas históricas con contraseña vía /api/validate-historical-password
 - Guardado, limpieza y movimiento entre listas respetando la fecha histórica seleccionada
+
+
+- Firestore: se agregó merge:true en db.settings() para eliminar la advertencia de sobrescritura de host en SDK 12.6.0.
+- Firestore: se agregó experimentalLongPollingOptions.timeoutSeconds=25 para entornos con proxies/buffering más agresivos.
+
+
+- Calendario histórico: se eliminó la dependencia de Flatpickr por CDN.
+- Calendario histórico: se implementó un calendario local propio, con estilo estable y puntos azules persistentes.
+- Calendario histórico: las fechas con historial se cachean por docId en localStorage para que los puntos no desaparezcan tras una recarga si Firestore falla momentáneamente.
+- Calendario histórico: al guardar o limpiar una fecha, esa fecha se marca de inmediato en el calendario aunque la recarga del historial falle.

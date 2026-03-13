@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const histDateInput = $('histDateInput');
   const btnHistToday = $('btnHistToday');
   const btnToggleHistLock = $('btnToggleHistLock');
+  const btnHistCalendar = $('btnHistCalendar');
+  const histCalendarPanel = $('histCalendarPanel');
 
   // Scanner elements
   const btnScan = $('btnScan');
@@ -35,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let scanInterval = null;
   let detector = null;
 
-  // Histórico (flatpickr)
+  // Histórico
   let histPicker = null;
   let currentViewDate = null; // null = hoy (editable)
   let histDatesWithData = new Set();
@@ -797,6 +799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const payload = collectPayload();
 
         await saveChecklistToFirestore(docId, payload, targetDay);
+        rememberHistoryDate(docId, targetDay);
         lastUpdateISO = payload.meta.updatedAt;
         lastSaved.innerHTML =
           '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
@@ -830,6 +833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       await saveChecklistToFirestore(docId, payload, targetDay);
+      rememberHistoryDate(docId, targetDay);
       lastUpdateISO = payload.meta.updatedAt;
       lastSaved.innerHTML =
         '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
@@ -844,52 +848,292 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ===== Histórico =====
-  async function refreshHistoryPicker() {
-  if (!histDateInput || typeof flatpickr === 'undefined' || typeof getHistoryDates !== 'function') return;
 
-  const wrapper = histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
-
-  try {
-    const docId = getDocIdForCurrentList();
-    const fechas = await getHistoryDates(docId);
-    const fechasUnicas = Array.from(new Set((fechas || []).filter(Boolean)));
-    histDatesWithData = new Set(fechasUnicas);
-  } catch (e) {
-    console.error('Error al obtener fechas de historial:', e);
-    // Conserva las fechas ya conocidas para no “aplanar” el calendario
-    // cuando Firestore falle momentáneamente.
+  function formatDateISO(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  if (histPicker) {
-    try { histPicker.destroy(); } catch (_) {}
-    histPicker = null;
+  function parseDateISO(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return null;
+    const [year, month, day] = String(iso).split('-').map(Number);
+    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  histPicker = flatpickr(histDateInput, {
-    dateFormat: 'Y-m-d',
-    allowInput: false,
-    appendTo: wrapper,
-    onDayCreate: function(dObj, dStr, fp, dayElem) {
-      try {
-        const date = dayElem.dateObj;
-        if (!date) return;
+  function startOfMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0);
+  }
 
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        const iso = `${yyyy}-${mm}-${dd}`;
+  function sameDay(a, b) {
+    return !!(a && b && formatDateISO(a) === formatDateISO(b));
+  }
 
-        if (histDatesWithData && histDatesWithData.has(iso)) {
-          dayElem.classList.add('has-history');
-        }
-      } catch (_) {}
-    },
-    onChange: function(selectedDates, dateStr) {
-      if (!dateStr) return;
-      loadHistoryForDate(dateStr);
+  function getCalendarMonthLabel(date) {
+    try {
+      return new Intl.DateTimeFormat('es-SV', {
+        month: 'long',
+        year: 'numeric'
+      }).format(date);
+    } catch (_) {
+      const months = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+      ];
+      return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
-  });
-}
+  }
+
+  function getHistoryCacheKey(docId) {
+    return `trlista:history-dates:${docId || 'default'}`;
+  }
+
+  function readHistoryDatesCache(docId) {
+    if (!docId || typeof localStorage === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(getHistoryCacheKey(docId));
+      const parsed = JSON.parse(raw || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v)));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeHistoryDatesCache(docId, values) {
+    if (!docId || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(
+        getHistoryCacheKey(docId),
+        JSON.stringify(Array.from(new Set((values || []).filter(Boolean))).sort())
+      );
+    } catch (_) {}
+  }
+
+  function rememberHistoryDate(docId, isoDate) {
+    if (!docId || !isoDate) return;
+    const cached = new Set(readHistoryDatesCache(docId));
+    cached.add(isoDate);
+    writeHistoryDatesCache(docId, Array.from(cached));
+    histDatesWithData = cached;
+    if (histPicker && typeof histPicker.redraw === 'function') {
+      histPicker.redraw();
+    }
+  }
+
+  function createHistoryPicker() {
+    if (!histDateInput || !histCalendarPanel) return null;
+
+    const wrapper = histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
+    const weekdayLabels = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
+
+    const state = {
+      selectedDate: currentViewDate ? parseDateISO(currentViewDate) : null,
+      visibleMonth: startOfMonth(currentViewDate ? parseDateISO(currentViewDate) || new Date() : new Date()),
+      isOpen: false
+    };
+
+    function syncInput() {
+      histDateInput.value = state.selectedDate ? formatDateISO(state.selectedDate) : '';
+      if (btnHistCalendar) {
+        btnHistCalendar.innerHTML = state.isOpen
+          ? '<i class="fa-solid fa-chevron-up"></i>'
+          : '<i class="fa-solid fa-chevron-down"></i>';
+      }
+    }
+
+    function close() {
+      state.isOpen = false;
+      histCalendarPanel.classList.add('d-none');
+      histCalendarPanel.setAttribute('aria-hidden', 'true');
+      syncInput();
+    }
+
+    function open() {
+      state.isOpen = true;
+      histCalendarPanel.classList.remove('d-none');
+      histCalendarPanel.setAttribute('aria-hidden', 'false');
+      render();
+      syncInput();
+    }
+
+    function setSelectedDate(isoDate, triggerChange = false) {
+      const parsed = isoDate ? parseDateISO(isoDate) : null;
+      state.selectedDate = parsed;
+      if (parsed) {
+        state.visibleMonth = startOfMonth(parsed);
+      }
+      syncInput();
+      render();
+
+      if (parsed && triggerChange) {
+        loadHistoryForDate(formatDateISO(parsed));
+      }
+    }
+
+    function clear() {
+      state.selectedDate = null;
+      state.visibleMonth = startOfMonth(new Date());
+      close();
+      syncInput();
+      render();
+    }
+
+    function destroy() {
+      close();
+      histCalendarPanel.innerHTML = '';
+    }
+
+    function changeMonth(offset) {
+      state.visibleMonth = new Date(
+        state.visibleMonth.getFullYear(),
+        state.visibleMonth.getMonth() + offset,
+        1,
+        12, 0, 0, 0
+      );
+      render();
+    }
+
+    function render() {
+      if (!histCalendarPanel) return;
+
+      const today = parseDateISO(getTodayString()) || new Date();
+      const firstDay = startOfMonth(state.visibleMonth);
+      const gridStart = new Date(firstDay.getFullYear(), firstDay.getMonth(), 1 - firstDay.getDay(), 12, 0, 0, 0);
+
+      let html = `
+        <div class="history-calendar-header">
+          <button type="button" class="history-calendar-nav" data-cal-nav="-1" aria-label="Mes anterior">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <div class="history-calendar-title">${getCalendarMonthLabel(firstDay)}</div>
+          <button type="button" class="history-calendar-nav" data-cal-nav="1" aria-label="Mes siguiente">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+        <div class="history-calendar-weekdays">
+          ${weekdayLabels.map(label => `<div class="history-calendar-weekday">${label}</div>`).join('')}
+        </div>
+        <div class="history-calendar-grid">
+      `;
+
+      for (let i = 0; i < 42; i++) {
+        const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i, 12, 0, 0, 0);
+        const iso = formatDateISO(date);
+        const classes = ['history-calendar-day'];
+
+        if (date.getMonth() !== firstDay.getMonth()) classes.push('is-outside');
+        if (sameDay(date, today)) classes.push('is-today');
+        if (state.selectedDate && sameDay(date, state.selectedDate)) classes.push('is-selected');
+        if (histDatesWithData && histDatesWithData.has(iso)) classes.push('has-history');
+
+        html += `
+          <button type="button"
+            class="${classes.join(' ')}"
+            data-cal-date="${iso}"
+            aria-label="Seleccionar ${iso}">
+            ${date.getDate()}
+          </button>
+        `;
+      }
+
+      html += '</div>';
+
+      if (!histDatesWithData || histDatesWithData.size === 0) {
+        html += '<div class="history-calendar-empty">Aún no hay fechas marcadas para esta lista.</div>';
+      }
+
+      histCalendarPanel.innerHTML = html;
+
+      histCalendarPanel.querySelectorAll('[data-cal-nav]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const offset = Number(btn.getAttribute('data-cal-nav') || 0);
+          changeMonth(offset);
+        });
+      });
+
+      histCalendarPanel.querySelectorAll('[data-cal-date]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const iso = btn.getAttribute('data-cal-date');
+          setSelectedDate(iso, true);
+          close();
+        });
+      });
+    }
+
+    histDateInput.addEventListener('click', () => {
+      state.isOpen ? close() : open();
+    });
+
+    histDateInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        state.isOpen ? close() : open();
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+
+    if (btnHistCalendar) {
+      btnHistCalendar.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        state.isOpen ? close() : open();
+      });
+    }
+
+    document.addEventListener('click', (event) => {
+      if (!wrapper || !wrapper.contains(event.target)) {
+        close();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
+
+    syncInput();
+    render();
+
+    return {
+      clear,
+      close,
+      destroy,
+      open,
+      redraw: render,
+      setDate: setSelectedDate
+    };
+  }
+
+  async function refreshHistoryPicker() {
+    if (!histDateInput || typeof getHistoryDates !== 'function') return;
+
+    const docId = getDocIdForCurrentList();
+    const cachedDates = readHistoryDatesCache(docId);
+    histDatesWithData = new Set(cachedDates);
+
+    if (!histPicker) {
+      histPicker = createHistoryPicker();
+    } else if (typeof histPicker.redraw === 'function') {
+      histPicker.redraw();
+    }
+
+    try {
+      const fechas = await getHistoryDates(docId);
+      const fechasUnicas = Array.from(new Set((fechas || []).filter(Boolean)));
+      histDatesWithData = new Set(fechasUnicas);
+      writeHistoryDatesCache(docId, fechasUnicas);
+    } catch (e) {
+      console.error('Error al obtener fechas de historial:', e);
+    }
+
+    if (histPicker && typeof histPicker.redraw === 'function') {
+      histPicker.redraw();
+    }
+  }
 
   async function loadHistoryForDate(dateStr) {
     if (!dateStr) return;

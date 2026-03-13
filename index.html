@@ -13,9 +13,6 @@
   <!-- Estilos propios -->
   <link href="assets/css/styles.css" rel="stylesheet">
 
-  <!-- Flatpickr (histórico) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-
   <!-- Librerías JS externas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -162,7 +159,18 @@
             <div class="row mt-2">
               <div class="col-12 col-md-6 hist-date-wrapper">
                 <label class="form-label fw-semibold mb-1">Consultar histórico por día</label>
-                <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha">
+                <div class="history-calendar-shell">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white">
+                      <i class="fa-regular fa-calendar"></i>
+                    </span>
+                    <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha" readonly>
+                    <button type="button" id="btnHistCalendar" class="btn btn-outline-secondary" aria-label="Abrir calendario">
+                      <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                  </div>
+                  <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
+                </div>
                 <div class="form-text small text-muted">
                   Los días con checklist guardado se marcarán con un punto azul en el calendario.
                 </div>
@@ -286,9 +294,6 @@
       firebase.initializeApp(firebaseConfig);
 }
   </script>
-
-  <!-- Flatpickr -->
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
   <!-- App -->
   <script src="assets/js/app.js"></script>

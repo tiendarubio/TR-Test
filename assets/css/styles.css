@@ -128,21 +128,135 @@ body {
   font-size: 0.85rem;
 }
 
-/* Indicador en el calendario para días con checklist guardado */
-.flatpickr-day.has-history {
+/* Calendario histórico local */
+.history-calendar-shell {
   position: relative;
 }
 
-.flatpickr-day.has-history::after {
+.history-calendar-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 1080;
+  width: min(100%, 320px);
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.85rem;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(33, 37, 41, 0.16);
+}
+
+.history-calendar-panel.d-none {
+  display: none !important;
+}
+
+.history-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.history-calendar-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #212529;
+  text-transform: capitalize;
+}
+
+.history-calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.65rem;
+  background: #fff;
+  color: #495057;
+  cursor: pointer;
+}
+
+.history-calendar-nav:hover {
+  background: #f8f9fa;
+}
+
+.history-calendar-weekdays,
+.history-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.history-calendar-weekdays {
+  margin-bottom: 0.35rem;
+}
+
+.history-calendar-weekday {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6c757d;
+  padding: 0.25rem 0;
+  text-transform: uppercase;
+}
+
+.history-calendar-day {
+  position: relative;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.15rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #212529;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.history-calendar-day:hover {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.history-calendar-day.is-outside {
+  color: #adb5bd;
+}
+
+.history-calendar-day.is-today {
+  border-color: #86b7fe;
+  background: #eef5ff;
+  font-weight: 700;
+}
+
+.history-calendar-day.is-selected {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+  font-weight: 700;
+}
+
+.history-calendar-day.has-history::after {
   content: "";
   position: absolute;
-  bottom: 0.25rem;
+  bottom: 0.35rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
+  width: 0.35rem;
+  height: 0.35rem;
   border-radius: 50%;
-  background-color: #0d6efd; /* punto azul */
+  background: #0d6efd;
+}
+
+.history-calendar-day.is-selected.has-history::after {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.history-calendar-empty {
+  padding: 0.5rem 0.25rem 0.1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #6c757d;
 }
 
 @media (max-width: 767.98px) {

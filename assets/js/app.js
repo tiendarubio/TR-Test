@@ -57,7 +57,9 @@ function getFirestoreDb() {
   try {
     db.settings({
       experimentalAutoDetectLongPolling: true,
-      useFetchStreams: false
+      experimentalLongPollingOptions: { timeoutSeconds: 25 },
+      useFetchStreams: false,
+      merge: true
     });
   } catch (err) {
     console.warn('Firestore settings omitidas:', err?.message || err);
