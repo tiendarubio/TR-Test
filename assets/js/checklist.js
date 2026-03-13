@@ -845,40 +845,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Histórico =====
   async function refreshHistoryPicker() {
-    if (!histDateInput || typeof flatpickr === 'undefined' || typeof getHistoryDates !== 'function') return;
-    try {
-      const docId = getDocIdForCurrentList();
-      const fechas = await getHistoryDates(docId);
-      const fechasUnicas = Array.from(new Set((fechas || []).filter(Boolean)));
-      histDatesWithData = new Set(fechasUnicas);
+  if (!histDateInput || typeof flatpickr === 'undefined' || typeof getHistoryDates !== 'function') return;
 
-      if (histPicker) {
-        try { histPicker.destroy(); } catch (e) {}
-        histPicker = null;
-      }
+  const wrapper = histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
 
-      histPicker = flatpickr(histDateInput, {
-        dateFormat: 'Y-m-d',
-        allowInput: false,
-        onDayCreate: function(dObj, dStr, fp, dayElem) {
-          try {
-            const date = dayElem.dateObj;
-            if (!date) return;
-            const iso = date.toISOString().slice(0, 10);
-            if (histDatesWithData && histDatesWithData.has(iso)) {
-              dayElem.classList.add('has-history');
-            }
-          } catch (_) {}
-        },
-        onChange: function(selectedDates, dateStr) {
-          if (!dateStr) return;
-          loadHistoryForDate(dateStr);
-        }
-      });
-    } catch (e) {
-      console.error('Error al configurar calendario histórico:', e);
-    }
+  try {
+    const docId = getDocIdForCurrentList();
+    const fechas = await getHistoryDates(docId);
+    const fechasUnicas = Array.from(new Set((fechas || []).filter(Boolean)));
+    histDatesWithData = new Set(fechasUnicas);
+  } catch (e) {
+    console.error('Error al obtener fechas de historial:', e);
+    // Conserva las fechas ya conocidas para no “aplanar” el calendario
+    // cuando Firestore falle momentáneamente.
   }
+
+  if (histPicker) {
+    try { histPicker.destroy(); } catch (_) {}
+    histPicker = null;
+  }
+
+  histPicker = flatpickr(histDateInput, {
+    dateFormat: 'Y-m-d',
+    allowInput: false,
+    appendTo: wrapper,
+    onDayCreate: function(dObj, dStr, fp, dayElem) {
+      try {
+        const date = dayElem.dateObj;
+        if (!date) return;
+
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const iso = `${yyyy}-${mm}-${dd}`;
+
+        if (histDatesWithData && histDatesWithData.has(iso)) {
+          dayElem.classList.add('has-history');
+        }
+      } catch (_) {}
+    },
+    onChange: function(selectedDates, dateStr) {
+      if (!dateStr) return;
+      loadHistoryForDate(dateStr);
+    }
+  });
+}
 
   async function loadHistoryForDate(dateStr) {
     if (!dateStr) return;

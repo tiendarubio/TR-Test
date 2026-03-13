@@ -43,6 +43,30 @@ function loadProductsFromGoogleSheets() {
 // === Firestore helpers (histórico por día) ===
 // Estructura (igual patrón que TR-Inventario):
 //   tr_lista/{docId}/historial/{YYYY-MM-DD}
+let FIRESTORE_DB = null;
+
+function getFirestoreDb() {
+  if (FIRESTORE_DB) return FIRESTORE_DB;
+
+  if (typeof firebase === 'undefined' || !firebase.firestore) {
+    throw new Error('Firebase/Firestore no está disponible.');
+  }
+
+  const db = firebase.firestore();
+
+  try {
+    db.settings({
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false
+    });
+  } catch (err) {
+    console.warn('Firestore settings omitidas:', err?.message || err);
+  }
+
+  FIRESTORE_DB = db;
+  return FIRESTORE_DB;
+}
+
 function getTodayString() {
   return new Date().toISOString().split('T')[0];
 }
@@ -55,7 +79,7 @@ function saveChecklistToFirestore(docId, payload, dateStr) {
     return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
   }
 
-  const db  = firebase.firestore();
+  const db  = getFirestoreDb();
   const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
 
   return db
@@ -77,7 +101,7 @@ function loadChecklistFromFirestore(docId, dateStr) {
     return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
   }
 
-  const db  = firebase.firestore();
+  const db  = getFirestoreDb();
   const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
 
   return db
@@ -95,11 +119,8 @@ function loadChecklistFromFirestore(docId, dateStr) {
 
 function getHistoryDates(docId) {
   if (!docId) return Promise.resolve([]);
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
-  }
 
-  const db = firebase.firestore();
+  const db = getFirestoreDb();
   return db
     .collection('tr_lista')
     .doc(String(docId))
@@ -108,7 +129,7 @@ function getHistoryDates(docId) {
     .then(snap => snap.docs.map(d => d.id))
     .catch(err => {
       console.error('Error al listar historial en Firestore:', err);
-      return [];
+      throw err;
     });
 }
 

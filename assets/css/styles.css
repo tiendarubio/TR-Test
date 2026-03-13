@@ -129,9 +129,10 @@ body {
 }
 
 /* Indicador en el calendario para días con checklist guardado */
-.hist-date-wrapper .flatpickr-day.has-history {
+.flatpickr-day.has-history {
   position: relative;
 }
+
 .flatpickr-day.has-history::after {
   content: "";
   position: absolute;

@@ -284,17 +284,7 @@
         appId: "1:21241790572:web:6fcd35853e44201badd849"
       };
       firebase.initializeApp(firebaseConfig);
-
-      try {
-        // Reduce problemas con WebChannel bloqueado por proxies/extensiones.
-        firebase.firestore().settings({
-          experimentalAutoDetectLongPolling: true,
-          useFetchStreams: false
-        });
-      } catch (err) {
-        console.warn('No se pudieron aplicar settings de Firestore:', err);
-      }
-    }
+}
   </script>
 
   <!-- Flatpickr -->
