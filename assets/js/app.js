@@ -40,99 +40,176 @@ function loadProductsFromGoogleSheets() {
   return preloadCatalog();
 }
 
-// === Firestore helpers (histórico por día) ===
-// Estructura (igual patrón que TR-Inventario):
-//   tr_lista/{docId}/historial/{YYYY-MM-DD}
-let FIRESTORE_DB = null;
-
-function getFirestoreDb() {
-  if (FIRESTORE_DB) return FIRESTORE_DB;
-
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    throw new Error('Firebase/Firestore no está disponible.');
-  }
-
-  const db = firebase.firestore();
-
-  try {
-    db.settings({
-      experimentalAutoDetectLongPolling: true,
-      experimentalLongPollingOptions: { timeoutSeconds: 25 },
-      useFetchStreams: false,
-      merge: true
-    });
-  } catch (err) {
-    console.warn('Firestore settings omitidas:', err?.message || err);
-  }
-
-  FIRESTORE_DB = db;
-  return FIRESTORE_DB;
-}
-
 function getTodayString() {
   return new Date().toISOString().split('T')[0];
 }
 
-function saveChecklistToFirestore(docId, payload, dateStr) {
+function getHistoryDatesCacheKey(docId) {
+  return `trlista:history-dates:${docId || 'default'}`;
+}
+
+function readHistoryDatesCache(docId) {
+  if (!docId || typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(getHistoryDatesCacheKey(docId));
+    const parsed = JSON.parse(raw || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v)));
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeHistoryDatesCache(docId, values) {
+  if (!docId || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(
+      getHistoryDatesCacheKey(docId),
+      JSON.stringify(Array.from(new Set((values || []).filter(Boolean))).sort())
+    );
+  } catch (_) {}
+}
+
+function getChecklistCacheKey(docId, day) {
+  return `trlista:checklist:${docId || 'default'}:${day || 'today'}`;
+}
+
+function cloneData(value) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? {}));
+  } catch (_) {
+    return value ?? {};
+  }
+}
+
+function readChecklistCache(docId, day) {
+  if (!docId || !day || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getChecklistCacheKey(docId, day));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeChecklistCache(docId, day, payload) {
+  if (!docId || !day || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getChecklistCacheKey(docId, day), JSON.stringify(cloneData(payload || {})));
+  } catch (_) {}
+}
+
+async function parseApiError(resp, fallbackMessage) {
+  let data = null;
+  let text = '';
+
+  try {
+    data = await resp.json();
+  } catch (_) {
+    try {
+      text = await resp.text();
+    } catch (_2) {}
+  }
+
+  const message =
+    data?.error ||
+    data?.details ||
+    text ||
+    fallbackMessage ||
+    'Error inesperado del servidor.';
+
+  return new Error(String(message));
+}
+
+async function saveChecklistToFirestore(docId, payload, dateStr) {
   if (!docId) {
-    return Promise.reject(new Error('Documento no configurado para esta tienda/lista.'));
-  }
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
+    throw new Error('Documento no configurado para esta tienda/lista.');
   }
 
-  const db  = getFirestoreDb();
   const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
 
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .doc(day)
-    .set(payload || {}, { merge: true })
-    .then(() => ({ ok: true, day }))
-    .catch(err => {
-      console.error('Error al guardar en Firestore:', err);
-      throw err;
-    });
-}
+  const resp = await fetch('/api/checklist-save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ docId, date: day, payload: payload || {} })
+  });
 
-function loadChecklistFromFirestore(docId, dateStr) {
-  if (!docId) return Promise.resolve({});
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
+  if (!resp.ok) {
+    throw await parseApiError(resp, 'No se pudo guardar el checklist.');
   }
 
-  const db  = getFirestoreDb();
-  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
+  const data = await resp.json().catch(() => ({}));
+  if (!data?.ok) {
+    throw new Error(data?.error || 'No se pudo guardar el checklist.');
+  }
 
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .doc(day)
-    .get()
-    .then(doc => (doc.exists ? (doc.data() || {}) : {}))
-    .catch(err => {
-      console.error('Error al leer Firestore:', err);
-      return {};
-    });
+  writeChecklistCache(docId, day, payload || {});
+  writeHistoryDatesCache(docId, [...readHistoryDatesCache(docId), day]);
+
+  return { ok: true, day };
 }
 
-function getHistoryDates(docId) {
-  if (!docId) return Promise.resolve([]);
+async function loadChecklistFromFirestore(docId, dateStr) {
+  if (!docId) return {};
 
-  const db = getFirestoreDb();
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .get()
-    .then(snap => snap.docs.map(d => d.id))
-    .catch(err => {
-      console.error('Error al listar historial en Firestore:', err);
-      throw err;
-    });
+  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
+
+  try {
+    const resp = await fetch(
+      `/api/checklist-get?docId=${encodeURIComponent(docId)}&date=${encodeURIComponent(day)}`
+    );
+
+    if (!resp.ok) {
+      throw await parseApiError(resp, 'No se pudo leer el checklist.');
+    }
+
+    const data = await resp.json().catch(() => ({}));
+    if (!data?.ok) {
+      throw new Error(data?.error || 'No se pudo leer el checklist.');
+    }
+
+    const record = (data?.data && typeof data.data === 'object') ? data.data : {};
+    writeChecklistCache(docId, day, record);
+
+    if (record && Array.isArray(record.items)) {
+      writeHistoryDatesCache(docId, [...readHistoryDatesCache(docId), day]);
+    }
+
+    return record;
+  } catch (err) {
+    console.error('Error al leer checklist desde backend:', err);
+
+    const cached = readChecklistCache(docId, day);
+    if (cached) {
+      const copy = cloneData(cached);
+      copy.__fromCache = true;
+      return copy;
+    }
+
+    throw err instanceof Error ? err : new Error(String(err || 'No se pudo leer el checklist.'));
+  }
+}
+
+async function getHistoryDates(docId) {
+  if (!docId) return [];
+
+  try {
+    const resp = await fetch(`/api/checklist-history?docId=${encodeURIComponent(docId)}`);
+    if (!resp.ok) {
+      throw await parseApiError(resp, 'No se pudo obtener el historial.');
+    }
+
+    const data = await resp.json().catch(() => ({}));
+    const dates = Array.isArray(data?.dates) ? data.dates.filter(Boolean) : [];
+
+    writeHistoryDatesCache(docId, dates);
+    return dates;
+  } catch (err) {
+    console.error('Error al listar historial desde backend:', err);
+    return readHistoryDatesCache(docId);
+  }
 }
 
 // Formatear fecha/hora a formato ES-SV

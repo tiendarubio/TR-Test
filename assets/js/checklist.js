@@ -87,6 +87,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateHistoricalLockUI();
   }
 
+  function showSyncWarning(message) {
+    if (!lastSaved) return;
+    lastSaved.innerHTML =
+      '<i class="fa-solid fa-triangle-exclamation me-1 text-warning"></i>' +
+      (message || 'Sin sincronización');
+  }
+
   async function validateHistoricalPassword(password) {
     const resp = await fetch('/api/validate-historical-password', {
       method: 'POST',
@@ -798,17 +805,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const docId = getDocIdForCurrentList();
         const payload = collectPayload();
 
-        await saveChecklistToFirestore(docId, payload, targetDay);
-        rememberHistoryDate(docId, targetDay);
-        lastUpdateISO = payload.meta.updatedAt;
-        lastSaved.innerHTML =
-          '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
-          'Última actualización: ' +
-          formatSV(lastUpdateISO);
+        try {
+          await saveChecklistToFirestore(docId, payload, targetDay);
+          rememberHistoryDate(docId, targetDay);
+          lastUpdateISO = payload.meta.updatedAt;
+          lastSaved.innerHTML =
+            '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
+            'Última actualización: ' +
+            formatSV(lastUpdateISO);
 
-        await refreshHistoryPicker();
+          await refreshHistoryPicker();
 
-        Swal.fire('Listo', 'Checklist guardado vacío correctamente.', 'success');
+          Swal.fire('Listo', 'Checklist guardado vacío correctamente.', 'success');
+        } catch (e) {
+          console.error(e);
+          showSyncWarning('No se pudo sincronizar el vaciado con el servidor.');
+          Swal.fire(
+            'Sin sincronización',
+            'La lista se limpió en pantalla, pero no se pudo guardar en el servidor. Intenta nuevamente.',
+            'warning'
+          );
+        }
       }
     });
   });
@@ -843,7 +860,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       await refreshHistoryPicker();
       Swal.fire('Guardado', 'Checklist guardado correctamente.', 'success');
     } catch (e) {
-      Swal.fire('Error', String(e), 'error');
+      console.error(e);
+      showSyncWarning('No se pudo sincronizar con el servidor.');
+      Swal.fire(
+        'Sin sincronización',
+        String(e?.message || e || 'No se pudo guardar el checklist.'),
+        'warning'
+      );
     }
   });
 
@@ -1152,7 +1175,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         record.items.forEach(addRowFromData);
         renumber();
         lastUpdateISO = record.meta?.updatedAt || null;
-        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+
+        if (record.__fromCache) {
+          showSyncWarning(
+            'Mostrando copia local del ' + dateStr + ' por falta de conexión con el servidor.'
+          );
+        } else {
+          lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+        }
       } else {
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
         Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
@@ -1162,7 +1192,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       setHistoricalViewMode(isHistorical);
     } catch (e) {
       console.error('Error al cargar histórico:', e);
-      Swal.fire('Error', 'No se pudo cargar el histórico para esa fecha.', 'error');
+      showSyncWarning('No se pudo cargar el histórico solicitado.');
+      Swal.fire(
+        'Sin sincronización',
+        'No se pudo cargar el histórico para esa fecha desde el servidor ni desde caché local.',
+        'warning'
+      );
     }
   }
 
@@ -1324,16 +1359,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     body.innerHTML = '';
 
     const docId = getDocIdForCurrentList();
-    const record = await loadChecklistFromFirestore(docId); // hoy
-    if (record && Array.isArray(record.items)) {
-      record.items.forEach(addRowFromData);
-      renumber();
-      lastUpdateISO = record.meta?.updatedAt || null;
-    } else {
-      lastUpdateISO = null;
-    }
 
-    lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+    try {
+      const record = await loadChecklistFromFirestore(docId); // hoy
+      if (record && Array.isArray(record.items)) {
+        record.items.forEach(addRowFromData);
+        renumber();
+        lastUpdateISO = record.meta?.updatedAt || null;
+      } else {
+        lastUpdateISO = null;
+      }
+
+      if (record && record.__fromCache) {
+        showSyncWarning('Mostrando copia local de hoy por falta de conexión con el servidor.');
+      } else {
+        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+      }
+    } catch (e) {
+      console.error('Error al cargar la lista actual:', e);
+      lastUpdateISO = null;
+      showSyncWarning('No se pudo cargar la lista actual.');
+      Swal.fire(
+        'Sin sincronización',
+        'No se pudo cargar la lista actual desde el servidor ni desde caché local.',
+        'warning'
+      );
+    }
   }
 
   await loadStoreStateForToday();
