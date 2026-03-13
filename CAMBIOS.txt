@@ -1,19 +1,26 @@
-TRLista2.0 — Migración a backend para Firestore (2026-03-13)
+TRLista2.0 — Ajustes adicionales (2026-03-12)
 
-1. Persistencia del checklist
-- Se eliminó el acceso directo a Firestore desde el navegador.
-- Ahora el frontend usa `/api/checklist-get`, `/api/checklist-save` y `/api/checklist-history`.
-- Vercel se conecta a Firestore mediante Firebase Admin SDK y variables de entorno seguras.
+1. Firestore
+- Se movió la configuración de long polling desde index.html hacia assets/js/app.js.
+- La instancia de Firestore ahora se inicializa una sola vez mediante getFirestoreDb().
+- Se elimina la alerta de settings sobrescritos en la mayoría de escenarios.
 
-2. Manejo de errores
-- Cuando el servidor no responde, la app intenta usar una copia local del checklist ya leída.
-- El badge superior muestra advertencias de sincronización en lugar de fallar silenciosamente.
-- El calendario mantiene sus fechas marcadas mediante caché local por documento.
+2. Calendario histórico
+- refreshHistoryPicker() ya no vacía el set de fechas marcadas si falla la consulta a Firestore.
+- Se agregó appendTo al flatpickr del histórico para que el popup se renderice dentro de su wrapper.
+- La marca azul ya no depende del selector .hist-date-wrapper .flatpickr-day.has-history.
+- El cálculo del día marcado usa yyyy-mm-dd local, evitando inconsistencias de zona horaria.
 
-3. Histórico desbloqueable
-- Se conserva el botón para desbloquear listas históricas con contraseña desde `estantes!G2`.
-- Guardar, limpiar y mover entre listas siguen respetando la fecha histórica seleccionada.
+3. Funcionalidad existente conservada
+- Desbloqueo/bloqueo de listas históricas con contraseña vía /api/validate-historical-password
+- Guardado, limpieza y movimiento entre listas respetando la fecha histórica seleccionada
 
-4. Frontend
-- Se removieron los scripts cliente de Firebase del `index.html`.
-- El calendario local estable se mantiene sin depender de Flatpickr.
+
+- Firestore: se agregó merge:true en db.settings() para eliminar la advertencia de sobrescritura de host en SDK 12.6.0.
+- Firestore: se agregó experimentalLongPollingOptions.timeoutSeconds=25 para entornos con proxies/buffering más agresivos.
+
+
+- Calendario histórico: se eliminó la dependencia de Flatpickr por CDN.
+- Calendario histórico: se implementó un calendario local propio, con estilo estable y puntos azules persistentes.
+- Calendario histórico: las fechas con historial se cachean por docId en localStorage para que los puntos no desaparezcan tras una recarga si Firestore falla momentáneamente.
+- Calendario histórico: al guardar o limpiar una fecha, esa fecha se marca de inmediato en el calendario aunque la recarga del historial falle.

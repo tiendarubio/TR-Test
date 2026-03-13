@@ -1,10 +1,7 @@
 {
-  "name": "trlista-backend-firestore",
+  "name": "trlista-firebase-historial",
   "private": true,
   "type": "module",
-  "version": "1.1.0",
-  "description": "TRLista con histórico por día y backend Vercel para Firestore + Google Sheets.",
-  "dependencies": {
-    "firebase-admin": "^13.0.1"
-  }
+  "version": "1.0.0",
+  "description": "TRLista con Firestore + hist\u00f3rico por d\u00eda (flatpickr) y cat\u00e1logo/proveedores v\u00eda Google Sheets (proxy en Vercel)."
 }
