@@ -194,16 +194,266 @@ document.addEventListener('DOMContentLoaded', async () => {
     return String(v).replace(/"/g, '&quot;');
   }
 
+  function escapeHtml(v) {
+    if (v === null || v === undefined) return '';
+    return String(v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renumber() {
     [...body.getElementsByTagName('tr')].forEach((row, idx) => {
       row.cells[0].textContent = (body.rows.length - idx);
     });
   }
 
+  function setToggleState(btn, shouldBeOn) {
+    if (!btn) return;
+    btn.classList.toggle('on', !!shouldBeOn);
+    btn.classList.toggle('off', !shouldBeOn);
+  }
+
   function toggleBtn(btn) {
     const on = btn.classList.contains('on');
-    btn.classList.toggle('on', !on);
-    btn.classList.toggle('off', on);
+    setToggleState(btn, !on);
+  }
+
+  function normalizeMatchValue(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function hasUsefulCode(value) {
+    const normalized = normalizeMatchValue(value);
+    return !!normalized && normalized !== 'n/a' && normalized !== 'na' && normalized !== 'sin código' && normalized !== 'sin codigo';
+  }
+
+  function buildItemFromCatalogRow(row, fallbackCode = '') {
+    return {
+      codigo_barras: row?.[3] || fallbackCode || '',
+      nombre: row?.[0] || '',
+      codigo_inventario: row?.[1] || 'N/A',
+      bodega: row?.[2] || '',
+      cantidad: '',
+      revisado: false,
+      despachado: false
+    };
+  }
+
+  function findExistingRowByItem(item) {
+    const barcode = normalizeMatchValue(item?.codigo_barras);
+    const inventoryCode = normalizeMatchValue(item?.codigo_inventario);
+
+    return [...body.getElementsByTagName('tr')].find(tr => {
+      const rowBarcode = normalizeMatchValue(tr.cells[1]?.innerText);
+      const rowInventory = normalizeMatchValue(tr.cells[3]?.innerText);
+
+      if (hasUsefulCode(barcode) && rowBarcode === barcode) return true;
+      if (hasUsefulCode(inventoryCode) && rowInventory === inventoryCode) return true;
+      return false;
+    }) || null;
+  }
+
+  function clearSearchUI() {
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+    searchInput.value = '';
+  }
+
+  function flashAndFocusRow(tr, preferredTarget = 'qty') {
+    if (!tr) return;
+
+    tr.classList.remove('row-existing-highlight');
+    void tr.offsetWidth;
+    tr.classList.add('row-existing-highlight');
+
+    window.setTimeout(() => {
+      tr.classList.remove('row-existing-highlight');
+    }, 2200);
+
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    window.setTimeout(() => {
+      const qtyInput = tr.querySelector('.qty');
+      const dispatchBtn = tr.cells[7]?.querySelector('button');
+      const reviewBtn = tr.cells[6]?.querySelector('button');
+      const focusTarget =
+        (preferredTarget === 'dispatch' ? dispatchBtn : null) ||
+        qtyInput ||
+        dispatchBtn ||
+        reviewBtn ||
+        tr;
+
+      if (focusTarget === tr) {
+        tr.setAttribute('tabindex', '-1');
+      }
+
+      try {
+        focusTarget.focus({ preventScroll: true });
+      } catch (_) {
+        try { focusTarget.focus(); } catch (_) {}
+      }
+    }, 220);
+  }
+
+  function ensureRowDispatched(tr) {
+    const btnDes = tr?.cells?.[7]?.querySelector('button');
+    if (!btnDes) return false;
+
+    const wasDispatched = btnDes.classList.contains('on');
+    if (!wasDispatched) {
+      setToggleState(btnDes, true);
+    }
+    return !wasDispatched;
+  }
+
+  function isHistoricalEditingLocked() {
+    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+    return !!(currentViewDate && today && currentViewDate !== today && !historicalUnlockEnabled);
+  }
+
+  function updateLastSavedText(updatedAt, emptyText = 'Aún no guardado.') {
+    lastUpdateISO = updatedAt || null;
+    lastSaved.innerHTML =
+      '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
+      (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : emptyText);
+  }
+
+  async function persistCurrentChecklist(options = {}) {
+    const {
+      successTitle = 'Guardado',
+      successMessage = 'Checklist guardado correctamente.',
+      successIcon = 'success',
+      showSuccess = true
+    } = options || {};
+
+    if (isHistoricalEditingLocked()) {
+      await Swal.fire(
+        'Vista histórica',
+        'Estás viendo el checklist del ' + currentViewDate + '. Desbloquea los controles o vuelve a hoy para guardar cambios.',
+        'info'
+      );
+      return { ok: false, reason: 'locked' };
+    }
+
+    const docId = getDocIdForCurrentList();
+    const payload = collectPayload();
+    const targetDay = getTargetChecklistDate();
+
+    await saveChecklistToFirestore(docId, payload, targetDay);
+    rememberHistoryDate(docId, targetDay);
+    updateLastSavedText(payload.meta?.updatedAt || null);
+    await refreshHistoryPicker();
+
+    if (showSuccess) {
+      await Swal.fire(successTitle, successMessage, successIcon);
+    }
+
+    return { ok: true, docId, payload, targetDay };
+  }
+
+  async function promptExistingRowAction(item, existingRow) {
+    const isAlreadyDispatched = existingRow?.cells?.[7]?.querySelector('button')?.classList.contains('on');
+    const safeName = escapeHtml(item?.nombre || 'Este producto');
+    let selectedAction = 'cancel';
+
+    await Swal.fire({
+      title: 'Producto ya agregado',
+      html: `
+        <div class="text-start small text-muted mb-3">
+          <strong>${safeName}</strong> ya existe en la lista actual. ¿Qué deseas hacer?
+        </div>
+        <div class="d-grid gap-2 existing-item-actions">
+          <button type="button" class="btn btn-primary" data-action="locate">
+            <i class="fa-solid fa-location-crosshairs me-1"></i>
+            Ubicarme en esa fila
+          </button>
+          <button type="button" class="btn btn-success" data-action="dispatch" ${isAlreadyDispatched ? 'disabled' : ''}>
+            <i class="fa-solid fa-truck-ramp-box me-1"></i>
+            ${isAlreadyDispatched ? 'Ya está marcado como despachado' : 'Marcarlo como despachado y guardar'}
+          </button>
+          <button type="button" class="btn btn-outline-secondary" data-action="duplicate">
+            <i class="fa-solid fa-plus me-1"></i>
+            Agregar otra fila de todas formas
+          </button>
+        </div>
+      `,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: 'Cancelar',
+      focusCancel: true,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return;
+
+        popup.querySelectorAll('[data-action]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const action = btn.getAttribute('data-action') || 'cancel';
+            if (action === 'dispatch' && btn.hasAttribute('disabled')) {
+              return;
+            }
+            selectedAction = action;
+            Swal.close();
+          });
+        });
+      }
+    });
+
+    return selectedAction;
+  }
+
+  async function handleProductSelection(item) {
+    const existingRow = findExistingRowByItem(item);
+
+    if (!existingRow) {
+      addRowFromData(item);
+      clearSearchUI();
+      return;
+    }
+
+    clearSearchUI();
+
+    const action = await promptExistingRowAction(item, existingRow);
+
+    if (action === 'duplicate') {
+      addRowFromData(item);
+      return;
+    }
+
+    if (action === 'dispatch') {
+      const dispatchBtn = existingRow?.cells?.[7]?.querySelector('button');
+      const changed = ensureRowDispatched(existingRow);
+      flashAndFocusRow(existingRow, 'dispatch');
+
+      if (!changed) {
+        await Swal.fire('Sin cambios', 'Ese producto ya estaba marcado como despachado.', 'info');
+        return;
+      }
+
+      try {
+        await persistCurrentChecklist({
+          successTitle: 'Despachado',
+          successMessage: 'El producto existente se marcó como despachado y se guardó automáticamente.'
+        });
+      } catch (e) {
+        if (dispatchBtn) {
+          setToggleState(dispatchBtn, false);
+        }
+        flashAndFocusRow(existingRow, 'dispatch');
+        await Swal.fire(
+          'Error',
+          'Se marcó el producto en pantalla, pero no se pudo guardar automáticamente. ' + String(e),
+          'error'
+        );
+      }
+      return;
+    }
+
+    if (action === 'locate') {
+      flashAndFocusRow(existingRow, 'qty');
+    }
   }
 
   function collectPayload() {
@@ -421,25 +671,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           const bodega = r[2] || '';
           const barcode = r[3] || 'sin código';
           li.textContent = `${nombre} (${barcode}) [${codInv}] — ${bodega}`;
-          li.addEventListener('click', () => {
-            addRowFromData({
-              codigo_barras: r[3] || '',
-              nombre: r[0] || '',
-              codigo_inventario: r[1] || 'N/A',
-              bodega: r[2] || '',
-              cantidad: '',
-              revisado: false,
-              despachado: false
-            });
-            suggestions.innerHTML = '';
-            searchInput.value = '';
+          li.addEventListener('click', async () => {
+            await handleProductSelection(buildItemFromCatalogRow(r));
           });
           suggestions.appendChild(li);
         });
     });
   });
 
-  searchInput.addEventListener('keydown', (e) => {
+  searchInput.addEventListener('keydown', async (e) => {
     const items = suggestions.getElementsByTagName('li');
     if (e.key === 'ArrowDown') {
       currentFocus++;
@@ -465,17 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
         if (match) {
-          addRowFromData({
-            codigo_barras: match[3] || q,
-            nombre: match[0] || '',
-            codigo_inventario: match[1] || 'N/A',
-            bodega: match[2] || '',
-            cantidad: '',
-            revisado: false,
-            despachado: false
-          });
-          suggestions.innerHTML = '';
-          searchInput.value = '';
+          await handleProductSelection(buildItemFromCatalogRow(match, q));
         }
       }
     }
@@ -814,34 +1044,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   btnSave.addEventListener('click', async () => {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
-    const lockedHistorical =
-      currentViewDate && today && currentViewDate !== today && !historicalUnlockEnabled;
-
-    if (lockedHistorical) {
-      Swal.fire(
-        'Vista histórica',
-        'Estás viendo el checklist del ' + currentViewDate + '. Desbloquea los controles o vuelve a hoy para guardar cambios.',
-        'info'
-      );
-      return;
-    }
-
-    const docId = getDocIdForCurrentList();
-    const payload = collectPayload();
-    const targetDay = getTargetChecklistDate();
-
     try {
-      await saveChecklistToFirestore(docId, payload, targetDay);
-      rememberHistoryDate(docId, targetDay);
-      lastUpdateISO = payload.meta.updatedAt;
-      lastSaved.innerHTML =
-        '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
-        'Última actualización: ' +
-        formatSV(lastUpdateISO);
-
-      await refreshHistoryPicker();
-      Swal.fire('Guardado', 'Checklist guardado correctamente.', 'success');
+      await persistCurrentChecklist();
     } catch (e) {
       Swal.fire('Error', String(e), 'error');
     }
