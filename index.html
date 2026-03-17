@@ -42,144 +42,90 @@
   <main class="container-fluid py-4">
     <div class="row g-4">
 
-      <!-- PANEL IZQUIERDO: Configuración -->
-      <div class="col-xl-3 col-lg-4">
-        <!-- Card: Configuración de tienda -->
-        <div class="card shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pb-0">
-            <h6 class="card-title mb-1">
-              <i class="fa-solid fa-sliders me-2 text-primary"></i>
-              Configuración
-            </h6>
-          </div>
-          <div class="card-body">
-            <div class="mb-3">
-              <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
-              <select id="storeSelect" class="form-select form-select-sm">
-                <option value="lista_sexta_calle">Sexta Calle</option>
-                <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
-                <option value="lista_centro_comercial">Centro Comercial</option>
-              </select>
-            </div>
+      <!-- PANEL PRINCIPAL -->
+      <div class="col-12">
 
-            <div class="mb-3">
-              <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
-              <select id="versionSelect" class="form-select form-select-sm">
-                <option value="base" selected>Principal</option>
-                <option value="alterna">Alterna</option>
-              </select>
-            </div>
+        
+<div class="card shadow-sm mb-4 workspace-top-card workspace-config-card">
+  <div class="card-header bg-white border-0">
+    <h6 class="card-title mb-0">
+      <i class="fa-solid fa-sliders me-2 text-primary"></i>
+      Configuración e histórico
+    </h6>
+  </div>
 
-            <div class="mt-2 text-center">
-              <span id="storeBadge" class="badge-store badge-morazan">
-                <i class="fa-solid fa-store"></i>
-                <span id="storeBadgeText">Avenida Morazán</span>
-              </span>
-            </div>
-          </div>
+  <div class="card-body border-top">
+    <div class="row g-3 align-items-start">
+      <div class="col-12 col-md-6 col-xl-3">
+        <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
+        <div class="store-select-shell store-tone-morazan">
+          <span class="store-select-icon" aria-hidden="true">
+            <i class="fa-solid fa-store"></i>
+          </span>
+          <select id="storeSelect" class="form-select form-select-sm">
+            <option value="lista_sexta_calle">Sexta Calle</option>
+            <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
+            <option value="lista_centro_comercial">Centro Comercial</option>
+          </select>
         </div>
-
       </div>
 
-      <!-- PANEL DERECHO: Búsqueda + Checklist -->
-      <div class="col-xl-9 col-lg-8">
+      <div class="col-12 col-md-6 col-xl-3">
+        <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
+        <select id="versionSelect" class="form-select form-select-sm">
+          <option value="base" selected>Principal</option>
+          <option value="alterna">Alterna</option>
+        </select>
+      </div>
 
-        <!-- Card: Búsqueda, histórico y escáner -->
-        <div class="card shadow-sm mb-4">
-          <div class="card-header bg-white border-0">
-            <h6 class="card-title mb-0">
-              <i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>
-              Buscar producto
-            </h6>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="hist-date-wrapper h-100">
+          <label class="form-label fw-semibold mb-1">Consultar histórico por día</label>
+          <div class="history-calendar-shell">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white">
+                <i class="fa-regular fa-calendar"></i>
+              </span>
+              <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha" readonly>
+              <button type="button" id="btnHistCalendar" class="btn btn-outline-secondary" aria-label="Abrir calendario">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+            <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
           </div>
 
-          <div class="card-body border-top">
-            <!-- Buscador -->
-            <div class="position-relative mb-3">
-              <label class="form-label fw-semibold mb-1" for="searchInput">
-                Barra de búsqueda
-              </label>
-              <div class="input-group input-group-sm search-bar-group">
-                <input
-                  id="searchInput"
-                  type="text"
-                  class="form-control"
-                  placeholder="Nombre, código inventario o código de barras"
-                  autocomplete="off"
-                >
-                <button
-                  id="btnFilePick"
-                  class="btn btn-outline-secondary search-action-btn"
-                  type="button"
-                  title="Adjuntar imagen o documento"
-                  aria-label="Adjuntar imagen o documento"
-                >
-                  <i class="fa-solid fa-paperclip"></i>
-                </button>
-                <button
-                  id="btnScan"
-                  class="btn btn-outline-primary search-action-btn"
-                  type="button"
-                  title="Escanear código de barras"
-                  aria-label="Escanear código de barras"
-                >
-                  <i class="fa-solid fa-barcode"></i>
-                </button>
-              </div>
-              <input
-                id="fileScan"
-                class="d-none"
-                type="file"
-                accept="image/*,application/pdf,.pdf"
-                capture="environment"
-              >
-
-              <!-- Lista de sugerencias -->
-              <ul id="suggestions" class="list-group shadow-sm search-suggestions"></ul>
-            </div>
-
-            <!-- Histórico diario -->
-            <div class="row mt-2">
-              <div class="col-12 col-md-6 hist-date-wrapper">
-                <label class="form-label fw-semibold mb-1">Consultar histórico por día</label>
-                <div class="history-calendar-shell">
-                  <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white">
-                      <i class="fa-regular fa-calendar"></i>
-                    </span>
-                    <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha" readonly>
-                    <button type="button" id="btnHistCalendar" class="btn btn-outline-secondary" aria-label="Abrir calendario">
-                      <i class="fa-solid fa-chevron-down"></i>
-                    </button>
-                  </div>
-                  <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
-                </div>
-                <div class="form-text small" id="histViewModeText">
-                  Modo: checklist del día actual (editable).
-                </div>
-
-                <div class="d-grid gap-2 mt-2">
-                  <button type="button" id="btnHistToday" class="btn btn-outline-secondary btn-sm w-100">
-                    Ver checklist actual (hoy)
-                  </button>
-
-                  <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm w-100 d-none">
-                    <i class="fa-solid fa-unlock-keyhole me-1"></i>
-                    Desbloquear controles
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Área de escáner -->
-            <div id="scanWrap" class="scanner-wrap mt-3">
-              <div class="scanner">
-                <video id="scanVideo" playsinline></video>
-                <div class="scan-overlay"></div>
-              </div>
-            </div>
+          <div class="form-text small" id="histViewModeText">
+            Modo: checklist del día actual (editable).
           </div>
         </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-xl-3">
+        <label class="form-label fw-semibold mb-1">Acciones</label>
+        <div class="history-actions-row">
+          <button type="button" id="btnHistToday" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-calendar-day me-1"></i>
+            Hoy
+          </button>
+
+          <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm" disabled aria-disabled="true">
+            <i class="fa-solid fa-unlock-keyhole me-1"></i>
+            Desbloquear
+          </button>
+        </div>
+      </div>
+
+      <div class="col-12 d-none">
+        <div class="store-badge-wrap">
+          <span id="storeBadge" class="badge-store badge-morazan">
+            <i class="fa-solid fa-store"></i>
+            <span id="storeBadgeText">Avenida Morazán</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
         <!-- Card: Checklist -->
         <div class="card shadow-sm">
@@ -211,7 +157,64 @@
           </div>
 
           <div class="card-body border-top">
-            <div class="table-responsive table-checklist-wrapper">
+            <div class="checklist-workspace">
+              <div class="checklist-search-shell">
+                <div class="checklist-search-toolbar checklist-search-toolbar-single">
+                  <div class="position-relative checklist-search-input-wrap">
+                    <div class="input-group input-group-sm search-bar-group search-bar-embedded">
+                      <span class="input-group-text search-lead-chip">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Buscar producto</span>
+                      </span>
+                      <input
+                        id="searchInput"
+                        type="text"
+                        class="form-control"
+                        placeholder="Nombre, código inventario o código de barras"
+                        autocomplete="off"
+                      >
+                      <button
+                        id="btnFilePick"
+                        class="btn btn-outline-secondary search-action-btn"
+                        type="button"
+                        title="Adjuntar imagen o documento"
+                        aria-label="Adjuntar imagen o documento"
+                      >
+                        <i class="fa-solid fa-paperclip"></i>
+                      </button>
+                      <button
+                        id="btnScan"
+                        class="btn btn-outline-primary search-action-btn"
+                        type="button"
+                        title="Escanear código de barras"
+                        aria-label="Escanear código de barras"
+                      >
+                        <i class="fa-solid fa-barcode"></i>
+                      </button>
+                    </div>
+
+                    <input
+                      id="fileScan"
+                      class="d-none"
+                      type="file"
+                      accept="image/*,application/pdf,.pdf"
+                      capture="environment"
+                    >
+
+                    <ul id="suggestions" class="list-group shadow-sm search-suggestions"></ul>
+                  </div>
+                </div>
+
+                <div id="scanWrap" class="scanner-wrap scan-panel">
+                  <div class="scanner">
+                    <video id="scanVideo" playsinline></video>
+                    <div class="scan-overlay"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="table-checklist-shell mt-3">
+                <div class="table-responsive table-checklist-wrapper">
               <table class="table table-sm table-bordered align-middle mb-0" id="chkTable">
                 <thead class="table-light">
                   <tr>
@@ -230,11 +233,13 @@
                 </thead>
                 <tbody id="chkBody"></tbody>
               </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-      </div><!-- /col derecha -->
+      </div><!-- /panel principal -->
     </div><!-- /row -->
   </main>
 

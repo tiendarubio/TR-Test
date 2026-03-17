@@ -61,23 +61,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!btnToggleHistLock) return;
 
     const isHistorical = isHistoricalDateSelected();
-    btnToggleHistLock.classList.toggle('d-none', !isHistorical);
 
-    if (!isHistorical) return;
+    if (btnHistToday) {
+      btnHistToday.disabled = !isHistorical;
+      btnHistToday.setAttribute('aria-disabled', String(!isHistorical));
+    }
 
-    btnToggleHistLock.classList.remove('btn-outline-warning', 'btn-outline-success');
+    btnToggleHistLock.disabled = !isHistorical;
+    btnToggleHistLock.setAttribute('aria-disabled', String(!isHistorical));
+
+    btnToggleHistLock.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary');
+
+    if (!isHistorical) {
+      btnToggleHistLock.classList.add('btn-outline-secondary');
+      btnToggleHistLock.innerHTML = `
+        <i class="fa-solid fa-unlock-keyhole me-1"></i>
+        Desbloquear
+      `;
+      return;
+    }
 
     if (historicalUnlockEnabled) {
       btnToggleHistLock.classList.add('btn-outline-success');
       btnToggleHistLock.innerHTML = `
         <i class="fa-solid fa-lock me-1"></i>
-        Volver a bloquear controles
+        Bloquear
       `;
     } else {
       btnToggleHistLock.classList.add('btn-outline-warning');
       btnToggleHistLock.innerHTML = `
         <i class="fa-solid fa-unlock-keyhole me-1"></i>
-        Desbloquear controles
+        Desbloquear
       `;
     }
   }
@@ -175,16 +189,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateStoreUI() {
     const val = storeSelect.value;
+    const storeShell = storeSelect ? storeSelect.closest('.store-select-shell') : null;
+
     storeBadge.classList.remove('badge-sexta', 'badge-morazan', 'badge-centro');
+    if (storeShell) {
+      storeShell.classList.remove('store-tone-sexta', 'store-tone-morazan', 'store-tone-centro');
+    }
+
     if (val === 'lista_sexta_calle') {
       storeBadge.classList.add('badge-sexta');
       storeBadgeText.textContent = 'Sexta Calle';
+      if (storeShell) storeShell.classList.add('store-tone-sexta');
     } else if (val === 'lista_avenida_morazan') {
       storeBadge.classList.add('badge-morazan');
       storeBadgeText.textContent = 'Avenida Morazán';
+      if (storeShell) storeShell.classList.add('store-tone-morazan');
     } else {
       storeBadge.classList.add('badge-centro');
       storeBadgeText.textContent = 'Centro Comercial';
+      if (storeShell) storeShell.classList.add('store-tone-centro');
     }
   }
   updateStoreUI();
