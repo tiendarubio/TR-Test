@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnScan = $('btnScan');
   const scanWrap = $('scanWrap');
   const scanVideo = $('scanVideo');
-  const btnScanStop = $('btnScanStop');
+  const btnFilePick = $('btnFilePick');
   const fileScan = $('fileScan');
 
   let sortAsc = true;
@@ -131,7 +131,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (searchInput) searchInput.disabled = disableEditing;
     if (btnScan) btnScan.disabled = disableEditing;
+    if (btnFilePick) btnFilePick.disabled = disableEditing;
     if (fileScan) fileScan.disabled = disableEditing;
+    if (disableEditing && mediaStream) stopScanner();
 
     if (btnSave) btnSave.disabled = disableEditing;
     if (btnClear) btnClear.disabled = disableEditing;
@@ -1456,22 +1458,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ====== Barcode Scanner ======
-  async function startScanner() {
+  function setScanButtonState(isActive) {
+    if (!btnScan) return;
+
+    btnScan.classList.remove('btn-outline-primary', 'btn-outline-danger');
+
+    if (isActive) {
+      btnScan.classList.add('btn-outline-danger');
+      btnScan.title = 'Detener cámara';
+      btnScan.setAttribute('aria-label', 'Detener cámara');
+      btnScan.innerHTML = '<i class="fa-solid fa-stop me-1"></i><span>Detener</span>';
+    } else {
+      btnScan.classList.add('btn-outline-primary');
+      btnScan.title = 'Escanear código de barras';
+      btnScan.setAttribute('aria-label', 'Escanear código de barras');
+      btnScan.innerHTML = '<i class="fa-solid fa-barcode"></i>';
+    }
+  }
+
+  function ensureBarcodeDetector() {
+    if (detector !== null) return detector;
     if ('BarcodeDetector' in window) {
       try {
         detector = new window.BarcodeDetector({ formats: ['ean_13', 'code_128', 'code_39', 'ean_8', 'upc_a', 'upc_e'] });
-      } catch (e) { detector = null; }
+      } catch (_e) {
+        detector = false;
+      }
+    } else {
+      detector = false;
     }
+    return detector || null;
+  }
+
+  async function startScanner() {
+    if (mediaStream) return;
+
+    ensureBarcodeDetector();
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       Swal.fire('No compatible', 'Tu navegador no permite usar la cámara.', 'info');
       return;
     }
+
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       scanVideo.srcObject = mediaStream;
       await scanVideo.play();
       scanWrap.classList.add('active');
+      setScanButtonState(true);
 
       if (detector) {
         if (scanInterval) clearInterval(scanInterval);
@@ -1487,17 +1521,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (err) {
       console.error(err);
+      await stopScanner();
       Swal.fire('Cámara no disponible', 'No se pudo acceder a la cámara.', 'error');
     }
   }
 
   async function stopScanner() {
-    if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      scanInterval = null;
+    }
+
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
       mediaStream = null;
     }
+
+    if (scanVideo) {
+      try { scanVideo.pause(); } catch (_e) { }
+      scanVideo.srcObject = null;
+    }
+
     scanWrap.classList.remove('active');
+    setScanButtonState(false);
   }
 
   async function onBarcodeFound(code) {
@@ -1507,21 +1553,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchInput.dispatchEvent(e);
   }
 
-  fileScan.addEventListener('change', async () => {
-    const f = fileScan.files?.[0];
-    if (!f) return;
-    const m = (f.name || '').match(/\d{8,}/);
-    if (m) {
-      searchInput.value = m[0];
-      const e = new KeyboardEvent('keydown', { key: 'Enter' });
-      searchInput.dispatchEvent(e);
-    } else {
-      Swal.fire('Atención', 'No se pudo leer el código desde la imagen. Prueba con la cámara.', 'info');
-    }
-  });
+  async function tryDetectBarcodeFromImage(file) {
+    if (!file || !(file.type || '').startsWith('image/')) return '';
+    const activeDetector = ensureBarcodeDetector();
+    if (!activeDetector) return '';
 
-  btnScan.addEventListener('click', startScanner);
-  btnScanStop.addEventListener('click', stopScanner);
+    try {
+      const bitmap = await createImageBitmap(file);
+      try {
+        const barcodes = await activeDetector.detect(bitmap);
+        const raw = String(barcodes?.[0]?.rawValue || '').trim();
+        return raw || '';
+      } finally {
+        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+      }
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  if (btnFilePick) {
+    btnFilePick.addEventListener('click', async () => {
+      if (mediaStream) await stopScanner();
+      if (fileScan) fileScan.click();
+    });
+  }
+
+  if (fileScan) {
+    fileScan.addEventListener('change', async () => {
+      const f = fileScan.files?.[0];
+      if (!f) return;
+
+      let code = await tryDetectBarcodeFromImage(f);
+
+      if (!code) {
+        const m = String(f.name || '').match(/\d{8,}/);
+        code = m ? m[0] : '';
+      }
+
+      fileScan.value = '';
+
+      if (code) {
+        searchInput.value = code;
+        const e = new KeyboardEvent('keydown', { key: 'Enter' });
+        searchInput.dispatchEvent(e);
+      } else {
+        Swal.fire('Atención', 'No se pudo leer el código desde el archivo seleccionado.', 'info');
+      }
+    });
+  }
+
+  if (btnScan) {
+    btnScan.addEventListener('click', async () => {
+      if (mediaStream) {
+        await stopScanner();
+      } else {
+        await startScanner();
+      }
+    });
+  }
+
+  setScanButtonState(false);
 
   // ===== Carga inicial (hoy) =====
   async function loadStoreStateForToday() {

@@ -30,7 +30,6 @@
       </a>
 
       <div class="d-flex align-items-center gap-3 ms-auto">
-        <span class="text-white-50 small d-none d-md-inline">Solicitudes a bodega</span>
         <span class="badge bg-secondary" id="lastSaved">
           <i class="fa-solid fa-clock-rotate-left me-1"></i>
           Aún no guardado.
@@ -52,7 +51,6 @@
               <i class="fa-solid fa-sliders me-2 text-primary"></i>
               Configuración
             </h6>
-            <p class="text-muted small mb-0">Selecciona la tienda y la versión de lista.</p>
           </div>
           <div class="card-body">
             <div class="mb-3">
@@ -81,35 +79,6 @@
           </div>
         </div>
 
-        <!-- Card: Indicaciones -->
-        <div class="card shadow-sm">
-          <div class="card-header bg-white border-0 pb-0">
-            <h6 class="card-title mb-1">
-              <i class="fa-solid fa-circle-info me-2 text-primary"></i>
-              Indicaciones
-            </h6>
-          </div>
-          <div class="card-body small text-muted">
-            <ul class="list-unstyled mb-0">
-              <li class="mb-2 d-flex">
-                <i class="fa-solid fa-magnifying-glass text-primary me-2 mt-1"></i>
-                <span>Busca por nombre, código de inventario o código de barras.</span>
-              </li>
-              <li class="mb-2 d-flex">
-                <i class="fa-solid fa-barcode text-primary me-2 mt-1"></i>
-                <span>Usa el escáner para capturar códigos desde la cámara o una imagen.</span>
-              </li>
-              <li class="mb-2 d-flex">
-                <i class="fa-solid fa-calendar-days text-primary me-2 mt-1"></i>
-                <span>Consulta el histórico por día (solo lectura) y vuelve a hoy para editar.</span>
-              </li>
-              <li class="d-flex">
-                <i class="fa-solid fa-truck-ramp-box text-primary me-2 mt-1"></i>
-                <span>Marca cada ítem como <strong>Revisado</strong> y <strong>Despachado</strong> según corresponda.</span>
-              </li>
-            </ul>
-          </div>
-        </div>
       </div>
 
       <!-- PANEL DERECHO: Búsqueda + Checklist -->
@@ -118,18 +87,10 @@
         <!-- Card: Búsqueda, histórico y escáner -->
         <div class="card shadow-sm mb-4">
           <div class="card-header bg-white border-0">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
-                <h6 class="card-title mb-1">
-                  <i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>
-                  Buscar producto
-                </h6>
-                <p class="text-muted small mb-0">Catálogo centralizado por Google Sheets.</p>
-              </div>
-              <button id="btnScan" class="btn btn-outline-primary btn-sm" type="button" title="Escanear código de barras">
-                <i class="fa-solid fa-barcode me-1"></i> Escanear
-              </button>
-            </div>
+            <h6 class="card-title mb-0">
+              <i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>
+              Buscar producto
+            </h6>
           </div>
 
           <div class="card-body border-top">
@@ -138,10 +99,7 @@
               <label class="form-label fw-semibold mb-1" for="searchInput">
                 Barra de búsqueda
               </label>
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white">
-                  <i class="fa-solid fa-magnifying-glass text-muted"></i>
-                </span>
+              <div class="input-group input-group-sm search-bar-group">
                 <input
                   id="searchInput"
                   type="text"
@@ -149,7 +107,32 @@
                   placeholder="Nombre, código inventario o código de barras"
                   autocomplete="off"
                 >
+                <button
+                  id="btnFilePick"
+                  class="btn btn-outline-secondary search-action-btn"
+                  type="button"
+                  title="Adjuntar imagen o documento"
+                  aria-label="Adjuntar imagen o documento"
+                >
+                  <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <button
+                  id="btnScan"
+                  class="btn btn-outline-primary search-action-btn"
+                  type="button"
+                  title="Escanear código de barras"
+                  aria-label="Escanear código de barras"
+                >
+                  <i class="fa-solid fa-barcode"></i>
+                </button>
               </div>
+              <input
+                id="fileScan"
+                class="d-none"
+                type="file"
+                accept="image/*,application/pdf,.pdf"
+                capture="environment"
+              >
 
               <!-- Lista de sugerencias -->
               <ul id="suggestions" class="list-group shadow-sm search-suggestions"></ul>
@@ -170,9 +153,6 @@
                     </button>
                   </div>
                   <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
-                </div>
-                <div class="form-text small text-muted">
-                  Los días con checklist guardado se marcarán con un punto azul en el calendario.
                 </div>
                 <div class="form-text small" id="histViewModeText">
                   Modo: checklist del día actual (editable).
@@ -196,20 +176,6 @@
               <div class="scanner">
                 <video id="scanVideo" playsinline></video>
                 <div class="scan-overlay"></div>
-                <div class="scan-msg">Apunta al código de barras…</div>
-              </div>
-              <div class="d-flex flex-wrap gap-2 mt-2">
-                <button id="btnScanStop" class="btn btn-sm btn-outline-danger">
-                  <i class="fa-solid fa-stop me-1"></i> Detener
-                </button>
-                <input
-                  id="fileScan"
-                  class="form-control form-control-sm"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style="max-width:280px;"
-                >
               </div>
             </div>
           </div>
@@ -224,7 +190,6 @@
                   <i class="fa-solid fa-list-check me-2 text-primary"></i>
                   Checklist de productos
                 </h6>
-                <p class="text-muted small mb-0">Control de revisión y despacho por bodega.</p>
               </div>
 
               <!-- Toolbar -->

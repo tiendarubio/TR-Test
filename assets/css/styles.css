@@ -87,6 +87,22 @@ body {
   font-weight: 600;
 }
 
+.search-bar-group .form-control {
+  min-width: 0;
+}
+
+.search-bar-group .search-action-btn {
+  min-width: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.search-bar-group .search-action-btn span {
+  line-height: 1;
+}
+
 /* Scanner */
 .scanner-wrap {
   display: none;
@@ -117,16 +133,6 @@ body {
   border: 2px dashed rgba(255, 255, 255, 0.6);
 }
 
-.scan-msg {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 8px;
-  text-align: center;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  font-size: 0.85rem;
-}
 
 /* Calendario histórico local */
 .history-calendar-shell {
