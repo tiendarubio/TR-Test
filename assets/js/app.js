@@ -1,16 +1,45 @@
 // app.js — Config & helpers para TRLista (Vercel)
 
-// BINS por tienda (principal y alterna) — se reutilizan como docId en Firestore
+// Identificadores lógicos por tienda/lista — se reutilizan como docId en Firestore
 const STORE_BINS = {
-  lista_sexta_calle:      { base:'68c5b46ed0ea881f407ce556', alterna:'69174e9943b1c97be9ad5f6b' },
-  lista_centro_comercial: { base:'68c5b4add0ea881f407ce586', alterna:'69174eb7d0ea881f40e85786' },
-  lista_avenida_morazan:  { base:'68c5b4e043b1c97be941f83f', alterna:'69174e1ad0ea881f40e8565f' }
+  lista_sexta_calle: {
+    base: '68c5b46ed0ea881f407ce556',
+    alterna: '69174e9943b1c97be9ad5f6b',
+    traslado: 'traslado_sexta_calle'
+  },
+  lista_centro_comercial: {
+    base: '68c5b4add0ea881f407ce586',
+    alterna: '69174eb7d0ea881f40e85786',
+    traslado: 'traslado_centro_comercial'
+  },
+  lista_avenida_morazan: {
+    base: '68c5b4e043b1c97be941f83f',
+    alterna: '69174e1ad0ea881f40e8565f',
+    traslado: 'traslado_avenida_morazan'
+  }
 };
 
 function getBinId(storeKey, versionKey = 'base') {
   const rec = STORE_BINS[storeKey];
   if (!rec) return null;
-  return rec[versionKey] || rec.base;
+  return rec[versionKey] ?? null;
+}
+
+function getStoreVersions(storeKey) {
+  const rec = STORE_BINS[storeKey];
+  if (!rec) return [];
+  return Object.entries(rec)
+    .filter(([, docId]) => !!docId)
+    .map(([versionKey]) => versionKey);
+}
+
+function getListLabel(versionKey) {
+  const labels = {
+    base: 'Principal',
+    alterna: 'Alterna',
+    traslado: 'Traslado'
+  };
+  return labels[versionKey] || versionKey;
 }
 
 let CATALOGO_CACHE = null;
@@ -153,3 +182,8 @@ function formatSV(iso) {
     return 'Aún no guardado.';
   }
 }
+
+
+try {
+  window.STORE_BINS = STORE_BINS;
+} catch (_) {}

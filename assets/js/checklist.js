@@ -57,6 +57,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     return currentViewDate || today;
   }
 
+  function getVersionLabel(versionKey) {
+    if (typeof getListLabel === 'function') {
+      return getListLabel(versionKey);
+    }
+
+    const fallback = {
+      base: 'Principal',
+      alterna: 'Alterna',
+      traslado: 'Traslado'
+    };
+
+    return fallback[versionKey] || versionKey;
+  }
+
+  function getDestinationVersionKeys(storeKey, currentVersionKey) {
+    const available = (typeof getStoreVersions === 'function')
+      ? getStoreVersions(storeKey)
+      : Object.entries((typeof STORE_BINS !== 'undefined' && STORE_BINS[storeKey]) ? STORE_BINS[storeKey] : {})
+          .filter(([, docId]) => !!docId)
+          .map(([versionKey]) => versionKey);
+
+    return available.filter(versionKey => versionKey !== currentVersionKey);
+  }
+
+
   function updateHistoricalLockUI() {
     if (!btnToggleHistLock) return;
 
@@ -156,7 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const qty = tr.querySelector('.qty');
       const btnRev = tr.cells[6]?.querySelector('button');
       const btnDes = tr.cells[7]?.querySelector('button');
-      const btnMove = tr.querySelector('.btn-move-alterna');
+      const btnMove = tr.querySelector('.btn-move-list');
       const btnDel = tr.querySelector('.btn-delete-row');
 
       if (qty) qty.disabled = disableEditing;
@@ -501,14 +526,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         tienda_key: tiendaKey,
         tienda: tiendaName,
         version: versionKey,
+        version_label: getVersionLabel(versionKey),
         updatedAt: new Date().toISOString()
       },
       items
     };
   }
 
-  // === MOVER ÍTEM ENTRE PRINCIPAL Y ALTERNA (persistiendo ambas) ===
-  async function moveRowToAlterna(tr) {
+  // === MOVER ÍTEM ENTRE LISTAS (persistiendo origen y destino) ===
+  async function moveRowToAnotherList(tr) {
     try {
       const today = (typeof getTodayString === 'function') ? getTodayString() : null;
       const lockedHistorical =
@@ -524,25 +550,53 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const storeKey = storeSelect.value;
-      const versionKey = versionSelect.value; // 'base' o 'alterna'
+      const fromKey = versionSelect.value;
+      const destinationKeys = getDestinationVersionKeys(storeKey, fromKey);
 
-      const fromKey = (versionKey === 'alterna') ? 'alterna' : 'base';
-      const toKey = (versionKey === 'alterna') ? 'base' : 'alterna';
+      if (!destinationKeys.length) {
+        await Swal.fire(
+          'Configuración incompleta',
+          'No hay otra lista disponible como destino para esta tienda.',
+          'error'
+        );
+        return;
+      }
 
+      const destinationOptions = Object.fromEntries(
+        destinationKeys.map(versionKey => [versionKey, getVersionLabel(versionKey)])
+      );
+
+      const selection = await Swal.fire({
+        title: 'Mover producto',
+        input: 'select',
+        inputOptions: destinationOptions,
+        inputPlaceholder: 'Selecciona la lista destino',
+        showCancelButton: true,
+        confirmButtonText: 'Mover',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+          if (!value) return 'Debes seleccionar una lista destino.';
+          if (value === fromKey) return 'Debes seleccionar una lista distinta.';
+          return undefined;
+        }
+      });
+
+      if (!selection.isConfirmed) return;
+
+      const toKey = selection.value;
       const fromDoc = getBinId(storeKey, fromKey);
       const toDoc = getBinId(storeKey, toKey);
 
-      if (!toDoc) {
+      if (!fromDoc || !toDoc) {
         await Swal.fire(
           'Configuración incompleta',
-          'No hay documento configurado para la lista destino de esta tienda.',
+          'No se encontró el identificador de la lista origen o destino para esta tienda.',
           'error'
         );
         return;
       }
 
       const tiendaName = storeSelect.options[storeSelect.selectedIndex].text;
-
       const item = {
         codigo_barras: tr.cells[1].innerText.trim(),
         nombre: tr.cells[2].innerText.trim(),
@@ -556,7 +610,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const day = getTargetChecklistDate();
       let destRec = await loadChecklistFromFirestore(toDoc, day);
       if (!destRec || !Array.isArray(destRec.items)) {
-        destRec = { meta: { tienda_key: storeKey, tienda: tiendaName, version: toKey, updatedAt: null }, items: [] };
+        destRec = {
+          meta: {
+            tienda_key: storeKey,
+            tienda: tiendaName,
+            version: toKey,
+            version_label: getVersionLabel(toKey),
+            updatedAt: null
+          },
+          items: []
+        };
       }
 
       destRec.items.push(item);
@@ -564,11 +627,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       destRec.meta.tienda_key = storeKey;
       destRec.meta.tienda = tiendaName;
       destRec.meta.version = toKey;
+      destRec.meta.version_label = getVersionLabel(toKey);
       destRec.meta.updatedAt = new Date().toISOString();
 
       await saveChecklistToFirestore(toDoc, destRec, day);
 
-      // Remover del origen y guardar origen
       tr.remove();
       renumber();
 
@@ -576,15 +639,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       await saveChecklistToFirestore(fromDoc, payloadFrom, day);
 
       lastUpdateISO = payloadFrom.meta.updatedAt;
-      lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Última actualización: ' + formatSV(lastUpdateISO);
+      lastSaved.innerHTML =
+        '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
+        'Última actualización: ' +
+        formatSV(lastUpdateISO);
 
-      await refreshHistoryPicker(); // marca el día si no existía
+      await refreshHistoryPicker();
 
-      const msg = (versionKey === 'alterna')
-        ? 'El producto se movió a la lista principal de esta tienda.'
-        : 'El producto se movió a la lista alterna de esta tienda.';
-
-      await Swal.fire('Movimiento realizado', msg, 'success');
+      await Swal.fire(
+        'Movimiento realizado',
+        'El producto se movió a la lista ' + getVersionLabel(toKey) + ' de esta tienda.',
+        'success'
+      );
     } catch (err) {
       console.error(err);
       await Swal.fire('Error', 'No se pudo mover el producto entre listas. Intenta de nuevo.', 'error');
@@ -629,15 +695,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const btnRev = tr.cells[6].querySelector('button');
     const btnDes = tr.cells[7].querySelector('button');
-    const btnMove = tr.cells[8].querySelector('.btn-move-alterna');
+    const btnMove = tr.cells[8].querySelector('.btn-move-list');
     const btnDel = tr.cells[8].querySelector('.btn-delete-row');
 
     btnRev.addEventListener('click', () => toggleBtn(btnRev));
     btnDes.addEventListener('click', () => toggleBtn(btnDes));
 
     if (btnMove) {
+      btnMove.title = 'Mover a otra lista';
+      btnMove.setAttribute('aria-label', 'Mover a otra lista');
       btnMove.addEventListener('click', async () => {
-        await moveRowToAlterna(tr);
+        await moveRowToAnotherList(tr);
       });
     }
 
