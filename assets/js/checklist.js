@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </td>
       <td class="text-center">
         <div class="btn-group btn-group-sm" role="group">
-          <button class="btn btn-outline-warning btn-move-alterna" title="Enviar a lista alterna">
+          <button class="btn btn-outline-warning btn-move-list" title="Mover a otra lista" aria-label="Mover a otra lista">
             <i class="fa-solid fa-right-left"></i>
           </button>
           <button class="btn btn-outline-secondary btn-delete-row" title="Eliminar">
@@ -853,13 +853,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       doc.text(`Fecha: ${fechaActual}`, 10, 18);
       const upd = formatSV(lastUpdateISO);
       doc.text(`Última actualización (guardado): ${upd}`, 10, 26);
-      if (currentViewDate) {
+      const hasViewLine = !!currentViewDate;
+      const startY = hasViewLine ? 50 : 42;
+
+      if (hasViewLine) {
         doc.text(`Vista: ${currentViewDate}`, 10, 34);
         doc.text(`Bodega: ${bodega}`, 10, 42);
-        startY = 50;
       } else {
         doc.text(`Bodega: ${bodega}`, 10, 34);
-        startY = 42;
       }
 
       const rows = rowsTr.map((tr, i) => {
@@ -870,10 +871,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const revisado = tr.cells[6].querySelector('button').classList.contains('on') ? 'Sí' : 'No';
         return [i + 1, codBar, nombre, codInv, bodega, cantidadTxt, revisado];
       });
-
-      // compute startY depending on view line
-      const hasViewLine = !!currentViewDate;
-      const startY = hasViewLine ? 50 : 42;
 
       doc.autoTable({
         startY,
@@ -890,11 +887,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const content = await zip.generateAsync({ type: 'blob' });
     const zipFileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_Checklist_${fechaActual}_PDF.zip`;
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(content);
+    const objectUrl = URL.createObjectURL(content);
+    link.href = objectUrl;
     link.download = zipFileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 
     Swal.fire('Éxito', 'Se generaron los PDF por bodega.', 'success');
   }
