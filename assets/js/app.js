@@ -1,189 +1,205 @@
-// app.js — Config & helpers para TRLista (Vercel)
-
-// Identificadores lógicos por tienda/lista — se reutilizan como docId en Firestore
-const STORE_BINS = {
-  lista_sexta_calle: {
-    base: '68c5b46ed0ea881f407ce556',
-    alterna: '69174e9943b1c97be9ad5f6b',
-    traslado: 'traslado_sexta_calle'
-  },
-  lista_centro_comercial: {
-    base: '68c5b4add0ea881f407ce586',
-    alterna: '69174eb7d0ea881f40e85786',
-    traslado: 'traslado_centro_comercial'
-  },
-  lista_avenida_morazan: {
-    base: '68c5b4e043b1c97be941f83f',
-    alterna: '69174e1ad0ea881f40e8565f',
-    traslado: 'traslado_avenida_morazan'
-  }
-};
-
-function getBinId(storeKey, versionKey = 'base') {
-  const rec = STORE_BINS[storeKey];
-  if (!rec) return null;
-  return rec[versionKey] ?? null;
-}
-
-function getStoreVersions(storeKey) {
-  const rec = STORE_BINS[storeKey];
-  if (!rec) return [];
-  return Object.entries(rec)
-    .filter(([, docId]) => !!docId)
-    .map(([versionKey]) => versionKey);
-}
-
-function getListLabel(versionKey) {
-  const labels = {
-    base: 'Principal',
-    alterna: 'Alterna',
-    traslado: 'Traslado'
-  };
-  return labels[versionKey] || versionKey;
-}
-
 let CATALOGO_CACHE = null;
-
-function preloadCatalog() {
-  if (CATALOGO_CACHE) return Promise.resolve(CATALOGO_CACHE);
-
-  return fetch('/api/catalogo')
-    .then(r => {
-      if (!r.ok) throw new Error('Error catálogo: ' + r.statusText);
-      return r.json();
-    })
-    .then(data => {
-      CATALOGO_CACHE = Array.isArray(data.values) ? data.values : [];
-      try { window.CATALOGO_CACHE = CATALOGO_CACHE; } catch (_) {}
-      return CATALOGO_CACHE;
-    })
-    .catch(e => {
-      console.error('Sheets catálogo error:', e);
-      CATALOGO_CACHE = [];
-      try { window.CATALOGO_CACHE = CATALOGO_CACHE; } catch (_) {}
-      return CATALOGO_CACHE;
-    });
-}
-
-function loadProductsFromGoogleSheets() {
-  return preloadCatalog();
-}
-
-// === Firestore helpers (histórico por día) ===
-// Estructura (igual patrón que TR-Inventario):
-//   tr_lista/{docId}/historial/{YYYY-MM-DD}
-let FIRESTORE_DB = null;
-
-function getFirestoreDb() {
-  if (FIRESTORE_DB) return FIRESTORE_DB;
-
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    throw new Error('Firebase/Firestore no está disponible.');
-  }
-
-  const db = firebase.firestore();
-
-  try {
-    db.settings({
-      experimentalAutoDetectLongPolling: true,
-      experimentalLongPollingOptions: { timeoutSeconds: 25 },
-      useFetchStreams: false,
-      merge: true
-    });
-  } catch (err) {
-    console.warn('Firestore settings omitidas:', err?.message || err);
-  }
-
-  FIRESTORE_DB = db;
-  return FIRESTORE_DB;
-}
+let PROVIDERS_CACHE = null;
+let __FIREBASE_READY = null;
 
 function getTodayString() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/El_Salvador' });
 }
 
-function saveChecklistToFirestore(docId, payload, dateStr) {
-  if (!docId) {
-    return Promise.reject(new Error('Documento no configurado para esta tienda/lista.'));
+function showToast(icon, title) {
+  if (window.Swal) {
+    Swal.fire({ toast: true, position: 'top-end', icon, title, showConfirmButton: false, timer: 2200 });
   }
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
-  }
-
-  const db  = getFirestoreDb();
-  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
-
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .doc(day)
-    .set(payload || {}, { merge: true })
-    .then(() => ({ ok: true, day }))
-    .catch(err => {
-      console.error('Error al guardar en Firestore:', err);
-      throw err;
-    });
 }
 
-function loadChecklistFromFirestore(docId, dateStr) {
-  if (!docId) return Promise.resolve({});
-  if (typeof firebase === 'undefined' || !firebase.firestore) {
-    return Promise.reject(new Error('Firebase/Firestore no está disponible.'));
-  }
-
-  const db  = getFirestoreDb();
-  const day = (typeof dateStr === 'string' && dateStr) ? dateStr : getTodayString();
-
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .doc(day)
-    .get()
-    .then(doc => (doc.exists ? (doc.data() || {}) : {}))
-    .catch(err => {
-      console.error('Error al leer Firestore:', err);
-      return {};
-    });
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('No se pudo cargar: ' + src));
+    document.head.appendChild(s);
+  });
 }
 
-function getHistoryDates(docId) {
-  if (!docId) return Promise.resolve([]);
+async function initFirebaseCompat() {
+  if (__FIREBASE_READY) return __FIREBASE_READY;
 
-  const db = getFirestoreDb();
-  return db
-    .collection('tr_lista')
-    .doc(String(docId))
-    .collection('historial')
-    .get()
-    .then(snap => snap.docs.map(d => d.id))
-    .catch(err => {
-      console.error('Error al listar historial en Firestore:', err);
-      throw err;
-    });
+  __FIREBASE_READY = (async () => {
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js');
+
+    const r = await fetch('/api/firebase-config');
+    if (!r.ok) throw new Error('No se pudo cargar firebase-config');
+    const cfg = await r.json();
+
+    if (!window.firebase || !window.firebase.initializeApp) {
+      throw new Error('Firebase compat no disponible');
+    }
+
+    if (!window.firebase.apps || !window.firebase.apps.length) {
+      window.firebase.initializeApp(cfg);
+    }
+
+    return window.firebase;
+  })();
+
+  return __FIREBASE_READY;
 }
 
-// Formatear fecha/hora a formato ES-SV
-function formatSV(iso) {
-  if (!iso) return 'Aún no guardado.';
+function getDayCollection(dateStr) {
+  return initFirebaseCompat().then((fb) => {
+    const db = fb.firestore();
+    return db
+      .collection('tr_recepciones_fechas')
+      .doc(dateStr)
+      .collection('recepciones');
+  });
+}
+
+function generateReceptionId() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const y = now.getFullYear();
+  const m = pad(now.getMonth() + 1);
+  const d = pad(now.getDate());
+  const hh = pad(now.getHours());
+  const mm = pad(now.getMinutes());
+  const ss = pad(now.getSeconds());
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `RX-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
+}
+
+function normalizeNumber(value, decimals = 2) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? Number(n.toFixed(decimals)) : 0;
+}
+
+async function preloadCatalog() {
+  if (CATALOGO_CACHE) return CATALOGO_CACHE;
+
   try {
-    const dt = new Date(iso);
-    return dt.toLocaleString('es-SV', {
-      timeZone: 'America/El_Salvador',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  } catch (e) {
-    return 'Aún no guardado.';
+    const r = await fetch('/api/catalogo');
+    if (!r.ok) throw new Error('Error catálogo');
+    const data = await r.json();
+    CATALOGO_CACHE = Array.isArray(data.values) ? data.values : [];
+  } catch (error) {
+    console.error('Error al cargar catálogo:', error);
+    CATALOGO_CACHE = [];
   }
+
+  return CATALOGO_CACHE;
 }
 
+async function preloadProviders() {
+  if (PROVIDERS_CACHE) return PROVIDERS_CACHE;
 
-try {
-  window.STORE_BINS = STORE_BINS;
-} catch (_) {}
+  try {
+    const r = await fetch('/api/proveedores');
+    if (!r.ok) throw new Error('Error proveedores');
+    const data = await r.json();
+    PROVIDERS_CACHE = Array.isArray(data.providers) ? data.providers : [];
+  } catch (error) {
+    console.error('Error al cargar proveedores:', error);
+    PROVIDERS_CACHE = [];
+  }
+
+  return PROVIDERS_CACHE;
+}
+
+function mapCatalogRow(row) {
+  return {
+    codigoBarras: String(row?.[0] || '').trim(),
+    nombre: String(row?.[1] || '').trim(),
+    codigoInventario: String(row?.[2] || '').trim(),
+    departamento: String(row?.[3] || '').trim(),
+    subdepartamento: String(row?.[4] || '').trim(),
+    unidad: String(row?.[5] || '').trim()
+  };
+}
+
+async function createReceptionDraft(dateStr) {
+  const fb = await initFirebaseCompat();
+  const col = await getDayCollection(dateStr);
+  const receptionId = generateReceptionId();
+
+  const payload = {
+    receptionId,
+    date: dateStr,
+    status: 'draft',
+    proveedor: '',
+    numeroCreditoFiscal: '',
+    tienda: 'AVENIDA MORAZÁN',
+    items: [],
+    totales: {
+      lineas: 0,
+      cantidad_total: 0,
+      total_sin_iva: 0,
+      total_con_iva: 0
+    },
+    createdAt: fb.firestore.FieldValue.serverTimestamp(),
+    updatedAt: fb.firestore.FieldValue.serverTimestamp(),
+    completedAt: null
+  };
+
+  await col.doc(receptionId).set(payload);
+  return { receptionId, ...payload };
+}
+
+async function saveReceptionDraft(dateStr, receptionId, payload) {
+  const fb = await initFirebaseCompat();
+  const col = await getDayCollection(dateStr);
+  await col.doc(receptionId).set({
+    ...payload,
+    receptionId,
+    date: dateStr,
+    status: 'draft',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function finalizeReception(dateStr, receptionId, payload) {
+  const fb = await initFirebaseCompat();
+  const col = await getDayCollection(dateStr);
+  await col.doc(receptionId).set({
+    ...payload,
+    receptionId,
+    date: dateStr,
+    status: 'completed',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp(),
+    completedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function cancelReception(dateStr, receptionId, payload = {}) {
+  const fb = await initFirebaseCompat();
+  const col = await getDayCollection(dateStr);
+  await col.doc(receptionId).set({
+    ...payload,
+    receptionId,
+    date: dateStr,
+    status: 'cancelled',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function listReceptionsByDate(dateStr) {
+  const col = await getDayCollection(dateStr);
+  const snap = await col.get();
+  const rows = [];
+  snap.forEach((doc) => rows.push({ id: doc.id, ...doc.data() }));
+
+  return rows.sort((a, b) => {
+    const at = a.createdAt?.seconds || 0;
+    const bt = b.createdAt?.seconds || 0;
+    return bt - at;
+  });
+}
+
+async function loadReceptionById(dateStr, receptionId) {
+  const col = await getDayCollection(dateStr);
+  const doc = await col.doc(receptionId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
