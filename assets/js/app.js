@@ -1,15 +1,10 @@
+
 let CATALOGO_CACHE = null;
 let PROVIDERS_CACHE = null;
 let __FIREBASE_READY = null;
 
 function getTodayString() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/El_Salvador' });
-}
-
-function showToast(icon, title) {
-  if (window.Swal) {
-    Swal.fire({ toast: true, position: 'top-end', icon, title, showConfirmButton: false, timer: 2200 });
-  }
 }
 
 function loadScript(src) {
@@ -48,14 +43,59 @@ async function initFirebaseCompat() {
   return __FIREBASE_READY;
 }
 
-function getDayCollection(dateStr) {
-  return initFirebaseCompat().then((fb) => {
-    const db = fb.firestore();
-    return db
-      .collection('tr_recepciones_fechas')
-      .doc(dateStr)
-      .collection('recepciones');
-  });
+async function preloadCatalog() {
+  if (CATALOGO_CACHE) return CATALOGO_CACHE;
+
+  try {
+    const r = await fetch('/api/catalogo');
+    if (!r.ok) throw new Error('Error catálogo: ' + r.statusText);
+    const data = await r.json();
+    CATALOGO_CACHE = Array.isArray(data.values) ? data.values : [];
+    window.CATALOGO_CACHE = CATALOGO_CACHE;
+  } catch (error) {
+    console.error('Error al cargar catálogo:', error);
+    CATALOGO_CACHE = [];
+    window.CATALOGO_CACHE = [];
+  }
+
+  return CATALOGO_CACHE;
+}
+
+function loadProductsFromGoogleSheets() {
+  return preloadCatalog();
+}
+
+async function preloadProviders() {
+  if (PROVIDERS_CACHE) return PROVIDERS_CACHE;
+
+  try {
+    const r = await fetch('/api/proveedores');
+    if (!r.ok) throw new Error('Error proveedores: ' + r.statusText);
+    const data = await r.json();
+    PROVIDERS_CACHE = Array.isArray(data.providers) ? data.providers : [];
+  } catch (error) {
+    console.error('Error al cargar proveedores:', error);
+    PROVIDERS_CACHE = [];
+  }
+
+  return PROVIDERS_CACHE;
+}
+
+function loadProvidersFromGoogleSheets() {
+  return preloadProviders();
+}
+
+async function getDB() {
+  const fb = await initFirebaseCompat();
+  return { fb, db: fb.firestore() };
+}
+
+async function ensureDateDocument(dateStr) {
+  const { fb, db } = await getDB();
+  await db.collection('tr_recepciones_fechas').doc(dateStr).set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
 }
 
 function generateReceptionId() {
@@ -71,58 +111,11 @@ function generateReceptionId() {
   return `RX-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
 }
 
-function normalizeNumber(value, decimals = 2) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? Number(n.toFixed(decimals)) : 0;
-}
-
-async function preloadCatalog() {
-  if (CATALOGO_CACHE) return CATALOGO_CACHE;
-
-  try {
-    const r = await fetch('/api/catalogo');
-    if (!r.ok) throw new Error('Error catálogo');
-    const data = await r.json();
-    CATALOGO_CACHE = Array.isArray(data.values) ? data.values : [];
-  } catch (error) {
-    console.error('Error al cargar catálogo:', error);
-    CATALOGO_CACHE = [];
-  }
-
-  return CATALOGO_CACHE;
-}
-
-async function preloadProviders() {
-  if (PROVIDERS_CACHE) return PROVIDERS_CACHE;
-
-  try {
-    const r = await fetch('/api/proveedores');
-    if (!r.ok) throw new Error('Error proveedores');
-    const data = await r.json();
-    PROVIDERS_CACHE = Array.isArray(data.providers) ? data.providers : [];
-  } catch (error) {
-    console.error('Error al cargar proveedores:', error);
-    PROVIDERS_CACHE = [];
-  }
-
-  return PROVIDERS_CACHE;
-}
-
-function mapCatalogRow(row) {
-  return {
-    codigoBarras: String(row?.[0] || '').trim(),
-    nombre: String(row?.[1] || '').trim(),
-    codigoInventario: String(row?.[2] || '').trim(),
-    departamento: String(row?.[3] || '').trim(),
-    subdepartamento: String(row?.[4] || '').trim(),
-    unidad: String(row?.[5] || '').trim()
-  };
-}
-
 async function createReceptionDraft(dateStr) {
-  const fb = await initFirebaseCompat();
-  const col = await getDayCollection(dateStr);
+  const { fb, db } = await getDB();
   const receptionId = generateReceptionId();
+  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  const ref = parentRef.collection('recepciones').doc(receptionId);
 
   const payload = {
     receptionId,
@@ -143,14 +136,24 @@ async function createReceptionDraft(dateStr) {
     completedAt: null
   };
 
-  await col.doc(receptionId).set(payload);
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await ref.set(payload);
   return { receptionId, ...payload };
 }
 
 async function saveReceptionDraft(dateStr, receptionId, payload) {
-  const fb = await initFirebaseCompat();
-  const col = await getDayCollection(dateStr);
-  await col.doc(receptionId).set({
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('recepciones').doc(receptionId).set({
     ...payload,
     receptionId,
     date: dateStr,
@@ -160,9 +163,14 @@ async function saveReceptionDraft(dateStr, receptionId, payload) {
 }
 
 async function finalizeReception(dateStr, receptionId, payload) {
-  const fb = await initFirebaseCompat();
-  const col = await getDayCollection(dateStr);
-  await col.doc(receptionId).set({
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('recepciones').doc(receptionId).set({
     ...payload,
     receptionId,
     date: dateStr,
@@ -173,9 +181,14 @@ async function finalizeReception(dateStr, receptionId, payload) {
 }
 
 async function cancelReception(dateStr, receptionId, payload = {}) {
-  const fb = await initFirebaseCompat();
-  const col = await getDayCollection(dateStr);
-  await col.doc(receptionId).set({
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('recepciones').doc(receptionId).set({
     ...payload,
     receptionId,
     date: dateStr,
@@ -184,22 +197,43 @@ async function cancelReception(dateStr, receptionId, payload = {}) {
   }, { merge: true });
 }
 
-async function listReceptionsByDate(dateStr) {
-  const col = await getDayCollection(dateStr);
-  const snap = await col.get();
-  const rows = [];
-  snap.forEach((doc) => rows.push({ id: doc.id, ...doc.data() }));
-
-  return rows.sort((a, b) => {
-    const at = a.createdAt?.seconds || 0;
-    const bt = b.createdAt?.seconds || 0;
-    return bt - at;
-  });
+async function loadReceptionById(dateStr, receptionId) {
+  if (!dateStr || !receptionId) return {};
+  try {
+    const { db } = await getDB();
+    const snap = await db.collection('tr_recepciones_fechas').doc(dateStr).collection('recepciones').doc(receptionId).get();
+    return snap.exists ? (snap.data() || {}) : {};
+  } catch (error) {
+    console.error('Error al cargar recepción:', error);
+    return {};
+  }
 }
 
-async function loadReceptionById(dateStr, receptionId) {
-  const col = await getDayCollection(dateStr);
-  const doc = await col.doc(receptionId).get();
-  if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() };
+async function listReceptionsByDate(dateStr) {
+  if (!dateStr) return [];
+  try {
+    const { db } = await getDB();
+    const snap = await db
+      .collection('tr_recepciones_fechas')
+      .doc(dateStr)
+      .collection('recepciones')
+      .orderBy('updatedAt', 'desc')
+      .get();
+
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error al listar recepciones por fecha:', error);
+    return [];
+  }
+}
+
+async function getHistoryDates() {
+  try {
+    const { db } = await getDB();
+    const snap = await db.collection('tr_recepciones_fechas').get();
+    return snap.docs.map((d) => d.id).filter(Boolean).sort();
+  } catch (error) {
+    console.error('Error al listar fechas del historial:', error);
+    return [];
+  }
 }
