@@ -15,19 +15,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </head>
-<body>
+<body class="bg-light">
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container-fluid">
-      <span class="navbar-brand d-flex align-items-center gap-2 fw-semibold">
-        <i class="fa-solid fa-truck-ramp-box"></i>
-        <span>TRRecepción</span>
+      <span class="navbar-brand fw-semibold">
+        <i class="fa-solid fa-truck-ramp-box me-2"></i>TRRecepción
       </span>
-
-      <div class="ms-auto d-none d-md-flex align-items-center">
-        <span class="badge-store badge-morazan">
-          <i class="fa-solid fa-store"></i>
-          <span>Avenida Morazán</span>
-        </span>
+      <div class="ms-auto text-white-50 small d-none d-md-block">
+        Avenida Morazán — Recepciones individuales
       </div>
     </div>
   </nav>
@@ -35,33 +30,30 @@
   <main class="container-fluid py-4">
     <div class="row g-4">
       <div class="col-xl-3 col-lg-4">
-        <div class="card shadow-sm workspace-config-card mb-4">
-          <div class="card-header border-0 pb-0">
-            <h6 class="card-title mb-0 d-flex align-items-center gap-2">
-              <i class="fa-solid fa-inbox text-primary"></i>
-              <span>Recepción</span>
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-white border-0 pb-0">
+            <h6 class="card-title mb-1">
+              <i class="fa-solid fa-inbox me-2 text-primary"></i>
+              Recepción actual
             </h6>
+            <p class="text-muted small mb-0">
+              Crea una recepción nueva, guarda avances y finalízala cuando esté lista.
+            </p>
           </div>
-
           <div class="card-body">
-            <div class="workspace-status-shell mb-3">
-              <div class="workspace-status-meta">
-                <span class="section-chip section-chip-soft">
-                  <i class="fa-regular fa-calendar"></i>
-                  <span id="fechaRecepcion"></span>
-                </span>
-              </div>
+            <div class="mb-3">
+              <div id="fechaRecepcion" class="small text-muted fw-semibold"></div>
+            </div>
 
-              <div class="workspace-status-box">
-                <div class="workspace-status-label">Estado</div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                  <span id="modeLabel" class="badge text-bg-secondary">Sin recepción activa</span>
-                  <span id="activeReceptionLabel" class="small text-break text-muted"></span>
-                </div>
+            <div class="border rounded-3 p-3 bg-light-subtle mb-3">
+              <div class="small text-uppercase text-muted fw-semibold mb-1">Estado</div>
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span id="modeLabel" class="badge text-bg-secondary">Sin recepción activa</span>
+                <span id="activeReceptionLabel" class="small text-break"></span>
               </div>
             </div>
 
-            <div class="action-stack mb-3">
+            <div class="d-grid gap-2 mb-3">
               <button id="btnNewReception" class="btn btn-primary btn-sm">
                 <i class="fa-solid fa-plus me-1"></i>Nueva recepción
               </button>
@@ -69,107 +61,103 @@
                 <i class="fa-solid fa-floppy-disk me-1"></i>Guardar avance
               </button>
               <button id="finalizeReception" class="btn btn-success btn-sm" disabled>
-                <i class="fa-solid fa-circle-check me-1"></i>Finalizar
+                <i class="fa-solid fa-circle-check me-1"></i>Finalizar recepción
               </button>
               <button id="cancelReception" class="btn btn-outline-danger btn-sm" disabled>
-                <i class="fa-solid fa-ban me-1"></i>Cancelar
+                <i class="fa-solid fa-ban me-1"></i>Cancelar recepción
               </button>
             </div>
 
-            <div class="history-card-shell">
+            <div class="mb-2 hist-date-wrapper">
               <label for="historyDate" class="form-label fw-semibold mb-1">Recepciones por fecha</label>
-              <div class="history-calendar-shell mb-2">
-                <div class="input-group">
-                  <span class="input-group-text bg-white">
-                    <i class="fa-regular fa-calendar"></i>
-                  </span>
-                  <input id="historyDate" class="form-control" placeholder="Selecciona fecha" autocomplete="off">
-                  <button id="btnToday" class="btn btn-outline-secondary" type="button">Hoy</button>
-                </div>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white">
+                  <i class="fa-solid fa-calendar-day text-muted"></i>
+                </span>
+                <input id="historyDate" class="form-control" placeholder="Selecciona fecha" autocomplete="off">
+                <button id="btnToday" class="btn btn-outline-secondary" type="button" title="Volver a hoy">Hoy</button>
               </div>
+              <div class="form-text small text-muted" id="historyHint">
+                Puedes abrir cualquier recepción guardada desde el listado.
+              </div>
+            </div>
 
-              <div class="list-panel">
-                <div id="receptionsList" class="receptions-list">
-                  <div class="text-muted small py-2 px-1">No hay recepciones para esta fecha.</div>
-                </div>
+            <div class="border rounded-3 p-2 bg-white">
+              <div class="small text-uppercase text-muted fw-semibold mb-2">Listado</div>
+              <div id="receptionsList" class="receptions-list">
+                <div class="text-muted small py-2 px-1">No hay recepciones para esta fecha.</div>
               </div>
             </div>
 
             <p id="successMessage" class="text-success small mt-3 mb-0" style="display:none;"></p>
           </div>
         </div>
+
+        <div class="card shadow-sm">
+          <div class="card-header bg-white border-0 pb-0">
+            <h6 class="card-title mb-1">
+              <i class="fa-solid fa-circle-info me-2 text-primary"></i>
+              Indicaciones
+            </h6>
+          </div>
+          <div class="card-body small text-muted">
+            <ul class="list-unstyled mb-0">
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-truck-ramp-box text-primary me-2 mt-1"></i>
+                <span>Empieza cada proveedor con una nueva recepción para no mezclar documentos.</span>
+              </li>
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-floppy-disk text-primary me-2 mt-1"></i>
+                <span>Usa guardar avance durante el proceso si todavía no has terminado.</span>
+              </li>
+              <li class="mb-2 d-flex">
+                <i class="fa-solid fa-magnifying-glass text-primary me-2 mt-1"></i>
+                <span>Busca productos por nombre, código inventario o código de barras.</span>
+              </li>
+              <li class="d-flex">
+                <i class="fa-solid fa-circle-check text-primary me-2 mt-1"></i>
+                <span>Finaliza la recepción para dejarla cerrada en el historial.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <div class="col-xl-9 col-lg-8">
-        <div class="card shadow-sm mb-4 workspace-top-card">
-          <div class="card-header border-0 pb-0">
-            <h6 class="card-title mb-0 d-flex align-items-center gap-2">
-              <i class="fa-solid fa-address-card text-primary"></i>
-              <span>Proveedor y productos</span>
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-white border-0">
+            <h6 class="card-title mb-1">
+              <i class="fa-solid fa-address-card me-2 text-primary"></i>
+              Datos de proveedor y productos
             </h6>
           </div>
+          <div class="card-body border-top">
+            <div class="row g-3">
+              <div class="col-md-4 position-relative">
+                <label class="form-label fw-semibold mb-1">Proveedor</label>
+                <input id="proveedorInput" type="text" class="form-control form-control-sm" placeholder="Escriba para buscar proveedor...">
+                <ul id="provSuggestions" class="list-group search-suggestions"></ul>
+              </div>
 
-          <div class="card-body">
-            <div class="checklist-workspace">
-              <div class="checklist-search-shell">
-                <div class="row g-3">
-                  <div class="col-md-4 position-relative">
-                    <label class="form-label fw-semibold mb-1">Proveedor</label>
-                    <input id="proveedorInput" type="text" class="form-control" placeholder="Buscar proveedor">
-                    <ul id="provSuggestions" class="list-group search-suggestions"></ul>
-                  </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold mb-1">Número de Crédito Fiscal</label>
+                <input id="numCreditoInput" type="text" class="form-control form-control-sm" placeholder="Ej. 001-123456-789-0">
+              </div>
 
-                  <div class="col-md-4">
-                    <label class="form-label fw-semibold mb-1">Crédito fiscal</label>
-                    <input id="numCreditoInput" type="text" class="form-control" placeholder="001-123456-789-0">
-                  </div>
-
-                  <div class="col-md-4 position-relative">
-                    <label class="form-label fw-semibold mb-1">Buscar producto</label>
-                    <div class="input-group search-bar-embedded search-bar-group">
-                      <span class="input-group-text search-lead-chip">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <span>Buscar</span>
-                      </span>
-                      <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código o barras" autocomplete="off">
-                      <button id="btnScan" class="btn btn-outline-secondary search-action-btn" type="button" title="Escanear código" aria-label="Escanear código">
-                        <i class="fa-solid fa-qrcode"></i>
-                      </button>
-                      <button id="btnOpenManual" class="btn btn-outline-secondary search-action-btn" type="button" title="Agregar producto manual" aria-label="Agregar producto manual">
-                        <i class="fa-solid fa-plus"></i>
-                      </button>
-                    </div>
-                    <ul id="suggestions" class="list-group search-suggestions"></ul>
-                    <div id="scanWrap" class="scan-wrap">
-                      <div class="scan-panel">
-                        <div class="scan-panel-head">
-                          <span class="section-chip section-chip-soft scan-chip">
-                            <i class="fa-solid fa-camera"></i>
-                            <span>Escáner</span>
-                          </span>
-                          <button id="btnScanStop" class="btn btn-outline-danger btn-sm scan-stop-btn" type="button">
-                            <i class="fa-solid fa-stop"></i>
-                            <span>Detener</span>
-                          </button>
-                        </div>
-
-                        <div class="scanner scanner-elevated">
-                          <video id="scanVideo" playsinline></video>
-                          <div class="scan-overlay"></div>
-                          <div class="scan-frame"></div>
-                          <div class="scan-msg">Apunta al código</div>
-                        </div>
-
-                        <div class="scan-actions">
-                          <label class="scan-file-field" for="fileScan">
-                            <i class="fa-regular fa-image"></i>
-                            <span>Imagen</span>
-                          </label>
-                          <input id="fileScan" class="scan-file-input" type="file" accept="image/*" capture="environment">
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div class="col-md-4 position-relative">
+                <label class="form-label fw-semibold mb-1">Buscar producto</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white">
+                    <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                  </span>
+                  <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código inventario o código de barras" autocomplete="off">
+                  <button id="btnOpenManual" class="btn btn-outline-secondary" type="button" title="Agregar producto manual">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+                <ul id="suggestions" class="list-group search-suggestions"></ul>
+                <div class="form-text small text-muted mt-1">
+                  Si no se encuentra en el catálogo, puedes agregarlo manualmente con el botón <strong>+</strong>.
                 </div>
               </div>
             </div>
@@ -177,13 +165,17 @@
         </div>
 
         <div class="card shadow-sm">
-          <div class="card-header border-0">
+          <div class="card-header bg-white border-0">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <h6 class="card-title mb-0 d-flex align-items-center gap-2">
-                <i class="fa-solid fa-list-check text-primary"></i>
-                <span>Detalle</span>
-              </h6>
-
+              <div>
+                <h6 class="card-title mb-1">
+                  <i class="fa-solid fa-list-check me-2 text-primary"></i>
+                  Detalle de recepción
+                </h6>
+                <p class="text-muted small mb-0">
+                  Cantidades y costos por producto con cálculo automático de IVA.
+                </p>
+              </div>
               <div class="btn-toolbar gap-2" role="toolbar" aria-label="Toolbar">
                 <button id="exportPDF" class="btn btn-outline-danger btn-sm" disabled>
                   <i class="fa-solid fa-file-pdf me-1"></i>PDF
@@ -195,50 +187,40 @@
                   <i class="fa-solid fa-file-excel me-1"></i>Excel
                 </button>
                 <button id="clearDraft" class="btn btn-outline-secondary btn-sm" disabled>
-                  <i class="fa-solid fa-eraser me-1"></i>Vaciar
+                  <i class="fa-solid fa-eraser me-1"></i>Vaciar borrador
                 </button>
               </div>
             </div>
           </div>
-
           <div class="card-body border-top">
-            <div class="table-checklist-shell">
-              <div class="table-responsive table-checklist-wrapper">
-                <table class="table table-sm align-middle mb-0" id="recepcionTable">
-                  <thead class="table-light">
-                    <tr>
-                      <th class="text-center" style="width: 48px;">#</th>
-                      <th>Código de Barras</th>
-                      <th>Producto</th>
-                      <th>Código Inventario</th>
-                      <th class="text-center text-nowrap">Cantidad</th>
-                      <th class="text-center text-nowrap">Total sin IVA</th>
-                      <th class="text-center text-nowrap">Ud. con IVA</th>
-                      <th class="text-center text-nowrap">Ud. sin IVA</th>
-                      <th class="text-center text-nowrap">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody id="recepcionBody"></tbody>
-                </table>
-              </div>
+            <div class="table-responsive table-checklist-wrapper">
+              <table class="table table-sm table-bordered align-middle mb-0" id="recepcionTable">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-center" style="width: 48px;">#</th>
+                    <th>Código de Barras</th>
+                    <th>Nombre del Producto</th>
+                    <th>Código Inventario</th>
+                    <th class="text-center text-nowrap">Cantidad</th>
+                    <th class="text-center text-nowrap">Costo Total sin IVA</th>
+                    <th class="text-center text-nowrap">Ud. con IVA</th>
+                    <th class="text-center text-nowrap">Ud. sin IVA</th>
+                    <th class="text-center text-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="recepcionBody"></tbody>
+              </table>
             </div>
 
-            <div class="totals-shell">
-              <div class="total-pill">
-                <span class="total-pill-label">Líneas</span>
-                <span id="tLineas">0</span>
+            <div class="row mt-3 g-2 small fw-semibold">
+              <div class="col-md-4">
+                Líneas: <span id="tLineas">0</span>
               </div>
-              <div class="total-pill">
-                <span class="total-pill-label">Cantidad</span>
-                <span id="tCantidad">0</span>
+              <div class="col-md-4">
+                Cantidad total: <span id="tCantidad">0</span>
               </div>
-              <div class="total-pill total-pill-wide">
-                <span class="total-pill-label">Sin IVA</span>
-                <span>$<span id="tSinIva">0.00</span></span>
-              </div>
-              <div class="total-pill total-pill-wide">
-                <span class="total-pill-label">Con IVA</span>
-                <span>$<span id="tConIva">0.00</span></span>
+              <div class="col-md-4">
+                Total sin IVA: $<span id="tSinIva">0.00</span> — Total con IVA: $<span id="tConIva">0.00</span>
               </div>
             </div>
           </div>
@@ -249,7 +231,7 @@
 
   <div class="modal fade" id="manualModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content modal-shell">
+      <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Agregar producto manual</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -277,11 +259,14 @@
               <input id="mTotalSin" type="number" class="form-control" placeholder="Costo total sin IVA" min="0" step="0.01">
             </div>
           </div>
+          <div class="mt-3 small text-muted">
+            Este producto se guardará únicamente en la recepción actual.
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="button" id="btnAddManual" class="btn btn-primary">
-            <i class="fas fa-plus me-1"></i>Agregar
+            <i class="fas fa-plus"></i> Agregar a la recepción
           </button>
         </div>
       </div>

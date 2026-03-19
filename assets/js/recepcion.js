@@ -16,11 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = $('searchInput');
   const provSuggestions = $('provSuggestions');
   const suggestions = $('suggestions');
-  const btnScan = $('btnScan');
-  const scanWrap = $('scanWrap');
-  const scanVideo = $('scanVideo');
-  const btnScanStop = $('btnScanStop');
-  const fileScan = $('fileScan');
 
   const body = $('recepcionBody');
   const btnNew = $('btnNewReception');
@@ -45,9 +40,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let CURRENT_STATUS = null;
   let CATALOG = [];
   let PROVIDERS = [];
-  let mediaStream = null;
-  let scanInterval = null;
-  let detector = null;
 
   const fmtMoney = (n) => Number(n || 0).toFixed(2);
 
@@ -76,7 +68,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     numCreditoInput.disabled = !editable;
     searchInput.disabled = !editable;
     $('btnOpenManual').disabled = !editable;
-    if (btnScan) btnScan.disabled = !editable;
 
     btnSave.disabled = !editable;
     btnFinalize.disabled = !editable || !hasItems;
@@ -93,10 +84,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     [...body.querySelectorAll('.btn-delete-row')].forEach((btn) => {
       btn.disabled = !editable;
     });
-
-    if (!editable) {
-      stopScanner();
-    }
 
     if (!CURRENT_RECEPTION_ID) {
       modeLabel.textContent = 'Sin recepción activa';
@@ -440,139 +427,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-
-  function focusSearch() {
-    if (searchInput && typeof searchInput.focus === 'function') {
-      searchInput.focus();
-    }
-  }
-
-  function findCatalogMatch(query) {
-    const q = (query || '').trim();
-    if (!q) return null;
-
-    const exact = CATALOG
-      .map(mapCatalogRow)
-      .find((item) =>
-        item.codigoBarras === q ||
-        item.codigoInventario === q
-      );
-
-    if (exact) return exact;
-
-    return CATALOG
-      .map(mapCatalogRow)
-      .find((item) =>
-        matchText(item.nombre, q) ||
-        matchText(item.codigoInventario, q) ||
-        matchText(item.codigoBarras, q)
-      ) || null;
-  }
-
-  function appendCatalogMatch(query) {
-    const item = findCatalogMatch(query);
-    if (!item) return false;
-
-    appendRow(item, { cantidad: 1, totalSinIva: 0 });
-    searchInput.value = '';
-    suggestions.innerHTML = '';
-
-    const qtyInput = body.lastElementChild?.querySelector('.qty');
-    if (qtyInput) qtyInput.focus();
-    return true;
-  }
-
-  async function stopScanner() {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
-
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((track) => track.stop());
-      mediaStream = null;
-    }
-
-    if (scanVideo) {
-      scanVideo.pause?.();
-      scanVideo.srcObject = null;
-    }
-
-    if (scanWrap) {
-      scanWrap.classList.remove('active');
-    }
-  }
-
-  async function onBarcodeFound(code) {
-    await stopScanner();
-
-    if (!searchInput) return;
-    const cleanCode = String(code || '').trim();
-    if (!cleanCode) return;
-
-    if (appendCatalogMatch(cleanCode)) {
-      showToast('success', 'Código agregado');
-      return;
-    }
-
-    searchInput.value = cleanCode;
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    focusSearch();
-    showMessage('Código detectado. Selecciona el producto sugerido.', true);
-  }
-
-  async function startScanner() {
-    if (!btnScan || !scanWrap || !isEditable()) return;
-
-    if (!('BarcodeDetector' in window)) {
-      showToast('info', 'Usa imagen o pistola');
-      fileScan?.click();
-      return;
-    }
-
-    try {
-      detector = new window.BarcodeDetector({
-        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-      });
-    } catch (_error) {
-      detector = null;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      showMessage('Tu navegador no permite usar la cámara.', false);
-      return;
-    }
-
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false
-      });
-
-      if (!scanVideo) return;
-      scanVideo.srcObject = mediaStream;
-      await scanVideo.play();
-      scanWrap.classList.add('active');
-
-      if (detector) {
-        if (scanInterval) clearInterval(scanInterval);
-        scanInterval = setInterval(async () => {
-          try {
-            const barcodes = await detector.detect(scanVideo);
-            const raw = String(barcodes?.[0]?.rawValue || '').trim();
-            if (raw) {
-              await onBarcodeFound(raw);
-            }
-          } catch (_error) {
-          }
-        }, 250);
-      }
-    } catch (error) {
-      console.error(error);
-      showMessage('No se pudo acceder a la cámara.', false);
-    }
-  }
-
   function matchText(source, query) {
     return (source || '').toString().toLowerCase().includes((query || '').trim().toLowerCase());
   }
@@ -641,17 +495,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
   });
 
-  searchInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || !isEditable()) return;
-    event.preventDefault();
-    const q = searchInput.value.trim();
-    if (!q) return;
-
-    if (!appendCatalogMatch(q)) {
-      showMessage('No se encontró un producto con ese código.', false);
-    }
-  });
-
   document.addEventListener('click', (event) => {
     if (!provSuggestions.contains(event.target) && event.target !== proveedorInput) {
       provSuggestions.innerHTML = '';
@@ -659,24 +502,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!suggestions.contains(event.target) && event.target !== searchInput) {
       suggestions.innerHTML = '';
     }
-  });
-
-  btnScan?.addEventListener('click', startScanner);
-  btnScanStop?.addEventListener('click', stopScanner);
-
-  fileScan?.addEventListener('change', async () => {
-    const file = fileScan.files?.[0];
-    if (!file) return;
-
-    const guessed = (file.name || '').match(/\d{8,}/)?.[0] || '';
-    if (!guessed) {
-      showMessage('No se pudo detectar el código desde la imagen.', false);
-      fileScan.value = '';
-      return;
-    }
-
-    await onBarcodeFound(guessed);
-    fileScan.value = '';
   });
 
   $('btnOpenManual').addEventListener('click', () => {
@@ -857,10 +682,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!body.rows.length) return;
     const doc = buildPdf();
     window.open(doc.output('bloburl'), '_blank');
-  });
-
-  window.addEventListener('beforeunload', () => {
-    stopScanner();
   });
 
   setHeaderDate();
