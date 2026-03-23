@@ -1,29 +1,27 @@
-
 document.addEventListener('DOMContentLoaded', async () => {
-  const IVA = 0.13;
-  const ACTIVE_KEY = 'TR_RECEPCION_ACTIVE';
+  const ACTIVE_KEY = 'TR_INVENTARIO_ACTIVE_V2';
   const $ = (id) => document.getElementById(id);
 
-  const fechaEl = $('fechaRecepcion');
+  const fechaEl = $('fechaInventario');
   const modeLabel = $('modeLabel');
-  const activeReceptionLabel = $('activeReceptionLabel');
+  const activeInventoryLabel = $('activeInventoryLabel');
   const successMessage = $('successMessage');
   const historyDateInput = $('historyDate');
   const btnToday = $('btnToday');
   const historyHint = $('historyHint');
-  const listWrap = $('receptionsList');
+  const listWrap = $('inventoriesList');
 
   const proveedorInput = $('proveedorInput');
-  const numCreditoInput = $('numCreditoInput');
+  const ubicacionInput = $('ubicacionInput');
   const searchInput = $('searchInput');
   const provSuggestions = $('provSuggestions');
   const suggestions = $('suggestions');
 
   const body = $('recepcionBody');
-  const btnNew = $('btnNewReception');
-  const btnSave = $('saveReception');
-  const btnFinalize = $('finalizeReception');
-  const btnCancel = $('cancelReception');
+  const btnNew = $('btnNewInventory');
+  const btnSave = $('saveInventory');
+  const btnFinalize = $('finalizeInventory');
+  const btnCancel = $('cancelInventory');
   const btnClearDraft = $('clearDraft');
   const btnPDF = $('exportPDF');
   const btnPrint = $('printPDF');
@@ -40,12 +38,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mCodigo = $('mCodigo');
   const mNombre = $('mNombre');
   const mCodInv = $('mCodInv');
+  const mBodega = $('mBodega');
+  const mVencimiento = $('mVencimiento');
   const mCantidad = $('mCantidad');
-  const mTotalSin = $('mTotalSin');
   const btnAddManual = $('btnAddManual');
 
   let SELECTED_DATE = getTodayString();
-  let CURRENT_RECEPTION_ID = null;
+  let CURRENT_INVENTORY_ID = null;
   let CURRENT_STATUS = null;
   let historySet = new Set();
   let fpHistory = null;
@@ -56,10 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   function parseNum(v) {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
-  }
-
-  function fix2(n) {
-    return Math.round((Number(n) || 0) * 100) / 100;
   }
 
   function fmtDateTime(v) {
@@ -96,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function isEditable() {
-    return SELECTED_DATE === getTodayString() && !!CURRENT_RECEPTION_ID && CURRENT_STATUS === 'draft';
+    return SELECTED_DATE === getTodayString() && !!CURRENT_INVENTORY_ID && CURRENT_STATUS === 'draft';
   }
 
   function centerOnElement(el) {
@@ -111,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.addEventListener('focusin', (e) => {
     const t = e.target;
-    if (t === searchInput || t.classList.contains('qty') || t.classList.contains('totalSin')) {
+    if (t === searchInput || t.classList.contains('qty') || t.classList.contains('vencimiento')) {
       centerOnElement(t);
     }
   });
@@ -119,11 +114,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   function setControlsState() {
     const editable = isEditable();
     const hasItems = body.rows.length > 0;
-    const hasActive = !!CURRENT_RECEPTION_ID;
+    const hasActive = !!CURRENT_INVENTORY_ID;
     const readOnly = hasActive && !editable;
 
     proveedorInput.disabled = !editable;
-    numCreditoInput.disabled = !editable;
+    ubicacionInput.disabled = !editable;
     searchInput.disabled = !editable;
     $('btnOpenManual').disabled = !editable;
     btnScan.disabled = !editable;
@@ -131,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnSave.disabled = !editable;
     btnFinalize.disabled = !editable || !hasItems;
     btnCancel.disabled = !hasActive || CURRENT_STATUS !== 'draft';
-    btnClearDraft.disabled = !editable || (!hasItems && !(proveedorInput.value.trim() || numCreditoInput.value.trim()));
+    btnClearDraft.disabled = !editable || (!hasItems && !(proveedorInput.value.trim() || ubicacionInput.value.trim()));
 
     btnPDF.disabled = !hasItems;
     btnPrint.disabled = !hasItems;
@@ -146,10 +141,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.disabled = !editable;
     });
 
-    if (!CURRENT_RECEPTION_ID) {
-      modeLabel.textContent = SELECTED_DATE === getTodayString() ? 'Sin recepción activa' : 'Sin recepción abierta';
+    if (!CURRENT_INVENTORY_ID) {
+      modeLabel.textContent = SELECTED_DATE === getTodayString() ? 'Sin inventario activo' : 'Sin inventario abierto';
       modeLabel.className = 'badge text-bg-secondary';
-      activeReceptionLabel.textContent = '';
+      activeInventoryLabel.textContent = '';
       return;
     }
 
@@ -157,61 +152,43 @@ document.addEventListener('DOMContentLoaded', async () => {
       modeLabel.textContent = editable ? 'Borrador activo' : 'Borrador en solo lectura';
       modeLabel.className = 'badge text-bg-warning';
     } else if (CURRENT_STATUS === 'completed') {
-      modeLabel.textContent = 'Recepción finalizada';
+      modeLabel.textContent = 'Inventario finalizado';
       modeLabel.className = 'badge text-bg-success';
     } else if (CURRENT_STATUS === 'cancelled') {
-      modeLabel.textContent = 'Recepción cancelada';
+      modeLabel.textContent = 'Inventario cancelado';
       modeLabel.className = 'badge text-bg-danger';
     } else {
-      modeLabel.textContent = CURRENT_STATUS || 'Recepción';
+      modeLabel.textContent = CURRENT_STATUS || 'Inventario';
       modeLabel.className = 'badge text-bg-secondary';
     }
 
-    activeReceptionLabel.textContent = CURRENT_RECEPTION_ID ? `ID: ${CURRENT_RECEPTION_ID}` : '';
+    activeInventoryLabel.textContent = CURRENT_INVENTORY_ID ? `ID: ${CURRENT_INVENTORY_ID}` : '';
   }
 
   function updateTotals() {
     let lineas = 0;
     let cantidad = 0;
-    let totalSin = 0;
-    let totalCon = 0;
 
     [...body.rows].forEach((tr, idx) => {
-      tr.querySelector('.row-index').textContent = String(body.rows.length - idx);
+      const indexCell = tr.querySelector('.row-index');
+      if (indexCell) indexCell.textContent = String(body.rows.length - idx);
 
-      const qtyInput = tr.querySelector('.qty');
-      const totalSinInput = tr.querySelector('.totalSin');
-      const unitCon = tr.querySelector('.unitCon');
-      const unitSin = tr.querySelector('.unitSin');
-
-      const qty = parseNum(qtyInput.value);
-      const lineTotalSin = parseNum(totalSinInput.value);
-
-      const safeQty = qty > 0 ? qty : 0;
-      const safeTotalSin = lineTotalSin > 0 ? lineTotalSin : 0;
-      const perUnitSin = safeQty ? safeTotalSin / safeQty : 0;
-      const perUnitCon = perUnitSin * (1 + IVA);
-
-      unitSin.value = perUnitSin ? fix2(perUnitSin).toFixed(2) : '';
-      unitCon.value = perUnitCon ? fix2(perUnitCon).toFixed(2) : '';
-
-      lineas += 1;
-      cantidad += safeQty;
-      totalSin += safeTotalSin;
-      totalCon += safeTotalSin * (1 + IVA);
+      const qty = parseNum(tr.querySelector('.qty')?.value);
+      if (qty > 0) {
+        lineas += 1;
+        cantidad += qty;
+      }
     });
 
     $('tLineas').textContent = String(lineas);
     $('tCantidad').textContent = String(cantidad);
-    $('tSinIva').textContent = fix2(totalSin).toFixed(2);
-    $('tConIva').textContent = fix2(totalCon).toFixed(2);
     setControlsState();
   }
 
   function clearEditor() {
     body.innerHTML = '';
     proveedorInput.value = '';
-    numCreditoInput.value = '';
+    ubicacionInput.value = '';
     searchInput.value = '';
     suggestions.innerHTML = '';
     provSuggestions.innerHTML = '';
@@ -219,50 +196,86 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function getPayload() {
-    const items = [...body.getElementsByTagName('tr')].map((tr) => {
-      const qty = parseNum(tr.querySelector('.qty').value);
-      const totalSin = parseNum(tr.querySelector('.totalSin').value);
-      const unitSin = parseNum(tr.querySelector('.unitSin').value);
-      const unitCon = parseNum(tr.querySelector('.unitCon').value);
-
-      return {
-        codigo_barras: tr.cells[1].innerText.trim(),
-        nombre: tr.cells[2].innerText.trim(),
-        codigo_inventario: tr.cells[3].innerText.trim(),
-        cantidad: qty,
-        unit_con_iva: fix2(unitCon),
-        unit_sin_iva: fix2(unitSin),
-        total_sin_iva: fix2(totalSin),
-        total_con_iva: fix2(totalSin * (1 + IVA))
-      };
-    });
+    const items = [...body.getElementsByTagName('tr')].map((tr) => ({
+      codigo_barras: tr.cells[1].innerText.trim(),
+      nombre: tr.cells[2].innerText.trim(),
+      codigo_inventario: tr.cells[3].innerText.trim(),
+      bodega: tr.cells[4].innerText.trim(),
+      cantidad: parseNum(tr.querySelector('.qty')?.value),
+      fecha_vencimiento: (tr.querySelector('.vencimiento')?.value || '').trim()
+    }));
 
     return {
       proveedor: proveedorInput.value.trim(),
-      numeroCreditoFiscal: numCreditoInput.value.trim(),
+      ubicacion: ubicacionInput.value.trim(),
       tienda: 'AVENIDA MORAZÁN',
-      fechaRecepcion: new Date().toISOString(),
+      fechaInventario: new Date().toISOString(),
       items,
       totales: {
         lineas: Number($('tLineas').textContent || 0),
-        cantidad_total: Number($('tCantidad').textContent || 0),
-        total_sin_iva: Number($('tSinIva').textContent || 0),
-        total_con_iva: Number($('tConIva').textContent || 0)
+        cantidad_total: Number($('tCantidad').textContent || 0)
       }
     };
   }
 
-  function addRow({ barcode = '', nombre = '', codInvent = 'N/A', cantidad = '', totalSin = 0 } = {}) {
+  function findExistingRow(barcode, codInvent) {
+    const barcodeTrim = String(barcode || '').trim();
+    const codInvTrim = String(codInvent || '').trim();
+
+    return [...body.getElementsByTagName('tr')].find((tr) => {
+      const rowBarcode = tr.cells[1]?.innerText.trim() || '';
+      const rowCodInv = tr.cells[3]?.innerText.trim() || '';
+      const sameBarcode = barcodeTrim && rowBarcode && rowBarcode === barcodeTrim;
+      const sameCodInv = codInvTrim && rowCodInv && rowCodInv === codInvTrim;
+      return (sameBarcode && sameCodInv) || sameBarcode || sameCodInv;
+    }) || null;
+  }
+
+  function addRow({
+    barcode = '',
+    nombre = '',
+    codInvent = 'N/A',
+    bodega = '',
+    cantidad = '',
+    fechaVenc = '',
+    skipDuplicateCheck = false
+  } = {}) {
+    if (!skipDuplicateCheck) {
+      const existing = findExistingRow(barcode, codInvent);
+      if (existing) {
+        Swal.fire({
+          title: 'Producto ya agregado',
+          text: 'Este producto ya existe en el inventario. ¿Desea sumar la cantidad a la existente o cancelar?',
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sumar cantidades',
+          cancelButtonText: 'Cancelar'
+        }).then((res) => {
+          if (!res.isConfirmed) return;
+          const qtyInput = existing.querySelector('.qty');
+          const vencInput = existing.querySelector('.vencimiento');
+          const currentQty = parseNum(qtyInput?.value);
+          const addQty = parseNum(cantidad);
+          if (qtyInput) qtyInput.value = currentQty + addQty;
+          if (vencInput && !vencInput.value && fechaVenc) vencInput.value = fechaVenc;
+          updateTotals();
+          if (qtyInput) qtyInput.focus();
+          existing.classList.add('table-warning');
+          setTimeout(() => existing.classList.remove('table-warning'), 800);
+        });
+        return null;
+      }
+    }
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="text-center row-index"></td>
       <td>${barcode}</td>
       <td>${nombre}</td>
       <td>${codInvent || 'N/A'}</td>
+      <td>${bodega || ''}</td>
       <td><input type="number" class="form-control form-control-sm text-center qty" min="0" step="1" value="${cantidad !== '' ? cantidad : ''}"></td>
-      <td><input type="number" class="form-control form-control-sm text-center totalSin" min="0" step="0.01" value="${totalSin ? fix2(totalSin).toFixed(2) : ''}"></td>
-      <td><input type="text" class="form-control form-control-sm text-center unitCon bg-light" readonly></td>
-      <td><input type="text" class="form-control form-control-sm text-center unitSin bg-light" readonly></td>
+      <td><input type="date" class="form-control form-control-sm text-center vencimiento" value="${fechaVenc || ''}"></td>
       <td class="text-center">
         <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar ítem">
           <i class="fa-solid fa-trash"></i>
@@ -272,21 +285,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     body.prepend(tr);
 
-    const qty = tr.querySelector('.qty');
-    const totalSinInput = tr.querySelector('.totalSin');
+    const qtyInput = tr.querySelector('.qty');
+    const vencInput = tr.querySelector('.vencimiento');
     const delBtn = tr.querySelector('.btn-delete-row');
 
-    const recalcRow = () => updateTotals();
-    qty.addEventListener('input', recalcRow);
-    totalSinInput.addEventListener('input', recalcRow);
-
-    qty.addEventListener('keydown', (e) => {
+    qtyInput.addEventListener('input', updateTotals);
+    qtyInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        totalSinInput.focus();
+        vencInput.focus();
       }
     });
-    totalSinInput.addEventListener('keydown', (e) => {
+
+    vencInput.addEventListener('focus', () => {
+      try {
+        if (typeof vencInput.showPicker === 'function') vencInput.showPicker();
+      } catch (_) {}
+    });
+    vencInput.addEventListener('change', updateTotals);
+    vencInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         searchInput.focus();
@@ -308,72 +325,77 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     updateTotals();
-    qty.focus();
+    return tr;
   }
 
-  function addRowAndFocus({ barcode, nombre, codInvent }) {
+  function addRowAndFocus({ barcode, nombre, codInvent, bodega = '', fechaVenc = '' }) {
     if (!isEditable()) return;
-    addRow({ barcode, nombre, codInvent });
+    const row = addRow({ barcode, nombre, codInvent, bodega, fechaVenc });
     searchInput.value = '';
     suggestions.innerHTML = '';
+    if (!row) return;
+    const qtyInput = row.querySelector('.qty');
+    if (qtyInput) qtyInput.focus();
   }
 
-  function renderReception(record) {
+  function renderInventory(record) {
     clearEditor();
-    if (!record || !record.receptionId) {
+    if (!record || !record.inventoryId) {
       setControlsState();
       return;
     }
 
     proveedorInput.value = record.proveedor || '';
-    numCreditoInput.value = record.numeroCreditoFiscal || '';
+    ubicacionInput.value = record.ubicacion || '';
 
     (record.items || []).forEach((it) => {
       addRow({
         barcode: it.codigo_barras || '',
         nombre: it.nombre || '',
         codInvent: it.codigo_inventario || 'N/A',
+        bodega: it.bodega || '',
         cantidad: it.cantidad ?? '',
-        totalSin: Number(it.total_sin_iva || 0)
+        fechaVenc: it.fecha_vencimiento || '',
+        skipDuplicateCheck: true
       });
     });
 
     updateTotals();
   }
 
-  async function openReception(dateStr, receptionId) {
-    const record = await loadReceptionById(dateStr, receptionId);
-    if (!record || !record.receptionId) {
-      Swal.fire('No encontrada', 'No se pudo cargar la recepción seleccionada.', 'error');
+  async function openInventory(dateStr, inventoryId) {
+    const record = await loadInventoryById(dateStr, inventoryId);
+    if (!record || !record.inventoryId) {
+      Swal.fire('No encontrado', 'No se pudo cargar el inventario seleccionado.', 'error');
       return;
     }
 
     SELECTED_DATE = dateStr;
-    CURRENT_RECEPTION_ID = record.receptionId;
+    CURRENT_INVENTORY_ID = record.inventoryId;
     CURRENT_STATUS = record.status || 'draft';
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: dateStr, receptionId: CURRENT_RECEPTION_ID }));
-    renderReception(record);
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: dateStr, inventoryId: CURRENT_INVENTORY_ID }));
+    renderInventory(record);
     setControlsState();
-    await renderReceptionsList();
+    await renderInventoriesList();
   }
 
-  async function renderReceptionsList() {
-    const items = await listReceptionsByDate(SELECTED_DATE);
+  async function renderInventoriesList() {
+    const items = await listInventoriesByDate(SELECTED_DATE);
     listWrap.innerHTML = '';
 
     if (!items.length) {
-      listWrap.innerHTML = '<div class="text-muted small py-2 px-1">No hay recepciones para esta fecha.</div>';
-      if (historyHint) historyHint.textContent = 'No se encontraron recepciones registradas para la fecha seleccionada.';
+      listWrap.innerHTML = '<div class="text-muted small py-2 px-1">No hay inventarios para esta fecha.</div>';
+      if (historyHint) historyHint.textContent = 'No se encontraron inventarios registrados para la fecha seleccionada.';
       return;
     }
 
-    if (historyHint) historyHint.textContent = `${items.length} recepción(es) registradas para ${SELECTED_DATE}.`;
+    if (historyHint) historyHint.textContent = `${items.length} inventario(s) registrado(s) para ${SELECTED_DATE}.`;
 
     items.forEach((item) => {
       const div = document.createElement('button');
       div.type = 'button';
-      div.className = 'reception-item w-100 text-start bg-white';
-      if (item.receptionId === CURRENT_RECEPTION_ID) div.classList.add('active');
+      div.className = 'inventory-item reception-item w-100 text-start bg-white';
+      if (item.inventoryId === CURRENT_INVENTORY_ID) div.classList.add('active');
 
       const statusClass = item.status === 'completed'
         ? 'text-bg-success'
@@ -381,23 +403,26 @@ document.addEventListener('DOMContentLoaded', async () => {
           ? 'text-bg-danger'
           : 'text-bg-warning';
 
-      const provider = item.proveedor || 'Sin proveedor';
-      const amount = item.totales?.total_sin_iva ? `$${Number(item.totales.total_sin_iva).toFixed(2)}` : '$0.00';
+      const ubicacion = item.ubicacion || 'Sin ubicación';
+      const proveedor = item.proveedor ? ` · ${item.proveedor}` : '';
       const lines = item.totales?.lineas || 0;
+      const qty = item.totales?.cantidad_total || 0;
 
       div.innerHTML = `
         <div class="d-flex justify-content-between align-items-start gap-2">
-          <div class="title">${provider}</div>
+          <div class="title">${ubicacion}</div>
           <span class="badge ${statusClass}">${item.status || 'draft'}</span>
         </div>
-        <div class="meta mt-1">${item.receptionId}</div>
-        <div class="meta mt-1">Líneas: ${lines} · Total sin IVA: ${amount}</div>
+        <div class="meta mt-1">${item.inventoryId}</div>
+        <div class="meta mt-1">Líneas: ${lines} · Cantidad total: ${qty}${proveedor}</div>
         <div class="meta">${fmtDateTime(item.updatedAt) || SELECTED_DATE}</div>
       `;
+
       div.addEventListener('click', async () => {
         if (fpHistory) fpHistory.setDate(SELECTED_DATE, false);
-        await openReception(SELECTED_DATE, item.receptionId);
+        await openInventory(SELECTED_DATE, item.inventoryId);
       });
+
       listWrap.appendChild(div);
     });
   }
@@ -476,8 +501,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     mCodigo.value = '';
     mNombre.value = '';
     mCodInv.value = 'N/A';
+    mBodega.value = '';
+    mVencimiento.value = '';
     mCantidad.value = '';
-    mTotalSin.value = '';
 
     if (q) {
       if (/^\d+$/.test(q)) mCodigo.value = q;
@@ -492,7 +518,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     openManualModalFromSearch((searchInput.value || '').trim());
   });
 
-  const modalInputs = [mCodigo, mNombre, mCodInv, mCantidad, mTotalSin];
+  const modalInputs = [mCodigo, mNombre, mCodInv, mBodega, mVencimiento, mCantidad];
   modalInputs.forEach((inp, idx) => {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -511,23 +537,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const codigo = (mCodigo.value || '').trim();
     const nombre = (mNombre.value || '').trim();
     const codInv = (mCodInv.value || 'N/A').trim() || 'N/A';
+    const bodega = (mBodega.value || '').trim();
+    const fechaVenc = (mVencimiento.value || '').trim();
     const qty = parseNum(mCantidad.value);
-    const tSin = parseNum(mTotalSin.value);
 
     if (!codigo || !nombre) {
-      Swal.fire('Campos faltantes', 'Ingrese código de barra y nombre.', 'info');
+      Swal.fire('Campos faltantes', 'Ingrese código de barras y nombre.', 'info');
       return;
     }
     if (!(qty > 0)) {
       Swal.fire('Cantidad inválida', 'La cantidad debe ser mayor que 0.', 'warning');
       return;
     }
-    if (!(tSin >= 0)) {
-      Swal.fire('Costo inválido', 'El costo total sin IVA debe ser 0 o mayor.', 'warning');
-      return;
-    }
 
-    addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
+    addRow({ barcode: codigo, nombre, codInvent: codInv, bodega, cantidad: qty, fechaVenc });
     manualModal.hide();
     searchInput.focus();
   });
@@ -570,11 +593,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       filtered.slice(0, 50).forEach((prod) => {
         const nombre = prod?.[0] || '';
         const codInvent = prod?.[1] || 'N/A';
+        const bodega = prod?.[2] || '';
         const barcode = prod?.[3] || 'sin código';
         const li = document.createElement('li');
         li.className = 'list-group-item';
-        li.textContent = `${nombre} (${barcode}) [${codInvent}]`;
-        li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent }));
+        li.textContent = `${nombre} (${barcode}) [${codInvent}] — ${bodega}`;
+        li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent, bodega }));
         suggestions.appendChild(li);
       });
     }).catch(() => {});
@@ -612,7 +636,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         addRowAndFocus({
           barcode: match[3] || raw,
           nombre: match[0] || '',
-          codInvent: match[1] || 'N/A'
+          codInvent: match[1] || 'N/A',
+          bodega: match[2] || ''
         });
       }
     }
@@ -662,7 +687,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       detector = new window.BarcodeDetector({
         formats: ['ean_13', 'code_128', 'code_39', 'ean_8', 'upc_a', 'upc_e']
       });
-    } catch (_error) {
+    } catch (_) {
       detector = null;
     }
 
@@ -723,38 +748,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnScanStop.addEventListener('click', stopScanner);
 
   btnNew.addEventListener('click', async () => {
-    if (CURRENT_RECEPTION_ID && CURRENT_STATUS === 'draft' && isEditable() && (body.rows.length > 0 || proveedorInput.value.trim() || numCreditoInput.value.trim())) {
+    if (CURRENT_INVENTORY_ID && CURRENT_STATUS === 'draft' && isEditable() && (body.rows.length > 0 || proveedorInput.value.trim() || ubicacionInput.value.trim())) {
       const res = await Swal.fire({
         title: 'Hay un borrador activo',
-        text: 'Crear una nueva recepción limpiará el editor actual. El borrador actual seguirá guardado si ya lo habías guardado.',
+        text: 'Crear un nuevo inventario limpiará el editor actual. El borrador actual seguirá guardado si ya lo habías guardado.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Crear nueva'
+        confirmButtonText: 'Crear nuevo'
       });
       if (!res.isConfirmed) return;
     }
 
-    const created = await createReceptionDraft(getTodayString());
+    const created = await createInventoryDraft(getTodayString());
     SELECTED_DATE = getTodayString();
-    CURRENT_RECEPTION_ID = created.receptionId;
+    CURRENT_INVENTORY_ID = created.inventoryId;
     CURRENT_STATUS = 'draft';
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: SELECTED_DATE, receptionId: CURRENT_RECEPTION_ID }));
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: SELECTED_DATE, inventoryId: CURRENT_INVENTORY_ID }));
     if (fpHistory) fpHistory.setDate(SELECTED_DATE, false);
     clearEditor();
     setControlsState();
     await refreshHistoryDates();
-    await renderReceptionsList();
-    showMessage(`Nueva recepción creada: ${CURRENT_RECEPTION_ID}`);
+    await renderInventoriesList();
+    showMessage(`Nuevo inventario creado: ${CURRENT_INVENTORY_ID}`);
   });
 
   btnSave.addEventListener('click', async () => {
-    if (!CURRENT_RECEPTION_ID || !isEditable()) return;
-    if (!proveedorInput.value.trim()) {
-      Swal.fire('Proveedor requerido', 'Ingrese o seleccione un proveedor.', 'info');
-      return;
-    }
-    if (!numCreditoInput.value.trim()) {
-      Swal.fire('Crédito Fiscal requerido', 'Ingrese el número de crédito fiscal.', 'info');
+    if (!CURRENT_INVENTORY_ID || !isEditable()) return;
+    if (!ubicacionInput.value.trim()) {
+      Swal.fire('Ubicación requerida', 'Ingrese la ubicación del inventario.', 'info');
       return;
     }
     if (body.rows.length === 0) {
@@ -762,21 +783,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    await saveReceptionDraft(SELECTED_DATE, CURRENT_RECEPTION_ID, getPayload());
+    await saveInventoryDraft(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload());
     await refreshHistoryDates();
-    await renderReceptionsList();
+    await renderInventoriesList();
     showMessage('Avance guardado correctamente.');
-    Swal.fire('Guardado', 'La recepción se guardó como borrador.', 'success');
+    Swal.fire('Guardado', 'El inventario se guardó como borrador.', 'success');
   });
 
   btnFinalize.addEventListener('click', async () => {
-    if (!CURRENT_RECEPTION_ID || !isEditable()) return;
-    if (!proveedorInput.value.trim()) {
-      Swal.fire('Proveedor requerido', 'Ingrese o seleccione un proveedor.', 'info');
-      return;
-    }
-    if (!numCreditoInput.value.trim()) {
-      Swal.fire('Crédito Fiscal requerido', 'Ingrese el número de crédito fiscal.', 'info');
+    if (!CURRENT_INVENTORY_ID || !isEditable()) return;
+    if (!ubicacionInput.value.trim()) {
+      Swal.fire('Ubicación requerida', 'Ingrese la ubicación del inventario.', 'info');
       return;
     }
     if (body.rows.length === 0) {
@@ -785,7 +802,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const res = await Swal.fire({
-      title: '¿Finalizar recepción?',
+      title: '¿Finalizar inventario?',
       text: 'Después quedará en solo lectura.',
       icon: 'question',
       showCancelButton: true,
@@ -793,42 +810,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     if (!res.isConfirmed) return;
 
-    await finalizeReception(SELECTED_DATE, CURRENT_RECEPTION_ID, getPayload());
+    await finalizeInventory(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload());
     CURRENT_STATUS = 'completed';
     setControlsState();
     await refreshHistoryDates();
-    await renderReceptionsList();
-    showMessage('Recepción finalizada.');
-    Swal.fire('Finalizada', 'La recepción quedó cerrada.', 'success');
+    await renderInventoriesList();
+    showMessage('Inventario finalizado.');
+    Swal.fire('Finalizado', 'El inventario quedó cerrado.', 'success');
   });
 
   btnCancel.addEventListener('click', async () => {
-    if (!CURRENT_RECEPTION_ID || CURRENT_STATUS !== 'draft') return;
+    if (!CURRENT_INVENTORY_ID || CURRENT_STATUS !== 'draft') return;
     const res = await Swal.fire({
-      title: '¿Cancelar recepción?',
-      text: 'La recepción quedará marcada como cancelada.',
+      title: '¿Cancelar inventario?',
+      text: 'El inventario quedará marcado como cancelado.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Sí, cancelar'
     });
     if (!res.isConfirmed) return;
 
-    await cancelReception(SELECTED_DATE, CURRENT_RECEPTION_ID, getPayload());
+    await cancelInventory(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload());
     CURRENT_STATUS = 'cancelled';
     setControlsState();
     await refreshHistoryDates();
-    await renderReceptionsList();
-    showMessage('Recepción cancelada.');
-    Swal.fire('Cancelada', 'La recepción fue cancelada.', 'success');
+    await renderInventoriesList();
+    showMessage('Inventario cancelado.');
+    Swal.fire('Cancelado', 'El inventario fue cancelado.', 'success');
   });
 
   btnClearDraft.addEventListener('click', async () => {
     if (!isEditable()) return;
-    if (body.rows.length === 0 && !(proveedorInput.value.trim() || numCreditoInput.value.trim())) return;
+    if (body.rows.length === 0 && !(proveedorInput.value.trim() || ubicacionInput.value.trim())) return;
 
     const res = await Swal.fire({
       title: '¿Vaciar borrador?',
-      text: 'Se limpiará el contenido del borrador actual pero se conservará la misma recepción.',
+      text: 'Se limpiará el contenido del borrador actual pero se conservará el mismo inventario.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Sí, vaciar'
@@ -836,8 +853,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!res.isConfirmed) return;
 
     clearEditor();
-    await saveReceptionDraft(SELECTED_DATE, CURRENT_RECEPTION_ID, getPayload());
-    await renderReceptionsList();
+    await saveInventoryDraft(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload());
+    await renderInventoriesList();
     showMessage('Borrador vaciado.');
   });
 
@@ -848,40 +865,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fecha = SELECTED_DATE || getTodayString();
 
     doc.setFontSize(14);
-    doc.text('TRRecepción — Avenida Morazán', 10, 10);
+    doc.text('TRInventario — Avenida Morazán', 10, 10);
     doc.setFontSize(10);
-    doc.text(`Proveedor: ${proveedorInput.value || '-'}`, 10, 18);
-    doc.text(`Crédito Fiscal: ${numCreditoInput.value || '-'}`, 10, 26);
+    doc.text(`Ubicación: ${ubicacionInput.value || '-'}`, 10, 18);
+    doc.text(`Proveedor: ${proveedorInput.value || '-'}`, 10, 26);
     doc.text(`Fecha: ${fecha}`, 10, 34);
-    doc.text(`Recepción ID: ${CURRENT_RECEPTION_ID || '-'}`, 10, 42);
+    doc.text(`Inventario ID: ${CURRENT_INVENTORY_ID || '-'}`, 10, 42);
 
     const rows = [...body.getElementsByTagName('tr')].map((tr, i) => ([
       i + 1,
       tr.cells[1].innerText,
       tr.cells[2].innerText,
       tr.cells[3].innerText,
-      tr.querySelector('.qty').value,
-      (parseNum(tr.querySelector('.unitSin').value)).toFixed(2),
-      (parseNum(tr.querySelector('.unitCon').value)).toFixed(2),
-      (parseNum(tr.querySelector('.totalSin').value)).toFixed(2),
-      (parseNum(tr.querySelector('.totalSin').value) * (1 + IVA)).toFixed(2)
+      tr.cells[4].innerText,
+      tr.querySelector('.qty')?.value || '',
+      tr.querySelector('.vencimiento')?.value || ''
     ]));
 
     doc.autoTable({
       startY: 48,
-      head: [['#', 'Código Barras', 'Producto', 'Cod. Inv.', 'Cant.', 'Ud. sin IVA', 'Ud. con IVA', 'Total sin IVA', 'Total con IVA']],
+      head: [['#', 'Código Barras', 'Producto', 'Cod. Inv.', 'Bodega', 'Cant.', 'F. vencimiento']],
       body: rows,
       styles: { fontSize: 9, cellPadding: 2 }
     });
 
     const y = doc.lastAutoTable.finalY + 6;
     doc.text(
-      `Líneas: ${$('tLineas').textContent}  |  Cantidad total: ${$('tCantidad').textContent}  |  Total sin IVA: $${$('tSinIva').textContent}  |  Total con IVA: $${$('tConIva').textContent}`,
+      `Líneas: ${$('tLineas').textContent}  |  Cantidad total: ${$('tCantidad').textContent}`,
       10,
       y
     );
 
-    const name = `${sanitizeName(proveedorInput.value)}_${sanitizeName(numCreditoInput.value)}_${fecha}_${sanitizeName(CURRENT_RECEPTION_ID)}_RECEPCION_AVM.pdf`;
+    const name = `INVENTARIO_AVM_${sanitizeName(ubicacionInput.value)}_${fecha}_${sanitizeName(CURRENT_INVENTORY_ID)}.pdf`;
     if (openWindow) doc.output('dataurlnewwindow');
     else doc.save(name);
   }
@@ -892,23 +907,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnExcel.addEventListener('click', () => {
     if (body.rows.length === 0) return;
     const fecha = SELECTED_DATE || getTodayString();
-    const data = [['codigo', 'unidad', 'cantidad', 'totalcosto']];
+    const ubicacion = ubicacionInput.value || '';
+
+    const data = [[
+      'fechafis',
+      'idgrupo',
+      'idsubgrupo',
+      'idarticulo',
+      'descrip',
+      'codigobarra',
+      'cod_unidad',
+      'ubicacion',
+      'Bodega_5'
+    ]];
+
+    const catalogo = window.CATALOGO_CACHE || [];
 
     [...body.getElementsByTagName('tr')].forEach((tr) => {
-      const codInvent = String(tr.cells[3].innerText || '');
-      const qty = parseNum(tr.querySelector('.qty').value);
-      const totalSin = parseNum(tr.querySelector('.totalSin').value);
-      data.push([codInvent, 6, Number(qty), Number(fix2(totalSin))]);
+      const nombreUI = tr.cells[2].innerText.trim();
+      const codInventUI = tr.cells[3].innerText.trim();
+      const codigoBarrasUI = tr.cells[1].innerText.trim();
+      const qty = parseNum(tr.querySelector('.qty')?.value);
+
+      let match = null;
+      if (catalogo.length) {
+        match = catalogo.find((r) => {
+          const idartCatalogo = String(r?.[1] || '').trim();
+          const codBarCatalog = String(r?.[3] || '').trim();
+          const sameCodInv = codInventUI && idartCatalogo && idartCatalogo === codInventUI;
+          const sameBar = codigoBarrasUI && codBarCatalog && codBarCatalog === codigoBarrasUI;
+          return (sameCodInv && sameBar) || sameBar || sameCodInv;
+        }) || null;
+      }
+
+      const descrip = match ? (String(match[0] || '').trim() || nombreUI) : nombreUI;
+      const idart = match ? (String(match[1] || '').trim() || codInventUI) : codInventUI;
+      const codBar = match ? (String(match[3] || '').trim() || codigoBarrasUI) : codigoBarrasUI;
+      const idgrupo = match ? String(match[4] || '').trim() : '';
+      const idsubgr = match ? String(match[5] || '').trim() : '';
+      const codUnidad = 6;
+
+      data.push([
+        fecha,
+        idgrupo,
+        idsubgr,
+        idart,
+        descrip,
+        codBar,
+        codUnidad,
+        ubicacion,
+        qty
+      ]);
     });
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'Recepcion');
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${sanitizeName(proveedorInput.value)}_${sanitizeName(numCreditoInput.value)}_${fecha}_${sanitizeName(CURRENT_RECEPTION_ID)}_RECEPCION_AVM.xlsx`;
+    a.download = `INVENTARIO_AVM_${sanitizeName(ubicacion)}_${fecha}_${sanitizeName(CURRENT_INVENTORY_ID)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -921,11 +981,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       locale: 'es',
       onChange: async (_sel, dateStr) => {
         SELECTED_DATE = dateStr || getTodayString();
-        CURRENT_RECEPTION_ID = null;
+        CURRENT_INVENTORY_ID = null;
         CURRENT_STATUS = null;
         clearEditor();
         setControlsState();
-        await renderReceptionsList();
+        await renderInventoriesList();
       },
       onDayCreate: (_dObj, _dStr, _fp, dayElem) => {
         try {
@@ -938,12 +998,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   btnToday.addEventListener('click', async () => {
     SELECTED_DATE = getTodayString();
-    CURRENT_RECEPTION_ID = null;
+    CURRENT_INVENTORY_ID = null;
     CURRENT_STATUS = null;
     clearEditor();
     setControlsState();
     if (fpHistory) fpHistory.setDate(SELECTED_DATE, true);
-    else await renderReceptionsList();
+    else await renderInventoriesList();
   });
 
   await refreshHistoryDates();
@@ -953,19 +1013,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (activeRaw) {
     try {
       const active = JSON.parse(activeRaw);
-      if (active?.date && active?.receptionId) {
+      if (active?.date && active?.inventoryId) {
         SELECTED_DATE = active.date;
         if (fpHistory) fpHistory.setDate(SELECTED_DATE, false);
-        await renderReceptionsList();
-        await openReception(active.date, active.receptionId);
+        await renderInventoriesList();
+        await openInventory(active.date, active.inventoryId);
       } else {
-        await renderReceptionsList();
+        await renderInventoriesList();
       }
     } catch (_) {
-      await renderReceptionsList();
+      await renderInventoriesList();
     }
   } else {
-    await renderReceptionsList();
+    await renderInventoriesList();
   }
 
   setControlsState();

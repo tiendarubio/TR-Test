@@ -1,0 +1,7 @@
+{
+  "name": "trinventario-firebase-v2",
+  "private": true,
+  "type": "module",
+  "version": "2.0.0",
+  "description": "TRInventario con Firestore usando inventarios por fecha + inventarios independientes, sin sistema de hojas."
+}
