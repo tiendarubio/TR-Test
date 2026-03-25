@@ -109,145 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 0);
   }
 
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function normalizeMatchValue(value) {
-    return String(value || '').trim().toLowerCase();
-  }
-
-  function hasUsefulCode(value) {
-    const normalized = normalizeMatchValue(value);
-    return !!normalized && normalized !== 'n/a' && normalized !== 'na' && normalized !== 'sin código' && normalized !== 'sin codigo';
-  }
-
-  function buildCatalogItem(row, fallbackCode = '') {
-    return {
-      barcode: row?.[3] || fallbackCode || '',
-      nombre: row?.[0] || '',
-      codInvent: row?.[1] || 'N/A'
-    };
-  }
-
-  function clearSearchUI() {
-    searchInput.value = '';
-    suggestions.innerHTML = '';
-    currentFocus = -1;
-  }
-
-  function findExistingRowByItem(item) {
-    const barcode = normalizeMatchValue(item?.barcode);
-    const codInvent = normalizeMatchValue(item?.codInvent);
-
-    return [...body.getElementsByTagName('tr')].find((tr) => {
-      const rowBarcode = normalizeMatchValue(tr.cells[1]?.innerText);
-      const rowCodInvent = normalizeMatchValue(tr.cells[3]?.innerText);
-
-      if (hasUsefulCode(barcode) && rowBarcode === barcode) return true;
-      if (hasUsefulCode(codInvent) && rowCodInvent === codInvent) return true;
-      return false;
-    }) || null;
-  }
-
-  function flashAndFocusRow(tr, preferredTarget = 'qty') {
-    if (!tr) return;
-
-    tr.classList.remove('row-existing-highlight');
-    void tr.offsetWidth;
-    tr.classList.add('row-existing-highlight');
-    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    window.setTimeout(() => {
-      tr.classList.remove('row-existing-highlight');
-    }, 3800);
-
-    window.setTimeout(() => {
-      const qtyInput = tr.querySelector('.qty');
-      const totalSinInput = tr.querySelector('.totalSin');
-      const focusTarget = preferredTarget === 'totalSin'
-        ? (totalSinInput || qtyInput || tr)
-        : (qtyInput || totalSinInput || tr);
-
-      if (focusTarget === tr) tr.setAttribute('tabindex', '-1');
-
-      try {
-        focusTarget.focus({ preventScroll: true });
-      } catch (_) {
-        try { focusTarget.focus(); } catch (_) {}
-      }
-    }, 220);
-  }
-
-  async function promptExistingRowAction(item) {
-    const safeName = escapeHtml(item?.nombre || 'Este producto');
-    let selectedAction = 'cancel';
-
-    await Swal.fire({
-      title: 'Producto ya agregado',
-      html: `
-        <div class="text-start small text-muted mb-3">
-          <strong>${safeName}</strong> ya existe en la recepción actual. ¿Qué deseas hacer?
-        </div>
-        <div class="d-grid gap-2 existing-item-actions">
-          <button type="button" class="btn btn-primary" data-action="locate">
-            <i class="fa-solid fa-location-crosshairs me-1"></i>
-            Ubicarme en esa fila
-          </button>
-          <button type="button" class="btn btn-outline-secondary" data-action="duplicate">
-            <i class="fa-solid fa-plus me-1"></i>
-            Agregar otra fila de todas formas
-          </button>
-        </div>
-      `,
-      showConfirmButton: false,
-      showCancelButton: true,
-      cancelButtonText: 'Cancelar',
-      focusCancel: true,
-      didOpen: () => {
-        const popup = Swal.getPopup();
-        if (!popup) return;
-
-        popup.querySelectorAll('[data-action]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            selectedAction = btn.getAttribute('data-action') || 'cancel';
-            Swal.close();
-          });
-        });
-      }
-    });
-
-    return selectedAction;
-  }
-
-  async function addProductToReception(item) {
-    if (!isEditable()) return;
-
-    const existingRow = findExistingRowByItem(item);
-    if (!existingRow) {
-      addRow(item);
-      clearSearchUI();
-      return;
-    }
-
-    clearSearchUI();
-    const action = await promptExistingRowAction(item);
-
-    if (action === 'duplicate') {
-      addRow(item);
-      return;
-    }
-
-    if (action === 'locate') {
-      flashAndFocusRow(existingRow, 'qty');
-    }
-  }
-
   document.addEventListener('focusin', (e) => {
     const t = e.target;
     if (t === searchInput || t.classList.contains('qty') || t.classList.contains('totalSin')) {
@@ -357,6 +218,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTotals();
   }
 
+  function normalizeCode(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function hasUsefulCode(value) {
+    const normalized = normalizeCode(value);
+    return !!normalized && !['n/a', 'na', 'sin código', 'sin codigo', 's/c', '-', 'null', 'undefined'].includes(normalized);
+  }
+
+  function findExistingRow({ barcode = '', codInvent = '' } = {}) {
+    const barcodeNeedle = normalizeCode(barcode);
+    const codInventNeedle = normalizeCode(codInvent);
+
+    return [...body.rows].find((tr) => {
+      const rowBarcode = normalizeCode(tr.cells[1]?.innerText);
+      const rowCodInvent = normalizeCode(tr.cells[3]?.innerText);
+
+      return (
+        (hasUsefulCode(barcodeNeedle) && rowBarcode === barcodeNeedle) ||
+        (hasUsefulCode(codInventNeedle) && rowCodInvent === codInventNeedle)
+      );
+    }) || null;
+  }
+
+  function flashAndFocusRow(tr, fieldClass = 'qty') {
+    if (!tr) return;
+
+    tr.classList.add('table-warning');
+    setTimeout(() => tr.classList.remove('table-warning'), 1600);
+
+    centerOnElement(tr);
+
+    const input = tr.querySelector(`.${fieldClass}`);
+    if (input) {
+      setTimeout(() => {
+        input.focus();
+        if (typeof input.select === 'function') input.select();
+      }, 50);
+    }
+  }
+
   function getPayload() {
     const items = [...body.getElementsByTagName('tr')].map((tr) => {
       const qty = parseNum(tr.querySelector('.qty').value);
@@ -450,6 +352,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     qty.focus();
   }
 
+  function addRowAndFocus({ barcode = '', nombre = '', codInvent = 'N/A', cantidad = '', totalSin = 0, duplicateMessage = 'Producto ya agregado. Se ubicó la fila existente.' } = {}) {
+    if (!isEditable()) return false;
+
+    searchInput.value = '';
+    suggestions.innerHTML = '';
+
+    const existingRow = findExistingRow({ barcode, codInvent });
+    if (existingRow) {
+      flashAndFocusRow(existingRow, 'qty');
+      showMessage(duplicateMessage);
+      return false;
+    }
+
+    addRow({ barcode, nombre, codInvent, cantidad, totalSin });
+    return true;
+  }
 
   function renderReception(record) {
     clearEditor();
@@ -639,7 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  btnAddManual.addEventListener('click', async () => {
+  btnAddManual.addEventListener('click', () => {
     if (!isEditable()) return;
     const codigo = (mCodigo.value || '').trim();
     const nombre = (mNombre.value || '').trim();
@@ -660,24 +578,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const existingRow = findExistingRowByItem({ barcode: codigo, codInvent: codInv, nombre });
-    if (existingRow) {
-      manualModal.hide();
-      const action = await promptExistingRowAction({ barcode: codigo, codInvent: codInv, nombre });
+    const added = addRowAndFocus({
+      barcode: codigo,
+      nombre,
+      codInvent: codInv,
+      cantidad: qty,
+      totalSin: tSin,
+      duplicateMessage: 'Producto ya agregado. Se ubicó la fila existente para editar cantidad o costo.'
+    });
 
-      if (action === 'duplicate') {
-        addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
-      } else if (action === 'locate') {
-        flashAndFocusRow(existingRow, 'qty');
-      }
+    manualModal.hide();
 
+    if (added) {
       searchInput.focus();
       return;
     }
 
-    addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
-    manualModal.hide();
-    searchInput.focus();
+    setTimeout(() => {
+      const existingRow = findExistingRow({ barcode: codigo, codInvent: codInv });
+      if (existingRow) flashAndFocusRow(existingRow, 'qty');
+    }, 250);
   });
 
   let currentFocus = -1;
@@ -722,15 +642,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const li = document.createElement('li');
         li.className = 'list-group-item';
         li.textContent = `${nombre} (${barcode}) [${codInvent}]`;
-        li.addEventListener('click', async () => {
-          await addProductToReception({ barcode, nombre, codInvent });
-        });
+        li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent }));
         suggestions.appendChild(li);
       });
     }).catch(() => {});
   });
 
-  searchInput.addEventListener('keydown', async (e) => {
+  searchInput.addEventListener('keydown', (e) => {
     const items = suggestions.getElementsByTagName('li');
     if (e.key === 'ArrowDown') {
       currentFocus += 1;
@@ -759,7 +677,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       if (match) {
-        await addProductToReception(buildCatalogItem(match, raw));
+        addRowAndFocus({
+          barcode: match[3] || raw,
+          nombre: match[0] || '',
+          codInvent: match[1] || 'N/A'
+        });
       }
     }
   });

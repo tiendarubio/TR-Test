@@ -1,7 +1,7 @@
 {
-  "name": "trrecepcion-firebase-historial",
+  "name": "trrecepcion",
   "private": true,
   "type": "module",
   "version": "1.0.0",
-  "description": "TRRecepción con Firestore, historial por fecha y catálogo/proveedores vía Google Sheets (proxy en Vercel)."
+  "description": "TRRecepción con Firestore y recepción de mercadería; catálogo/proveedores vía Google Sheets (proxy en Vercel)."
 }
