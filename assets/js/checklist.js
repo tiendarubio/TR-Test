@@ -378,6 +378,66 @@ document.addEventListener('DOMContentLoaded', async () => {
       (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : emptyText);
   }
 
+  function clearChecklistRows() {
+    body.innerHTML = '';
+    renumber();
+  }
+
+  function renderChecklistRows(items = []) {
+    clearChecklistRows();
+    (items || []).forEach(addRowFromData);
+    renumber();
+  }
+
+  function resetHistoricalSelectionUI() {
+    if (histPicker) {
+      try {
+        histPicker.clear();
+        return;
+      } catch (_) { }
+    }
+
+    if (histDateInput) {
+      histDateInput.value = '';
+    }
+  }
+
+  async function switchToTodayView(options = {}) {
+    const {
+      refreshPicker = false,
+      focusSearch = false
+    } = options || {};
+
+    currentViewDate = null;
+    resetHistoricalUnlock();
+    resetHistoricalSelectionUI();
+
+    await loadStoreStateForToday();
+    setHistoricalViewMode(false);
+
+    if (refreshPicker) {
+      await refreshHistoryPicker();
+    }
+
+    if (focusSearch && searchInput) {
+      searchInput.focus();
+    }
+  }
+
+  async function reloadCurrentListContext(options = {}) {
+    const {
+      refreshPicker = true,
+      refreshStoreUI = false
+    } = options || {};
+
+    if (refreshStoreUI) {
+      updateStoreUI();
+    }
+
+    await switchToTodayView({ refreshPicker });
+  }
+
+
   async function persistCurrentChecklist(options = {}) {
     const {
       successTitle = 'Guardado',
@@ -1473,36 +1533,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       const today = (typeof getTodayString === 'function') ? getTodayString() : null;
 
       if (today && dateStr === today) {
-        currentViewDate = null;
-        historicalUnlockEnabled = false;
-
-        if (histPicker) {
-          histPicker.clear();
-        } else if (histDateInput) {
-          histDateInput.value = '';
-        }
-
-        await loadStoreStateForToday();
-        setHistoricalViewMode(false);
+        await switchToTodayView();
         return;
       }
 
       currentViewDate = dateStr;
-      historicalUnlockEnabled = false;
-
-      body.innerHTML = '';
-      renumber();
+      resetHistoricalUnlock();
+      clearChecklistRows();
 
       const docId = getDocIdForCurrentList();
       const record = await loadChecklistFromFirestore(docId, dateStr);
 
       if (record && Array.isArray(record.items) && record.items.length) {
-        record.items.forEach(addRowFromData);
-        renumber();
-        lastUpdateISO = record.meta?.updatedAt || null;
-        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+        renderChecklistRows(record.items);
+        updateLastSavedText(record.meta?.updatedAt || null);
       } else {
-        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
+        updateLastSavedText(null, 'Sin guardado para esa fecha.');
         Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
       }
 
@@ -1516,17 +1562,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnHistToday) {
     btnHistToday.addEventListener('click', async () => {
-      if (histPicker) {
-        histPicker.clear();
-      } else if (histDateInput) {
-        histDateInput.value = '';
-      }
-
-      currentViewDate = null;
-      resetHistoricalUnlock();
-      await loadStoreStateForToday(); // vuelve a hoy
-      setHistoricalViewMode(false);
-      if (searchInput) searchInput.focus();
+      await switchToTodayView({ focusSearch: true });
     });
   }
 
@@ -1759,19 +1795,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Carga inicial (hoy) =====
   async function loadStoreStateForToday() {
-    body.innerHTML = '';
+    clearChecklistRows();
 
     const docId = getDocIdForCurrentList();
     const record = await loadChecklistFromFirestore(docId); // hoy
+
     if (record && Array.isArray(record.items)) {
-      record.items.forEach(addRowFromData);
-      renumber();
-      lastUpdateISO = record.meta?.updatedAt || null;
-    } else {
-      lastUpdateISO = null;
+      renderChecklistRows(record.items);
+      updateLastSavedText(record.meta?.updatedAt || null);
+      return;
     }
 
-    lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+    updateLastSavedText(null);
   }
 
   await loadStoreStateForToday();
@@ -1783,25 +1818,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
-    updateStoreUI();
-    currentViewDate = null;
-    resetHistoricalUnlock();
-    if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-    if (histDateInput) histDateInput.value = '';
-
-    await loadStoreStateForToday();
-    setHistoricalViewMode(false);
-    await refreshHistoryPicker();
+    await reloadCurrentListContext({
+      refreshPicker: true,
+      refreshStoreUI: true
+    });
   });
 
   versionSelect.addEventListener('change', async () => {
-    currentViewDate = null;
-    resetHistoricalUnlock();
-    if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-    if (histDateInput) histDateInput.value = '';
-
-    await loadStoreStateForToday();
-    setHistoricalViewMode(false);
-    await refreshHistoryPicker();
+    await reloadCurrentListContext({ refreshPicker: true });
   });
 });
