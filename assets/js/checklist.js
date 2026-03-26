@@ -1362,14 +1362,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       histCalendarPanel.innerHTML = html;
 
       histCalendarPanel.querySelectorAll('[data-cal-nav]').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
           const offset = Number(btn.getAttribute('data-cal-nav') || 0);
           changeMonth(offset);
         });
       });
 
       histCalendarPanel.querySelectorAll('[data-cal-date]').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
           const iso = btn.getAttribute('data-cal-date');
           setSelectedDate(iso, true);
           close();
