@@ -966,3 +966,34 @@ main.container-fluid {
     display: none;
   }
 }
+
+
+/* Mantener acción "Hoy" anclada a la derecha aunque el input tenga valor */
+.history-search-shell .control-shell-history {
+  position: relative;
+}
+
+.history-search-shell .control-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.history-search-shell .control-input {
+  min-width: 0;
+}
+
+@media (max-width: 575.98px) {
+  .history-search-shell .control-actions {
+    right: 0.32rem;
+  }
+
+  .history-search-shell .control-inline-btn {
+    width: 2.6rem;
+    min-width: 2.6rem;
+    flex: 0 0 2.6rem;
+  }
+
+  .history-search-shell .control-input {
+    padding-right: 3.45rem;
+  }
+}

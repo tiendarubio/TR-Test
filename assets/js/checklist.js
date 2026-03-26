@@ -1391,6 +1391,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
+    if (shell) {
+      shell.addEventListener('click', (event) => {
+        if (event.target === histDateInput || event.target.closest('#btnHistToday')) {
+          return;
+        }
+
+        event.preventDefault();
+        toggle();
+        histDateInput.focus({ preventScroll: true });
+      });
+    }
+
     if (btnHistCalendar) {
       btnHistCalendar.addEventListener('click', (event) => {
         event.preventDefault();
@@ -1453,6 +1465,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!dateStr) return;
     try {
       const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+
+      if (today && dateStr === today) {
+        currentViewDate = null;
+        historicalUnlockEnabled = false;
+
+        if (histPicker) {
+          histPicker.clear();
+        } else if (histDateInput) {
+          histDateInput.value = '';
+        }
+
+        await loadStoreStateForToday();
+        setHistoricalViewMode(false);
+        return;
+      }
+
       currentViewDate = dateStr;
       historicalUnlockEnabled = false;
 
