@@ -605,6 +605,47 @@ main.container-fluid {
   text-align: center;
 }
 
+
+
+/* Simetría controlada para la fila de configuración */
+.workspace-config-row-balanced > [class*="col-"] {
+  display: flex;
+}
+
+.config-field-stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.config-field-stack .form-label {
+  min-height: 1.5rem;
+}
+
+.config-field-stack .store-select-shell,
+.config-field-stack .history-search-shell,
+.config-field-stack > .form-select {
+  width: 100%;
+}
+
+.config-field-stack > .form-select,
+.config-field-stack .store-select-shell .form-select,
+.config-field-stack .control-shell {
+  min-height: 46px;
+}
+
+@media (min-width: 992px) {
+  .workspace-config-row-balanced {
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .workspace-config-row-balanced > [class*="col-"] {
+    display: block;
+  }
+}
+
 /* Refinamientos configuración e histórico */
 .workspace-config-card,
 .workspace-config-card .card-body,

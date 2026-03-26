@@ -56,32 +56,36 @@
   </div>
 
   <div class="card-body border-top">
-    <div class="row g-3 align-items-start">
-      <div class="col-12 col-md-6 col-xl-3">
-        <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
-        <div class="store-select-shell store-tone-morazan">
-          <span class="store-select-icon" aria-hidden="true">
-            <i class="fa-solid fa-store"></i>
-          </span>
-          <select id="storeSelect" class="form-select form-select-sm">
-            <option value="lista_sexta_calle">Sexta Calle</option>
-            <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
-            <option value="lista_centro_comercial">Centro Comercial</option>
+    <div class="row g-3 align-items-start workspace-config-row-balanced">
+      <div class="col-12 col-lg-4">
+        <div class="config-field-stack h-100">
+          <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
+          <div class="store-select-shell store-tone-morazan">
+            <span class="store-select-icon" aria-hidden="true">
+              <i class="fa-solid fa-store"></i>
+            </span>
+            <select id="storeSelect" class="form-select form-select-sm">
+              <option value="lista_sexta_calle">Sexta Calle</option>
+              <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
+              <option value="lista_centro_comercial">Centro Comercial</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-4">
+        <div class="config-field-stack h-100">
+          <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
+          <select id="versionSelect" class="form-select form-select-sm">
+            <option value="base" selected>Principal</option>
+            <option value="alterna">Alterna</option>
+            <option value="traslado">Traslado</option>
           </select>
         </div>
       </div>
 
-      <div class="col-12 col-md-6 col-xl-3">
-        <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
-        <select id="versionSelect" class="form-select form-select-sm">
-          <option value="base" selected>Principal</option>
-          <option value="alterna">Alterna</option>
-          <option value="traslado">Traslado</option>
-        </select>
-      </div>
-
-      <div class="col-12 col-xl-6">
-        <div class="hist-date-wrapper h-100">
+      <div class="col-12 col-lg-4">
+        <div class="hist-date-wrapper config-field-stack h-100">
           <label for="histDateInput" class="form-label fw-semibold mb-1">Recepciones por fecha</label>
           <div class="history-search-shell history-calendar-shell">
             <div class="control-shell control-shell-search control-shell-history">
