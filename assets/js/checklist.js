@@ -1391,18 +1391,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    if (shell) {
-      shell.addEventListener('click', (event) => {
-        if (event.target === histDateInput || event.target.closest('#btnHistToday')) {
-          return;
-        }
-
-        event.preventDefault();
-        toggle();
-        histDateInput.focus({ preventScroll: true });
-      });
-    }
-
     if (btnHistCalendar) {
       btnHistCalendar.addEventListener('click', (event) => {
         event.preventDefault();

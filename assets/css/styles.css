@@ -966,20 +966,3 @@ main.container-fluid {
     display: none;
   }
 }
-
-
-/* Anclar acción "Hoy" a la derecha dentro del selector de fecha */
-.control-shell-history .control-actions {
-  margin-left: auto;
-  justify-content: flex-end;
-}
-
-.control-shell-history .control-input {
-  min-width: 0;
-}
-
-@media (min-width: 576px) {
-  .control-shell-history .control-actions {
-    padding-left: 0.35rem;
-  }
-}
