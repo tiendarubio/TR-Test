@@ -517,6 +517,94 @@ main.container-fluid {
 }
 
 
+
+/* Shell visual para calendario histórico */
+.history-search-shell {
+  position: relative;
+}
+
+.control-shell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 42px;
+  padding: 0.35rem 0.45rem 0.35rem 0.85rem;
+  border: 1px solid #ced4da;
+  border-radius: 0.95rem;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+.control-shell:focus-within {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.12);
+}
+
+.control-shell-history {
+  min-height: 46px;
+}
+
+.control-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #5c6773;
+}
+
+.control-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  box-shadow: none !important;
+  padding: 0.4rem 0;
+  background: transparent;
+  color: #212529;
+  cursor: pointer;
+}
+
+.control-input:focus {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.control-input::placeholder {
+  color: #6c757d;
+}
+
+.control-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+}
+
+.control-actions-compact {
+  gap: 0.4rem;
+}
+
+.control-inline-btn {
+  min-height: 36px;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.control-inline-icon-btn {
+  min-width: 2.55rem;
+  padding-inline: 0.7rem;
+}
+
+.control-inline-btn i {
+  width: 1rem;
+  text-align: center;
+}
+
 /* Refinamientos configuración e histórico */
 .workspace-config-card,
 .workspace-config-card .card-body,
@@ -593,13 +681,49 @@ main.container-fluid {
 }
 
 .history-calendar-panel {
-  width: 320px;
-  max-width: min(92vw, 320px);
+  width: min(100%, 360px);
+  max-width: min(92vw, 360px);
 }
 
 @media (max-width: 767.98px) {
   .history-actions-row {
     grid-template-columns: 1fr;
+  }
+
+  .control-shell-history {
+    flex-wrap: wrap;
+    align-items: stretch;
+    padding-right: 0.55rem;
+  }
+
+  .control-input {
+    width: 100%;
+    order: 2;
+    padding-top: 0;
+  }
+
+  .control-actions {
+    width: 100%;
+    justify-content: flex-end;
+    order: 3;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .control-shell {
+    padding-left: 0.75rem;
+  }
+
+  .control-actions {
+    justify-content: stretch;
+  }
+
+  .control-inline-btn {
+    flex: 1 1 0;
+  }
+
+  .control-inline-icon-btn {
+    flex: 0 0 auto;
   }
 }
 
@@ -679,5 +803,125 @@ main.container-fluid {
   .checklist-actions-toolbar .btn {
     flex: 1 1 100%;
     min-width: 100%;
+  }
+}
+
+
+/* Calendario histórico visual tipo app B */
+.history-search-shell .control-shell {
+  position: relative;
+  gap: 0;
+  min-height: 44px;
+  padding: 0;
+  border-color: #d6dee8;
+  border-radius: 12px;
+  background: #fdfefe;
+}
+
+.history-search-shell .control-shell:hover {
+  border-color: #c7d4e2;
+  background: #fff;
+}
+
+.history-search-shell .control-shell:focus-within,
+.history-search-shell .control-shell.is-open {
+  border-color: #7fa9d8;
+  box-shadow: 0 0 0 0.2rem rgba(72, 132, 196, 0.10);
+}
+
+.history-search-shell .control-shell-history {
+  min-height: 42px;
+  cursor: pointer;
+}
+
+.history-search-shell .control-icon {
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a8797;
+  pointer-events: none;
+  z-index: 2;
+  font-size: 0.95rem;
+}
+
+.history-search-shell .control-input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: 44px;
+  padding: 0 4.9rem 0 2.75rem;
+  border-radius: inherit !important;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.history-search-shell .control-input::placeholder {
+  color: #94a3b8;
+}
+
+.history-search-shell .control-actions {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  z-index: 2;
+  gap: 0;
+}
+
+.history-search-shell .control-actions-compact {
+  right: 0.4rem;
+}
+
+.history-search-shell .control-inline-btn {
+  min-height: 30px !important;
+  height: 30px;
+  border: 0 !important;
+  border-left: 1px solid #e5ecf3 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #5e6f84 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding-inline: 0.72rem;
+  box-shadow: none !important;
+}
+
+.history-search-shell .control-inline-btn:hover,
+.history-search-shell .control-inline-btn:focus {
+  color: #214e86 !important;
+  background: rgba(36, 99, 235, 0.04) !important;
+}
+
+.history-search-shell .control-inline-btn i {
+  font-size: 0.95rem;
+  width: auto;
+}
+
+.history-search-shell .control-inline-btn span {
+  font-size: 0.83rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 575.98px) {
+  .history-search-shell .control-input {
+    padding-right: 3.35rem;
+  }
+
+  .history-search-shell .control-inline-btn {
+    width: 2.6rem;
+    padding-inline: 0;
+  }
+
+  .history-search-shell .control-inline-btn span {
+    display: none;
   }
 }

@@ -80,35 +80,38 @@
         </select>
       </div>
 
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-xl-6">
         <div class="hist-date-wrapper h-100">
-          <label class="form-label fw-semibold mb-1">Consultar histórico por día</label>
-          <div class="history-calendar-shell">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text bg-white">
-                <i class="fa-regular fa-calendar"></i>
+          <label for="histDateInput" class="form-label fw-semibold mb-1">Recepciones por fecha</label>
+          <div class="history-search-shell history-calendar-shell">
+            <div class="control-shell control-shell-search control-shell-history">
+              <span class="control-icon" aria-hidden="true">
+                <i class="fa-solid fa-calendar-day"></i>
               </span>
-              <input id="histDateInput" type="text" class="form-control form-control-sm" placeholder="Seleccione una fecha" readonly>
-              <button type="button" id="btnHistCalendar" class="btn btn-outline-secondary" aria-label="Abrir calendario">
-                <i class="fa-solid fa-chevron-down"></i>
-              </button>
+
+              <input
+                id="histDateInput"
+                type="text"
+                class="form-control control-input"
+                placeholder="Selecciona fecha"
+                autocomplete="off"
+                readonly
+              >
+
+              <div class="control-actions control-actions-compact">
+                <button type="button" id="btnHistToday" class="btn btn-outline-secondary control-inline-btn" title="Volver a hoy">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>Hoy</span>
+                </button>
+              </div>
             </div>
+
             <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
           </div>
 
           <div class="form-text small" id="histViewModeText">
             Modo: checklist del día actual (editable).
           </div>
-        </div>
-      </div>
-
-      <div class="col-12 col-md-6 col-xl-3">
-        <label class="form-label fw-semibold mb-1">Acciones</label>
-        <div class="history-actions-row">
-          <button type="button" id="btnHistToday" class="btn btn-outline-secondary btn-sm">
-            <i class="fa-solid fa-calendar-day me-1"></i>
-            Hoy
-          </button>
         </div>
       </div>
 

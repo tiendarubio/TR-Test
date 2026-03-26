@@ -1230,7 +1230,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   function createHistoryPicker() {
     if (!histDateInput || !histCalendarPanel) return null;
 
-    const wrapper = histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
+    const wrapper = histDateInput.closest('.history-search-shell') || histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
+    const shell = histDateInput.closest('.control-shell-history') || histDateInput.closest('.control-shell') || wrapper;
     const weekdayLabels = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
 
     const state = {
@@ -1241,10 +1242,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function syncInput() {
       histDateInput.value = state.selectedDate ? formatDateISO(state.selectedDate) : '';
+      histDateInput.setAttribute('aria-expanded', String(state.isOpen));
+      if (shell) {
+        shell.classList.toggle('is-open', state.isOpen);
+      }
       if (btnHistCalendar) {
         btnHistCalendar.innerHTML = state.isOpen
           ? '<i class="fa-solid fa-chevron-up"></i>'
           : '<i class="fa-solid fa-chevron-down"></i>';
+        btnHistCalendar.setAttribute('aria-expanded', String(state.isOpen));
       }
     }
 
@@ -1261,6 +1267,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       histCalendarPanel.setAttribute('aria-hidden', 'false');
       render();
       syncInput();
+    }
+
+    function toggle() {
+      state.isOpen ? close() : open();
     }
 
     function setSelectedDate(isoDate, triggerChange = false) {
@@ -1367,24 +1377,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
-    histDateInput.addEventListener('click', () => {
-      state.isOpen ? close() : open();
+    histDateInput.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggle();
     });
 
     histDateInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        state.isOpen ? close() : open();
+        toggle();
       } else if (event.key === 'Escape') {
         close();
       }
     });
 
+    if (shell) {
+      shell.addEventListener('click', (event) => {
+        if (event.target === histDateInput || event.target.closest('#btnHistToday')) {
+          return;
+        }
+
+        event.preventDefault();
+        toggle();
+        histDateInput.focus({ preventScroll: true });
+      });
+    }
+
     if (btnHistCalendar) {
       btnHistCalendar.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        state.isOpen ? close() : open();
+        toggle();
       });
     }
 
