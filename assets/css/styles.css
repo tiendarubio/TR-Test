@@ -644,3 +644,40 @@ main.container-fluid {
     padding-inline: 0.8rem;
   }
 }
+
+/* Simetría segura para acciones principales del checklist */
+.checklist-actions-toolbar {
+  align-items: stretch;
+}
+
+.checklist-actions-toolbar .btn {
+  min-height: 42px;
+  min-width: 8.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.checklist-actions-toolbar .btn i {
+  width: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .checklist-actions-toolbar .btn {
+    flex: 1 1 calc(50% - 0.5rem);
+  }
+}
+
+@media (max-width: 575.98px) {
+  .checklist-actions-toolbar {
+    width: 100%;
+  }
+
+  .checklist-actions-toolbar .btn {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+}
