@@ -583,6 +583,10 @@ main.container-fluid {
   white-space: nowrap;
 }
 
+.history-actions-row > .btn:only-child {
+  grid-column: 1 / -1;
+}
+
 #btnToggleHistLock:disabled {
   opacity: 0.6;
   cursor: not-allowed;
