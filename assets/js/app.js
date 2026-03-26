@@ -187,3 +187,21 @@ function formatSV(iso) {
 try {
   window.STORE_BINS = STORE_BINS;
 } catch (_) {}
+
+
+try {
+  window.TRListaApp = {
+    STORE_BINS,
+    getBinId,
+    getStoreVersions,
+    getListLabel,
+    preloadCatalog,
+    loadProductsFromGoogleSheets,
+    getFirestoreDb,
+    getTodayString,
+    saveChecklistToFirestore,
+    loadChecklistFromFirestore,
+    getHistoryDates,
+    formatSV
+  };
+} catch (_) {}
