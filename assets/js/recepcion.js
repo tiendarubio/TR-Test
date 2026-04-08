@@ -566,6 +566,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     mCodigo.focus();
   });
 
+  manualModalEl.addEventListener('hide.bs.modal', () => {
+    const nextFocus = pendingFocusAfterManualClose
+      || (lastManualTrigger instanceof HTMLElement ? lastManualTrigger : null)
+      || searchInput;
+
+    if (document.activeElement instanceof HTMLElement && manualModalEl.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+
+    if (nextFocus instanceof HTMLElement && !manualModalEl.contains(nextFocus) && !nextFocus.disabled) {
+      nextFocus.focus({ preventScroll: true });
+    }
+  });
+
   manualModalEl.addEventListener('hidden.bs.modal', () => {
     const nextFocus = pendingFocusAfterManualClose
       || (lastManualTrigger instanceof HTMLElement ? lastManualTrigger : null)
