@@ -941,10 +941,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   if (historyDateInput && window.flatpickr) {
+    const flatpickrLocaleEs = window.flatpickr?.l10ns?.es || undefined;
+
     fpHistory = window.flatpickr(historyDateInput, {
       dateFormat: 'Y-m-d',
       defaultDate: SELECTED_DATE,
-      locale: 'es',
+      ...(flatpickrLocaleEs ? { locale: flatpickrLocaleEs } : {}),
       onChange: async (_sel, dateStr) => {
         SELECTED_DATE = dateStr || getTodayString();
         CURRENT_RECEPTION_ID = null;
