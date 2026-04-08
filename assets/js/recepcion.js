@@ -865,16 +865,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnScanStop.addEventListener('click', stopScanner);
 
   btnNew.addEventListener('click', async () => {
-    if (CURRENT_RECEPTION_ID && CURRENT_STATUS === 'draft' && isEditable() && (body.rows.length > 0 || proveedorInput.value.trim() || numCreditoInput.value.trim())) {
-      const res = await Swal.fire({
-        title: 'Hay un borrador activo',
-        text: 'Crear una nueva recepción limpiará el editor actual. El borrador actual seguirá guardado si ya lo habías guardado.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Crear nueva'
-      });
-      if (!res.isConfirmed) return;
-    }
+    const hasDraftContent = body.rows.length > 0 || proveedorInput.value.trim() || numCreditoInput.value.trim();
+    const isActiveEditableDraft = CURRENT_RECEPTION_ID && CURRENT_STATUS === 'draft' && isEditable();
+
+    const confirmConfig = isActiveEditableDraft && hasDraftContent
+      ? {
+          title: 'Hay un borrador activo',
+          text: 'Crear una nueva recepción limpiará el editor actual. El borrador actual seguirá guardado si ya lo habías guardado.',
+          icon: 'warning',
+          confirmButtonText: 'Sí, crear nueva',
+          cancelButtonText: 'Cancelar'
+        }
+      : {
+          title: '¿Crear nueva recepción?',
+          text: 'Se abrirá una nueva recepción en blanco para la fecha de hoy.',
+          icon: 'question',
+          confirmButtonText: 'Sí, crear',
+          cancelButtonText: 'Cancelar'
+        };
+
+    const res = await Swal.fire({
+      ...confirmConfig,
+      showCancelButton: true,
+      reverseButtons: true,
+      focusCancel: true
+    });
+
+    if (!res.isConfirmed) return;
 
     const created = await createReceptionDraft(getTodayString());
     SELECTED_DATE = getTodayString();
