@@ -986,10 +986,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   if (historyDateInput && window.flatpickr) {
+    historyDateInput.name = historyDateInput.name || 'historyDate';
+    historyDateInput.setAttribute('aria-label', 'Recepciones por fecha');
+
     fpHistory = window.flatpickr(historyDateInput, {
       dateFormat: 'Y-m-d',
       defaultDate: SELECTED_DATE,
       locale: FLATPICKR_LOCALE_ES,
+      disableMobile: true,
       onChange: async (_sel, dateStr) => {
         SELECTED_DATE = dateStr || getTodayString();
         CURRENT_RECEPTION_ID = null;
