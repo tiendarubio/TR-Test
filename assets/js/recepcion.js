@@ -47,6 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mCantidad = $('mCantidad');
   const mTotalSin = $('mTotalSin');
   const btnAddManual = $('btnAddManual');
+  let pendingFocusAfterManualClose = null;
+  let lastManualTrigger = null;
 
   function syncReceptionActionsPlacement() {
     if (!receptionActionsAnchor || !receptionActionsGroup || !mobileReceptionDock) return;
@@ -549,6 +551,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     mCodInv.value = 'N/A';
     mCantidad.value = '';
     mTotalSin.value = '';
+    lastManualTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    pendingFocusAfterManualClose = searchInput;
 
     if (q) {
       if (/^\d+$/.test(q)) mCodigo.value = q;
@@ -556,8 +560,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     manualModal.show();
-    setTimeout(() => mCodigo.focus(), 200);
   }
+
+  manualModalEl.addEventListener('shown.bs.modal', () => {
+    mCodigo.focus();
+  });
+
+  manualModalEl.addEventListener('hidden.bs.modal', () => {
+    const nextFocus = pendingFocusAfterManualClose
+      || (lastManualTrigger instanceof HTMLElement ? lastManualTrigger : null)
+      || searchInput;
+
+    pendingFocusAfterManualClose = null;
+    lastManualTrigger = null;
+
+    if (nextFocus instanceof HTMLElement && !nextFocus.disabled) {
+      nextFocus.focus();
+    }
+  });
 
   $('btnOpenManual').addEventListener('click', () => {
     openManualModalFromSearch((searchInput.value || '').trim());
@@ -599,8 +619,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
+
+    if (document.activeElement instanceof HTMLElement && manualModalEl.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+
+    pendingFocusAfterManualClose = searchInput;
     manualModal.hide();
-    searchInput.focus();
   });
 
   let currentFocus = -1;
@@ -816,6 +841,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshHistoryDates();
     await renderReceptionsList();
     showMessage(`Nueva recepción creada: ${CURRENT_RECEPTION_ID}`);
+    await Swal.fire('Recepción creada', `Se creó la recepción ${CURRENT_RECEPTION_ID}.`, 'success');
   });
 
   btnSave.addEventListener('click', async () => {
