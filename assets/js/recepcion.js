@@ -119,6 +119,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     return (s || '').toString().trim().replace(/\s+/g, '_').replace(/[^\w\-.]/g, '_');
   }
 
+  function escapeAttr(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function showMessage(text, ok = true) {
     if (!successMessage) return;
     successMessage.textContent = text;
@@ -304,17 +312,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function addRow({ barcode = '', nombre = '', codInvent = 'N/A', cantidad = '', totalSin = 0 } = {}) {
     const tr = document.createElement('tr');
+    const safeNombre = escapeAttr(nombre || 'producto sin nombre');
+    const safeBarcode = escapeAttr(barcode);
+    const safeDisplayName = escapeAttr(nombre);
+    const safeCodInvent = escapeAttr(codInvent || 'N/A');
+
     tr.innerHTML = `
       <td class="text-center row-index"></td>
-      <td>${barcode}</td>
-      <td>${nombre}</td>
-      <td>${codInvent || 'N/A'}</td>
-      <td><input type="number" class="form-control form-control-sm text-center qty" min="0" step="1" value="${cantidad !== '' ? cantidad : ''}"></td>
-      <td><input type="number" class="form-control form-control-sm text-center totalSin" min="0" step="0.01" value="${totalSin ? fix2(totalSin).toFixed(2) : ''}"></td>
-      <td><input type="text" class="form-control form-control-sm text-center unitCon bg-light" readonly></td>
-      <td><input type="text" class="form-control form-control-sm text-center unitSin bg-light" readonly></td>
+      <td>${safeBarcode}</td>
+      <td>${safeDisplayName}</td>
+      <td>${safeCodInvent}</td>
+      <td>
+        <input type="number" name="cantidad[]" class="form-control form-control-sm text-center qty" min="0" step="1" value="${cantidad !== '' ? cantidad : ''}" aria-label="Cantidad del producto ${safeNombre}">
+      </td>
+      <td>
+        <input type="number" name="totalSinIva[]" class="form-control form-control-sm text-center totalSin" min="0" step="0.01" value="${totalSin ? fix2(totalSin).toFixed(2) : ''}" aria-label="Costo total sin IVA del producto ${safeNombre}">
+      </td>
+      <td>
+        <input type="text" name="unitConIva[]" class="form-control form-control-sm text-center unitCon bg-light" readonly aria-label="Costo unitario con IVA del producto ${safeNombre}">
+      </td>
+      <td>
+        <input type="text" name="unitSinIva[]" class="form-control form-control-sm text-center unitSin bg-light" readonly aria-label="Costo unitario sin IVA del producto ${safeNombre}">
+      </td>
       <td class="text-center">
-        <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar ítem">
+        <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar ítem" aria-label="Eliminar producto ${safeNombre}">
           <i class="fa-solid fa-trash"></i>
         </button>
       </td>

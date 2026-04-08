@@ -73,7 +73,7 @@
                   <span class="control-icon" aria-hidden="true">
                     <i class="fa-solid fa-calendar-day"></i>
                   </span>
-                  <input id="historyDate" class="form-control control-input" placeholder="Selecciona fecha" autocomplete="off">
+                  <input id="historyDate" name="historyDate" class="form-control control-input" placeholder="Selecciona fecha" autocomplete="off" aria-label="Recepciones por fecha">
                   <div class="control-actions control-actions-compact">
                     <button id="btnToday" class="btn btn-outline-secondary control-inline-btn" type="button" title="Volver a hoy">
                       <i class="fa-solid fa-rotate-left"></i>
@@ -107,34 +107,34 @@
           <div class="card-body">
             <div class="row g-3">
               <div class="col-md-4 position-relative field-block">
-                <label class="form-label fw-semibold mb-1">Proveedor</label>
+                <label for="proveedorInput" class="form-label fw-semibold mb-1">Proveedor</label>
                 <div class="control-shell control-shell-field">
                   <span class="control-icon" aria-hidden="true">
                     <i class="fa-solid fa-truck-field"></i>
                   </span>
-                  <input id="proveedorInput" type="text" class="form-control form-control-sm control-input" placeholder="Escriba para buscar proveedor...">
+                  <input id="proveedorInput" name="proveedor" type="text" class="form-control form-control-sm control-input" placeholder="Escriba para buscar proveedor..." aria-describedby="provSuggestions">
                 </div>
                 <ul id="provSuggestions" class="list-group search-suggestions"></ul>
               </div>
 
               <div class="col-md-4 field-block">
-                <label class="form-label fw-semibold mb-1">Número de Crédito Fiscal</label>
+                <label for="numCreditoInput" class="form-label fw-semibold mb-1">Número de Crédito Fiscal</label>
                 <div class="control-shell control-shell-field">
                   <span class="control-icon" aria-hidden="true">
                     <i class="fa-regular fa-file-lines"></i>
                   </span>
-                  <input id="numCreditoInput" type="text" class="form-control form-control-sm control-input" placeholder="Ej. 001-123456-789-0">
+                  <input id="numCreditoInput" name="numeroCreditoFiscal" type="text" class="form-control form-control-sm control-input" placeholder="Ej. 001-123456-789-0">
                 </div>
               </div>
 
               <div class="col-md-4 position-relative field-block">
-                <label class="form-label fw-semibold mb-1">Buscar producto</label>
+                <label for="searchInput" class="form-label fw-semibold mb-1">Buscar producto</label>
                 <div class="checklist-search-shell">
                   <div class="control-shell control-shell-search">
                     <span class="control-icon" aria-hidden="true">
                       <i class="fa-solid fa-magnifying-glass"></i>
                     </span>
-                    <input id="searchInput" type="text" class="form-control control-input" placeholder="Nombre, código inventario o código de barras" autocomplete="off">
+                    <input id="searchInput" name="buscarProducto" type="text" class="form-control control-input" placeholder="Nombre, código inventario o código de barras" autocomplete="off" aria-describedby="suggestions">
                     <div class="control-actions">
                       <button id="btnScan" class="btn btn-outline-secondary control-inline-btn icon-only" type="button" title="Escanear código de barras">
                         <i class="fa-solid fa-qrcode"></i>
@@ -165,7 +165,8 @@
                       <span class="control-icon" aria-hidden="true">
                         <i class="fa-regular fa-image"></i>
                       </span>
-                      <input id="fileScan" class="form-control form-control-sm control-input" type="file" accept="image/*" capture="environment">
+                      <label for="fileScan" class="visually-hidden">Seleccionar imagen para escanear código de barras</label>
+                      <input id="fileScan" name="barcodeImage" class="form-control form-control-sm control-input" type="file" accept="image/*" capture="environment">
                     </div>
                   </div>
                 </div>
@@ -249,38 +250,38 @@
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-md-4 field-block">
-              <label class="form-label">Código de barras</label>
+              <label for="mCodigo" class="form-label">Código de barras</label>
               <div class="control-shell control-shell-field">
                 <span class="control-icon" aria-hidden="true"><i class="fa-solid fa-barcode"></i></span>
-                <input id="mCodigo" type="text" class="form-control control-input" placeholder="Código de barras">
+                <input id="mCodigo" name="manualCodigo" type="text" class="form-control control-input" placeholder="Código de barras">
               </div>
             </div>
             <div class="col-md-4 field-block">
-              <label class="form-label">Nombre del producto</label>
+              <label for="mNombre" class="form-label">Nombre del producto</label>
               <div class="control-shell control-shell-field">
                 <span class="control-icon" aria-hidden="true"><i class="fa-solid fa-box-open"></i></span>
-                <input id="mNombre" type="text" class="form-control control-input" placeholder="Nombre del producto">
+                <input id="mNombre" name="manualNombre" type="text" class="form-control control-input" placeholder="Nombre del producto">
               </div>
             </div>
             <div class="col-md-4 field-block">
-              <label class="form-label">Código inventario</label>
+              <label for="mCodInv" class="form-label">Código inventario</label>
               <div class="control-shell control-shell-field">
                 <span class="control-icon" aria-hidden="true"><i class="fa-solid fa-hashtag"></i></span>
-                <input id="mCodInv" type="text" class="form-control control-input is-readonly" value="N/A" readonly>
+                <input id="mCodInv" name="manualCodigoInventario" type="text" class="form-control control-input is-readonly" value="N/A" readonly>
               </div>
             </div>
             <div class="col-md-4 field-block">
-              <label class="form-label">Cantidad</label>
+              <label for="mCantidad" class="form-label">Cantidad</label>
               <div class="control-shell control-shell-field">
                 <span class="control-icon" aria-hidden="true"><i class="fa-solid fa-boxes-stacked"></i></span>
-                <input id="mCantidad" type="number" class="form-control control-input" placeholder="Cantidad" min="0" step="1">
+                <input id="mCantidad" name="manualCantidad" type="number" class="form-control control-input" placeholder="Cantidad" min="0" step="1">
               </div>
             </div>
             <div class="col-md-4 field-block">
-              <label class="form-label">Costo total sin IVA</label>
+              <label for="mTotalSin" class="form-label">Costo total sin IVA</label>
               <div class="control-shell control-shell-field">
                 <span class="control-icon" aria-hidden="true"><i class="fa-solid fa-dollar-sign"></i></span>
-                <input id="mTotalSin" type="number" class="form-control control-input" placeholder="Costo total sin IVA" min="0" step="0.01">
+                <input id="mTotalSin" name="manualTotalSinIva" type="number" class="form-control control-input" placeholder="Costo total sin IVA" min="0" step="0.01">
               </div>
             </div>
           </div>
