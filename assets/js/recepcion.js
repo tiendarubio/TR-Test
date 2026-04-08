@@ -70,6 +70,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   let scanInterval = null;
   let detector = null;
 
+  const FLATPICKR_LOCALE_ES = {
+    weekdays: {
+      shorthand: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+      longhand: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    },
+    months: {
+      shorthand: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+      longhand: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    },
+    firstDayOfWeek: 1,
+    ordinal: () => 'º',
+    rangeSeparator: ' a ',
+    weekAbbreviation: 'Sem',
+    scrollTitle: 'Desplázate para incrementar',
+    toggleTitle: 'Haz clic para alternar',
+    amPM: ['AM', 'PM'],
+    yearAriaLabel: 'Año',
+    monthAriaLabel: 'Mes',
+    hourAriaLabel: 'Hora',
+    minuteAriaLabel: 'Minuto',
+    time_24hr: false
+  };
+
+
   function parseNum(v) {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
@@ -941,12 +965,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   if (historyDateInput && window.flatpickr) {
-    const flatpickrLocaleEs = window.flatpickr?.l10ns?.es || undefined;
-
     fpHistory = window.flatpickr(historyDateInput, {
       dateFormat: 'Y-m-d',
       defaultDate: SELECTED_DATE,
-      ...(flatpickrLocaleEs ? { locale: flatpickrLocaleEs } : {}),
+      locale: FLATPICKR_LOCALE_ES,
       onChange: async (_sel, dateStr) => {
         SELECTED_DATE = dateStr || getTodayString();
         CURRENT_RECEPTION_ID = null;
