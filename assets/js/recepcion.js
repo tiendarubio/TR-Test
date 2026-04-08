@@ -47,8 +47,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mCantidad = $('mCantidad');
   const mTotalSin = $('mTotalSin');
   const btnAddManual = $('btnAddManual');
+  const manualModalFocusParking = $('manualModalFocusParking');
   let pendingFocusAfterManualClose = null;
   let lastManualTrigger = null;
+
+  function focusElementSafely(el, options = { preventScroll: true }) {
+    if (!(el instanceof HTMLElement) || el.disabled) return false;
+    try {
+      el.focus(options);
+      return document.activeElement === el;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function moveFocusOutsideManualModal(preferredTarget = null) {
+    const fallbackTarget = preferredTarget instanceof HTMLElement && !manualModalEl.contains(preferredTarget)
+      ? preferredTarget
+      : null;
+
+    if (focusElementSafely(manualModalFocusParking)) return manualModalFocusParking;
+    if (focusElementSafely(fallbackTarget)) return fallbackTarget;
+    if (focusElementSafely(searchInput)) return searchInput;
+    return null;
+  }
+
 
   function syncReceptionActionsPlacement() {
     if (!receptionActionsAnchor || !receptionActionsGroup || !mobileReceptionDock) return;
@@ -563,7 +586,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   manualModalEl.addEventListener('shown.bs.modal', () => {
-    mCodigo.focus();
+    focusElementSafely(mCodigo);
   });
 
   manualModalEl.addEventListener('hide.bs.modal', () => {
@@ -575,9 +598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.activeElement.blur();
     }
 
-    if (nextFocus instanceof HTMLElement && !manualModalEl.contains(nextFocus) && !nextFocus.disabled) {
-      nextFocus.focus({ preventScroll: true });
-    }
+    moveFocusOutsideManualModal(nextFocus);
   });
 
   manualModalEl.addEventListener('hidden.bs.modal', () => {
@@ -588,14 +609,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     pendingFocusAfterManualClose = null;
     lastManualTrigger = null;
 
-    if (nextFocus instanceof HTMLElement && !nextFocus.disabled) {
-      nextFocus.focus();
-    }
+    window.requestAnimationFrame(() => {
+      if (!focusElementSafely(nextFocus, { preventScroll: false })) {
+        focusElementSafely(searchInput, { preventScroll: false });
+      }
+    });
   });
 
   $('btnOpenManual').addEventListener('click', () => {
     openManualModalFromSearch((searchInput.value || '').trim());
   });
+
+  manualModalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach((dismissTrigger) => {
+    dismissTrigger.addEventListener('click', () => {
+      pendingFocusAfterManualClose = searchInput;
+      moveFocusOutsideManualModal(searchInput);
+    });
+  });
+
 
   const modalInputs = [mCodigo, mNombre, mCodInv, mCantidad, mTotalSin];
   modalInputs.forEach((inp, idx) => {
@@ -639,6 +670,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     pendingFocusAfterManualClose = searchInput;
+    moveFocusOutsideManualModal(searchInput);
     manualModal.hide();
   });
 
