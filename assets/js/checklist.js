@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
+  const btnReqFlag = $('btnReqFlag');
   const thBodega = $('thBodega');
 
   // Histórico
@@ -47,6 +48,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
   let historicalSelectionMode = false;
+  let requisitionHecha = false;
+  let requisitionHechaAt = null;
+  let trasladoUnlockEnabled = false;
+  let previousVersionValue = versionSelect?.value || 'base';
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
@@ -79,6 +84,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     return fallback[versionKey] || versionKey;
+  }
+
+  function isRestrictedVersion(versionKey) {
+    return versionKey === 'traslado';
+  }
+
+  function isRestrictedDestinationVersion(versionKey) {
+    return versionKey === 'traslado';
+  }
+
+  function resetTrasladoUnlock() {
+    trasladoUnlockEnabled = false;
+  }
+
+  function canAccessVersion(versionKey) {
+    return !isRestrictedVersion(versionKey) || trasladoUnlockEnabled;
+  }
+
+  function getAllowedMoveDestinationKeys(storeKey, currentVersionKey) {
+    return getDestinationVersionKeys(storeKey, currentVersionKey)
+      .filter(versionKey => !isRestrictedDestinationVersion(versionKey));
+  }
+
+  function getAllowedHistoricalDestinationKeys(storeKey) {
+    return getAllDestinationVersionKeys(storeKey)
+      .filter(versionKey => !isRestrictedDestinationVersion(versionKey));
+  }
+
+  function setRequisitionState(done, at = null) {
+    requisitionHecha = !!done;
+    requisitionHechaAt = requisitionHecha
+      ? (at || requisitionHechaAt || new Date().toISOString())
+      : null;
+    updateRequisitionButton();
+  }
+
+  function updateRequisitionButton() {
+    if (!btnReqFlag) return;
+
+    btnReqFlag.classList.remove('btn-outline-secondary', 'btn-outline-success', 'btn-success');
+
+    if (requisitionHecha) {
+      btnReqFlag.classList.add('btn-success');
+      btnReqFlag.innerHTML = '<i class="fa-solid fa-flag-checkered me-1"></i> Requisición hecha';
+      btnReqFlag.title = 'Marcar como no hecha';
+      btnReqFlag.setAttribute('aria-label', 'Marcar requisición como no hecha');
+    } else {
+      btnReqFlag.classList.add('btn-outline-secondary');
+      btnReqFlag.innerHTML = '<i class="fa-regular fa-flag me-1"></i> Requisición pendiente';
+      btnReqFlag.title = 'Marcar como hecha';
+      btnReqFlag.setAttribute('aria-label', 'Marcar requisición como hecha');
+    }
+  }
+
+  async function promptRestrictedVersionAccess(versionLabel = 'Traslado') {
+    const result = await Swal.fire({
+      title: `Acceso restringido: ${versionLabel}`,
+      text: 'Ingresa la contraseña para abrir esta lista.',
+      input: 'password',
+      inputLabel: 'Contraseña',
+      inputPlaceholder: '••••••••',
+      inputAttributes: {
+        autocapitalize: 'off',
+        autocorrect: 'off'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Entrar',
+      cancelButtonText: 'Cancelar',
+      preConfirm: async (password) => {
+        if (!password) {
+          Swal.showValidationMessage('Debes ingresar la contraseña.');
+          return false;
+        }
+
+        try {
+          const ok = await validateHistoricalPassword(password);
+          if (!ok) {
+            Swal.showValidationMessage('Contraseña incorrecta.');
+            return false;
+          }
+          return true;
+        } catch (err) {
+          Swal.showValidationMessage(String(err.message || err));
+          return false;
+        }
+      }
+    });
+
+    return !!result.isConfirmed;
   }
 
   function getDestinationVersionKeys(storeKey, currentVersionKey) {
@@ -256,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const storeKey = storeSelect.value;
-      const destinationKeys = getAllDestinationVersionKeys(storeKey);
+      const destinationKeys = getAllowedHistoricalDestinationKeys(storeKey);
 
       if (!destinationKeys.length) {
         await Swal.fire(
@@ -483,6 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnSave) btnSave.disabled = disableEditing;
     if (btnClear) btnClear.disabled = disableEditing;
+    if (btnReqFlag) btnReqFlag.disabled = disableEditing;
 
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
@@ -822,7 +917,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         tienda: tiendaName,
         version: versionKey,
         version_label: getVersionLabel(versionKey),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        requisition_done: requisitionHecha,
+        requisition_done_at: requisitionHecha ? (requisitionHechaAt || new Date().toISOString()) : null
       },
       items
     };
@@ -846,7 +943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const storeKey = storeSelect.value;
       const fromKey = versionSelect.value;
-      const destinationKeys = getDestinationVersionKeys(storeKey, fromKey);
+      const destinationKeys = getAllowedMoveDestinationKeys(storeKey, fromKey);
 
       if (!destinationKeys.length) {
         await Swal.fire(
@@ -1795,12 +1892,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const docId = getDocIdForCurrentList();
       const record = await loadChecklistFromFirestore(docId, dateStr);
 
-      if (record && Array.isArray(record.items) && record.items.length) {
+      if (record && Array.isArray(record.items)) {
         record.items.forEach(addRowFromData);
         renumber();
         lastUpdateISO = record.meta?.updatedAt || null;
+        setRequisitionState(
+          !!record.meta?.requisition_done,
+          record.meta?.requisition_done_at || null
+        );
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
       } else {
+        setRequisitionState(false, null);
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
         Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
       }
@@ -2092,6 +2194,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setScanButtonState(false);
+  updateRequisitionButton();
+
+  if (btnReqFlag) {
+    btnReqFlag.addEventListener('click', async () => {
+      if (isHistoricalEditingLocked()) {
+        await Swal.fire(
+          'Vista histórica',
+          'Desbloquea la fecha histórica o vuelve a hoy para cambiar este estado.',
+          'info'
+        );
+        return;
+      }
+
+      const previousDone = requisitionHecha;
+      const previousAt = requisitionHechaAt;
+      const nextDone = !requisitionHecha;
+      const nextAt = nextDone ? new Date().toISOString() : null;
+
+      setRequisitionState(nextDone, nextAt);
+
+      try {
+        await persistCurrentChecklist({
+          successTitle: nextDone ? 'Requisición marcada' : 'Requisición desmarcada',
+          successMessage: nextDone
+            ? 'La lista quedó marcada como requisición hecha.'
+            : 'La lista quedó marcada como requisición no hecha.'
+        });
+      } catch (err) {
+        setRequisitionState(previousDone, previousAt);
+        await Swal.fire(
+          'Error',
+          'No se pudo actualizar el estado de requisición. Intenta nuevamente.',
+          'error'
+        );
+      }
+    });
+  }
 
   // ===== Carga inicial (hoy) =====
   async function loadStoreStateForToday() {
@@ -2104,8 +2243,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       record.items.forEach(addRowFromData);
       renumber();
       lastUpdateISO = record.meta?.updatedAt || null;
+      setRequisitionState(
+        !!record.meta?.requisition_done,
+        record.meta?.requisition_done_at || null
+      );
     } else {
       lastUpdateISO = null;
+      setRequisitionState(false, null);
     }
 
     lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
@@ -2123,6 +2267,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStoreUI();
     currentViewDate = null;
     resetHistoricalUnlock();
+    resetTrasladoUnlock();
+    previousVersionValue = versionSelect.value;
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
     if (histDateInput) histDateInput.value = '';
 
@@ -2131,7 +2277,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshHistoryPicker();
   });
 
+  versionSelect.addEventListener('focus', () => {
+    previousVersionValue = versionSelect.value;
+  });
+
+  versionSelect.addEventListener('click', () => {
+    previousVersionValue = versionSelect.value;
+  });
+
   versionSelect.addEventListener('change', async () => {
+    const nextVersion = versionSelect.value;
+
+    if (isRestrictedVersion(nextVersion) && !canAccessVersion(nextVersion)) {
+      const allowed = await promptRestrictedVersionAccess(getVersionLabel(nextVersion));
+      if (!allowed) {
+        versionSelect.value = previousVersionValue || 'base';
+        return;
+      }
+      trasladoUnlockEnabled = true;
+    }
+
+    if (!isRestrictedVersion(nextVersion)) {
+      resetTrasladoUnlock();
+    }
+
+    previousVersionValue = versionSelect.value;
     currentViewDate = null;
     resetHistoricalUnlock();
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
