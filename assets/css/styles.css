@@ -977,3 +977,30 @@ hr {
   word-break: break-word;
   color: var(--tr-text);
 }
+
+
+
+/* Botón de bloqueo de edición: tono verde-azulado distinto al éxito/finalización */
+.btn-outline-edit-lock {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #fff;
+}
+
+.btn-outline-edit-lock:hover,
+.btn-outline-edit-lock:focus,
+.btn-outline-edit-lock:active,
+.btn-outline-edit-lock.active,
+.btn-check:checked + .btn-outline-edit-lock {
+  color: #fff;
+  background: #0f766e;
+  border-color: #0f766e;
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
+}
+
+.btn-outline-edit-lock:disabled,
+.btn-outline-edit-lock.disabled {
+  color: #98a2b3;
+  border-color: var(--tr-border-strong);
+  background: #fff;
+}
