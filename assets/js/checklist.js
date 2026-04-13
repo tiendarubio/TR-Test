@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
-  const btnReqFlag = $('btnReqFlag');
   const thBodega = $('thBodega');
 
   // Histórico
@@ -48,10 +47,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
   let historicalSelectionMode = false;
-  let requisitionHecha = false;
-  let requisitionHechaAt = null;
+  let requisicionHecha = false;
+  let requisicionHechaAt = null;
   let trasladoUnlockEnabled = false;
-  let previousVersionValue = versionSelect?.value || 'base';
+  let previousVersionValue = versionSelect ? versionSelect.value : 'base';
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
@@ -90,58 +89,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     return versionKey === 'traslado';
   }
 
-  function isRestrictedDestinationVersion(versionKey) {
-    return versionKey === 'traslado';
+  function getVisibleDestinationVersionKeys(storeKey, currentVersionKey = null) {
+    const sourceKeys = (currentVersionKey === null)
+      ? getAllDestinationVersionKeys(storeKey)
+      : getDestinationVersionKeys(storeKey, currentVersionKey);
+
+    return sourceKeys.filter(versionKey => !isRestrictedVersion(versionKey));
   }
 
-  function resetTrasladoUnlock() {
-    trasladoUnlockEnabled = false;
-  }
-
-  function canAccessVersion(versionKey) {
-    return !isRestrictedVersion(versionKey) || trasladoUnlockEnabled;
-  }
-
-  function getAllowedMoveDestinationKeys(storeKey, currentVersionKey) {
-    return getDestinationVersionKeys(storeKey, currentVersionKey)
-      .filter(versionKey => !isRestrictedDestinationVersion(versionKey));
-  }
-
-  function getAllowedHistoricalDestinationKeys(storeKey) {
-    return getAllDestinationVersionKeys(storeKey)
-      .filter(versionKey => !isRestrictedDestinationVersion(versionKey));
-  }
-
-  function setRequisitionState(done, at = null) {
-    requisitionHecha = !!done;
-    requisitionHechaAt = requisitionHecha
-      ? (at || requisitionHechaAt || new Date().toISOString())
-      : null;
-    updateRequisitionButton();
+  function getRequisitionButton() {
+    return document.getElementById('btnReqFlag');
   }
 
   function updateRequisitionButton() {
+    const btnReqFlag = getRequisitionButton();
     if (!btnReqFlag) return;
 
-    btnReqFlag.classList.remove('btn-outline-secondary', 'btn-outline-success', 'btn-success');
+    btnReqFlag.classList.remove('btn-outline-secondary', 'btn-success');
 
-    if (requisitionHecha) {
+    if (requisicionHecha) {
       btnReqFlag.classList.add('btn-success');
       btnReqFlag.innerHTML = '<i class="fa-solid fa-flag-checkered me-1"></i> Requisición hecha';
-      btnReqFlag.title = 'Marcar como no hecha';
-      btnReqFlag.setAttribute('aria-label', 'Marcar requisición como no hecha');
+      btnReqFlag.title = requisicionHechaAt
+        ? ('Marcada el ' + formatSV(requisicionHechaAt))
+        : 'Requisición hecha';
     } else {
       btnReqFlag.classList.add('btn-outline-secondary');
       btnReqFlag.innerHTML = '<i class="fa-regular fa-flag me-1"></i> Requisición pendiente';
-      btnReqFlag.title = 'Marcar como hecha';
-      btnReqFlag.setAttribute('aria-label', 'Marcar requisición como hecha');
+      btnReqFlag.title = 'Marcar requisición como hecha';
     }
+  }
+
+  function setRequisitionState(done, at = null) {
+    requisicionHecha = !!done;
+    requisicionHechaAt = requisicionHecha ? (at || new Date().toISOString()) : null;
+    updateRequisitionButton();
+  }
+
+  function ensureRequisitionButton() {
+    if (getRequisitionButton()) return getRequisitionButton();
+
+    const toolbar = btnClear?.closest('.btn-toolbar');
+    if (!toolbar) return null;
+
+    const btnReqFlag = document.createElement('button');
+    btnReqFlag.type = 'button';
+    btnReqFlag.id = 'btnReqFlag';
+    btnReqFlag.className = 'btn btn-outline-secondary btn-sm';
+    btnReqFlag.innerHTML = '<i class="fa-regular fa-flag me-1"></i> Requisición pendiente';
+
+    if (btnClear && btnClear.parentNode === toolbar) {
+      toolbar.insertBefore(btnReqFlag, btnClear);
+    } else {
+      toolbar.appendChild(btnReqFlag);
+    }
+
+    return btnReqFlag;
   }
 
   async function promptRestrictedVersionAccess(versionLabel = 'Traslado') {
     const result = await Swal.fire({
-      title: `Acceso restringido: ${versionLabel}`,
-      text: 'Ingresa la contraseña para abrir esta lista.',
+      title: 'Acceso restringido',
+      text: 'Ingresa la contraseña para abrir la lista ' + versionLabel + '.',
       input: 'password',
       inputLabel: 'Contraseña',
       inputPlaceholder: '••••••••',
@@ -166,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           return true;
         } catch (err) {
-          Swal.showValidationMessage(String(err.message || err));
+          Swal.showValidationMessage(String(err?.message || err || 'No se pudo validar la contraseña.'));
           return false;
         }
       }
@@ -350,7 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const storeKey = storeSelect.value;
-      const destinationKeys = getAllowedHistoricalDestinationKeys(storeKey);
+      const destinationKeys = getVisibleDestinationVersionKeys(storeKey);
 
       if (!destinationKeys.length) {
         await Swal.fire(
@@ -577,7 +586,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnSave) btnSave.disabled = disableEditing;
     if (btnClear) btnClear.disabled = disableEditing;
-    if (btnReqFlag) btnReqFlag.disabled = disableEditing;
+    if (getRequisitionButton()) getRequisitionButton().disabled = disableEditing;
 
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
@@ -644,6 +653,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   updateStoreUI();
+
+  ensureRequisitionButton();
+  updateRequisitionButton();
+
+  const btnReqFlag = getRequisitionButton();
+  if (btnReqFlag) {
+    btnReqFlag.addEventListener('click', async () => {
+      if (isHistoricalEditingLocked()) {
+        await Swal.fire(
+          'Vista histórica',
+          'Desbloquea la fecha histórica o vuelve a hoy para cambiar este estado.',
+          'info'
+        );
+        return;
+      }
+
+      setRequisitionState(!requisicionHecha);
+    });
+  }
 
   await preloadCatalog();
 
@@ -918,8 +946,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         version: versionKey,
         version_label: getVersionLabel(versionKey),
         updatedAt: new Date().toISOString(),
-        requisition_done: requisitionHecha,
-        requisition_done_at: requisitionHecha ? (requisitionHechaAt || new Date().toISOString()) : null
+        requisition_done: requisicionHecha,
+        requisition_done_at: requisicionHecha ? (requisicionHechaAt || new Date().toISOString()) : null
       },
       items
     };
@@ -943,7 +971,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const storeKey = storeSelect.value;
       const fromKey = versionSelect.value;
-      const destinationKeys = getAllowedMoveDestinationKeys(storeKey, fromKey);
+      const destinationKeys = getVisibleDestinationVersionKeys(storeKey, fromKey);
 
       if (!destinationKeys.length) {
         await Swal.fire(
@@ -1893,8 +1921,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const record = await loadChecklistFromFirestore(docId, dateStr);
 
       if (record && Array.isArray(record.items)) {
-        record.items.forEach(addRowFromData);
-        renumber();
+        if (record.items.length) {
+          record.items.forEach(addRowFromData);
+          renumber();
+        }
+
         lastUpdateISO = record.meta?.updatedAt || null;
         setRequisitionState(
           !!record.meta?.requisition_done,
@@ -2194,43 +2225,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setScanButtonState(false);
-  updateRequisitionButton();
-
-  if (btnReqFlag) {
-    btnReqFlag.addEventListener('click', async () => {
-      if (isHistoricalEditingLocked()) {
-        await Swal.fire(
-          'Vista histórica',
-          'Desbloquea la fecha histórica o vuelve a hoy para cambiar este estado.',
-          'info'
-        );
-        return;
-      }
-
-      const previousDone = requisitionHecha;
-      const previousAt = requisitionHechaAt;
-      const nextDone = !requisitionHecha;
-      const nextAt = nextDone ? new Date().toISOString() : null;
-
-      setRequisitionState(nextDone, nextAt);
-
-      try {
-        await persistCurrentChecklist({
-          successTitle: nextDone ? 'Requisición marcada' : 'Requisición desmarcada',
-          successMessage: nextDone
-            ? 'La lista quedó marcada como requisición hecha.'
-            : 'La lista quedó marcada como requisición no hecha.'
-        });
-      } catch (err) {
-        setRequisitionState(previousDone, previousAt);
-        await Swal.fire(
-          'Error',
-          'No se pudo actualizar el estado de requisición. Intenta nuevamente.',
-          'error'
-        );
-      }
-    });
-  }
 
   // ===== Carga inicial (hoy) =====
   async function loadStoreStateForToday() {
@@ -2267,7 +2261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStoreUI();
     currentViewDate = null;
     resetHistoricalUnlock();
-    resetTrasladoUnlock();
+    trasladoUnlockEnabled = false;
     previousVersionValue = versionSelect.value;
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
     if (histDateInput) histDateInput.value = '';
@@ -2281,24 +2275,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     previousVersionValue = versionSelect.value;
   });
 
-  versionSelect.addEventListener('click', () => {
+  versionSelect.addEventListener('mousedown', () => {
     previousVersionValue = versionSelect.value;
   });
+
+  versionSelect.addEventListener('touchstart', () => {
+    previousVersionValue = versionSelect.value;
+  }, { passive: true });
 
   versionSelect.addEventListener('change', async () => {
     const nextVersion = versionSelect.value;
 
-    if (isRestrictedVersion(nextVersion) && !canAccessVersion(nextVersion)) {
+    if (isRestrictedVersion(nextVersion) && !trasladoUnlockEnabled) {
       const allowed = await promptRestrictedVersionAccess(getVersionLabel(nextVersion));
       if (!allowed) {
         versionSelect.value = previousVersionValue || 'base';
         return;
       }
       trasladoUnlockEnabled = true;
-    }
-
-    if (!isRestrictedVersion(nextVersion)) {
-      resetTrasladoUnlock();
+    } else if (!isRestrictedVersion(nextVersion)) {
+      trasladoUnlockEnabled = false;
     }
 
     previousVersionValue = versionSelect.value;
