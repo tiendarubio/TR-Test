@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let historicalSelectionMode = false;
   let requisitionDone = false;
   let requisitionDoneAt = null;
+  let lastCommittedVersionValue = versionSelect?.value || 'base';
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
@@ -130,6 +131,61 @@ document.addEventListener('DOMContentLoaded', async () => {
       'Para ' + actionLabel + ', desbloquea la edición o cambia de vista. ' + contextText,
       'info'
     );
+  }
+
+  async function requestUnlockPassword(options = {}) {
+    const title = options.title || 'Desbloquear edición';
+    const text = options.text || 'Ingresa la contraseña para continuar.';
+    const confirmButtonText = options.confirmButtonText || 'Desbloquear';
+
+    const result = await Swal.fire({
+      title,
+      text,
+      input: 'password',
+      inputLabel: 'Contraseña',
+      inputPlaceholder: '••••••••',
+      inputAttributes: {
+        autocapitalize: 'off',
+        autocorrect: 'off'
+      },
+      showCancelButton: true,
+      confirmButtonText,
+      cancelButtonText: 'Cancelar',
+      preConfirm: async (password) => {
+        if (!password) {
+          Swal.showValidationMessage('Debes ingresar la contraseña.');
+          return false;
+        }
+
+        try {
+          const ok = await validateHistoricalPassword(password);
+          if (!ok) {
+            Swal.showValidationMessage('Contraseña incorrecta.');
+            return false;
+          }
+          return true;
+        } catch (err) {
+          Swal.showValidationMessage(String(err.message || err));
+          return false;
+        }
+      }
+    });
+
+    return !!result.isConfirmed;
+  }
+
+  async function ensureProtectedDestinationAccess(versionKey, actionLabel = 'continuar') {
+    const isProtectedDestination = (typeof isProtectedVersionKey === 'function')
+      ? isProtectedVersionKey(versionKey)
+      : (versionKey === 'traslado');
+
+    if (!isProtectedDestination) return true;
+
+    return requestUnlockPassword({
+      title: 'Acceso a lista protegida',
+      text: 'Ingresa la contraseña para ' + actionLabel + ' en la lista ' + getVersionLabel(versionKey) + '.',
+      confirmButtonText: 'Continuar'
+    });
   }
 
   function buildChecklistMeta(options = {}) {
@@ -392,6 +448,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!selection.isConfirmed) return;
 
       const toKey = selection.value;
+      const hasProtectedDestinationAccess = await ensureProtectedDestinationAccess(
+        toKey,
+        'enviar productos a hoy'
+      );
+
+      if (!hasProtectedDestinationAccess) {
+        return;
+      }
+
       const toDoc = getBinId(storeKey, toKey);
       const today = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
 
@@ -978,6 +1043,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!selection.isConfirmed) return;
 
       const toKey = selection.value;
+      const hasProtectedDestinationAccess = await ensureProtectedDestinationAccess(
+        toKey,
+        'mover este producto'
+      );
+
+      if (!hasProtectedDestinationAccess) {
+        return;
+      }
+
       const fromDoc = getBinId(storeKey, fromKey);
       const toDoc = getBinId(storeKey, toKey);
 
@@ -2028,40 +2102,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (canUnlockHistorical) contexts.push('la vista histórica');
       if (canUnlockProtected) contexts.push('la lista ' + getVersionLabel(versionSelect.value));
 
-      const result = await Swal.fire({
+      const unlocked = await requestUnlockPassword({
         title: 'Desbloquear edición',
         text: 'Ingresa la contraseña para habilitar edición en ' + contexts.join(' y ') + '.',
-        input: 'password',
-        inputLabel: 'Contraseña',
-        inputPlaceholder: '••••••••',
-        inputAttributes: {
-          autocapitalize: 'off',
-          autocorrect: 'off'
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Desbloquear',
-        cancelButtonText: 'Cancelar',
-        preConfirm: async (password) => {
-          if (!password) {
-            Swal.showValidationMessage('Debes ingresar la contraseña.');
-            return false;
-          }
-
-          try {
-            const ok = await validateHistoricalPassword(password);
-            if (!ok) {
-              Swal.showValidationMessage('Contraseña incorrecta.');
-              return false;
-            }
-            return true;
-          } catch (err) {
-            Swal.showValidationMessage(String(err.message || err));
-            return false;
-          }
-        }
+        confirmButtonText: 'Desbloquear'
       });
 
-      if (result.isConfirmed) {
+      if (unlocked) {
         historicalUnlockEnabled = canUnlockHistorical;
         protectedVersionUnlockEnabled = canUnlockProtected;
         setHistoricalViewMode(isHistoricalDateSelected());
@@ -2272,16 +2319,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadStoreStateForToday();
     setHistoricalViewMode(false);
     await refreshHistoryPicker();
+    lastCommittedVersionValue = versionSelect.value;
   });
 
   versionSelect.addEventListener('change', async () => {
+    const requestedVersion = versionSelect.value;
+    const previousVersion = lastCommittedVersionValue || 'base';
+    const isProtectedRequest = (typeof isProtectedVersionKey === 'function')
+      ? isProtectedVersionKey(requestedVersion)
+      : (requestedVersion === 'traslado');
+
+    if (isProtectedRequest && requestedVersion !== previousVersion) {
+      const hasProtectedAccess = await ensureProtectedDestinationAccess(
+        requestedVersion,
+        'abrir esta lista protegida'
+      );
+
+      if (!hasProtectedAccess) {
+        versionSelect.value = previousVersion;
+        return;
+      }
+    }
+
     currentViewDate = null;
-    resetHistoricalUnlock();
+    historicalUnlockEnabled = false;
+    protectedVersionUnlockEnabled = !!isProtectedRequest;
+
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
     if (histDateInput) histDateInput.value = '';
 
     await loadStoreStateForToday();
     setHistoricalViewMode(false);
     await refreshHistoryPicker();
+    lastCommittedVersionValue = versionSelect.value;
   });
 });
