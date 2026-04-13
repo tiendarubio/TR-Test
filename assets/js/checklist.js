@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
-  const btnReqFlag = $('btnReqFlag');
   const thBodega = $('thBodega');
 
   // Histórico
@@ -48,10 +47,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
   let historicalSelectionMode = false;
-  let requisicionHecha = false;
-  let requisicionHechaAt = null;
-  let trasladoUnlockEnabled = false;
-  let previousVersionValue = versionSelect?.value || 'base';
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
@@ -72,88 +67,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     return currentViewDate || today;
   }
 
-  function isRestrictedVersion(versionKey) {
-    return versionKey === 'traslado';
-  }
-
-  function canAccessVersion(versionKey) {
-    if (!versionKey) return false;
-    if (!isRestrictedVersion(versionKey)) return true;
-    return !!trasladoUnlockEnabled;
-  }
-
-  function resetTrasladoUnlock(options = {}) {
-    const { keepIfCurrentRestricted = false } = options || {};
-    if (keepIfCurrentRestricted && isRestrictedVersion(versionSelect?.value)) {
-      return;
+  function getVersionLabel(versionKey) {
+    if (typeof getListLabel === 'function') {
+      return getListLabel(versionKey);
     }
-    trasladoUnlockEnabled = false;
-  }
 
-  function setRequisitionState(done, at = null) {
-    requisicionHecha = !!done;
-    requisicionHechaAt = requisicionHecha ? (at || new Date().toISOString()) : null;
-    updateRequisitionButton();
-  }
+    const fallback = {
+      base: 'Principal',
+      alterna: 'Alterna',
+      traslado: 'Traslado'
+    };
 
-  function updateRequisitionButton() {
-    if (!btnReqFlag) return;
-
-    btnReqFlag.classList.remove(
-      'btn-outline-secondary',
-      'btn-outline-success',
-      'btn-success'
-    );
-
-    if (requisicionHecha) {
-      btnReqFlag.classList.add('btn-success');
-      btnReqFlag.innerHTML = '<i class="fa-solid fa-flag-checkered me-1"></i> Requisición hecha';
-      btnReqFlag.title = 'Marcar como requisición pendiente';
-      btnReqFlag.setAttribute('aria-label', 'Marcar como requisición pendiente');
-    } else {
-      btnReqFlag.classList.add('btn-outline-secondary');
-      btnReqFlag.innerHTML = '<i class="fa-regular fa-flag me-1"></i> Requisición pendiente';
-      btnReqFlag.title = 'Marcar como requisición hecha';
-      btnReqFlag.setAttribute('aria-label', 'Marcar como requisición hecha');
-    }
-  }
-
-  async function promptRestrictedVersionAccess(versionKey) {
-    const versionLabel = getVersionLabel(versionKey);
-    const result = await Swal.fire({
-      title: 'Acceso restringido',
-      text: 'Ingresa la contraseña para abrir la lista ' + versionLabel + '.',
-      input: 'password',
-      inputLabel: 'Contraseña',
-      inputPlaceholder: '••••••••',
-      inputAttributes: {
-        autocapitalize: 'off',
-        autocorrect: 'off'
-      },
-      showCancelButton: true,
-      confirmButtonText: 'Entrar',
-      cancelButtonText: 'Cancelar',
-      preConfirm: async (password) => {
-        if (!password) {
-          Swal.showValidationMessage('Debes ingresar la contraseña.');
-          return false;
-        }
-
-        try {
-          const ok = await validateHistoricalPassword(password, versionKey);
-          if (!ok) {
-            Swal.showValidationMessage('Contraseña incorrecta.');
-            return false;
-          }
-          return true;
-        } catch (err) {
-          Swal.showValidationMessage(String(err.message || err));
-          return false;
-        }
-      }
-    });
-
-    return !!result.isConfirmed;
+    return fallback[versionKey] || versionKey;
   }
 
   function getDestinationVersionKeys(storeKey, currentVersionKey) {
@@ -163,9 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           .filter(([, docId]) => !!docId)
           .map(([versionKey]) => versionKey);
 
-    return available
-      .filter(versionKey => versionKey !== currentVersionKey)
-      .filter(canAccessVersion);
+    return available.filter(versionKey => versionKey !== currentVersionKey);
   }
 
 
@@ -177,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           .filter(([, docId]) => !!docId)
           .map(([versionKey]) => versionKey);
 
-    return available.filter(Boolean).filter(canAccessVersion);
+    return available.filter(Boolean);
   }
 
   function isHistoricalSelectionAvailable() {
@@ -394,9 +317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tienda: tiendaName,
             version: toKey,
             version_label: getVersionLabel(toKey),
-            updatedAt: null,
-            requisition_done: false,
-            requisition_done_at: null
+            updatedAt: null
           },
           items: []
         };
@@ -437,10 +358,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       destinationRecord.meta.version = toKey;
       destinationRecord.meta.version_label = getVersionLabel(toKey);
       destinationRecord.meta.updatedAt = new Date().toISOString();
-      destinationRecord.meta.requisition_done = !!destinationRecord.meta.requisition_done;
-      destinationRecord.meta.requisition_done_at = destinationRecord.meta.requisition_done
-        ? (destinationRecord.meta.requisition_done_at || destinationRecord.meta.updatedAt)
-        : null;
 
       await saveChecklistToFirestore(toDoc, destinationRecord, today);
       rememberHistoryDate(toDoc, today);
@@ -516,12 +433,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateHistoricalLockUI();
   }
 
-  async function validateHistoricalPassword(password, scope = 'historical') {
-    const normalizedScope = (scope === 'traslado') ? 'traslado' : 'historical';
+  async function validateHistoricalPassword(password) {
     const resp = await fetch('/api/validate-historical-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, scope: normalizedScope })
+      body: JSON.stringify({ password })
     });
 
     const data = await resp.json().catch(() => ({}));
@@ -567,7 +483,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnSave) btnSave.disabled = disableEditing;
     if (btnClear) btnClear.disabled = disableEditing;
-    if (btnReqFlag) btnReqFlag.disabled = disableEditing;
 
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
@@ -898,7 +813,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tiendaKey = storeSelect.value;
     const tiendaName = storeSelect.options[storeSelect.selectedIndex].text;
     const versionKey = versionSelect.value;
-    const updatedAt = new Date().toISOString();
 
     const items = [...body.getElementsByTagName('tr')].map(buildChecklistItemFromRow);
 
@@ -908,9 +822,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tienda: tiendaName,
         version: versionKey,
         version_label: getVersionLabel(versionKey),
-        updatedAt,
-        requisition_done: requisicionHecha,
-        requisition_done_at: requisicionHecha ? (requisicionHechaAt || updatedAt) : null
+        updatedAt: new Date().toISOString()
       },
       items
     };
@@ -991,22 +903,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             tienda: tiendaName,
             version: toKey,
             version_label: getVersionLabel(toKey),
-            updatedAt: null,
-            requisition_done: false,
-            requisition_done_at: null
+            updatedAt: null
           },
           items: []
         };
-      }
-
-      const duplicateInDestination = findMatchingItemInArray(destRec.items, item);
-      if (duplicateInDestination) {
-        await Swal.fire(
-          'Producto duplicado',
-          'Ese producto ya existe en la lista ' + getVersionLabel(toKey) + '. No se movió para evitar duplicados.',
-          'info'
-        );
-        return;
       }
 
       destRec.items.push(item);
@@ -1016,10 +916,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       destRec.meta.version = toKey;
       destRec.meta.version_label = getVersionLabel(toKey);
       destRec.meta.updatedAt = new Date().toISOString();
-      destRec.meta.requisition_done = !!destRec.meta.requisition_done;
-      destRec.meta.requisition_done_at = destRec.meta.requisition_done
-        ? (destRec.meta.requisition_done_at || destRec.meta.updatedAt)
-        : null;
 
       await saveChecklistToFirestore(toDoc, destRec, day);
 
@@ -1524,7 +1420,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res.isConfirmed) {
         body.innerHTML = '';
         renumber();
-        setRequisitionState(false, null);
 
         const docId = getDocIdForCurrentList();
         const payload = collectPayload();
@@ -1551,23 +1446,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       Swal.fire('Error', String(e), 'error');
     }
   });
-
-  if (btnReqFlag) {
-    updateRequisitionButton();
-
-    btnReqFlag.addEventListener('click', async () => {
-      if (isHistoricalEditingLocked()) {
-        await Swal.fire(
-          'Vista histórica',
-          'Desbloquea la fecha histórica o vuelve a hoy para cambiar este estado.',
-          'info'
-        );
-        return;
-      }
-
-      setRequisitionState(!requisicionHecha);
-    });
-  }
 
   // ===== Histórico =====
 
@@ -1921,13 +1799,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         record.items.forEach(addRowFromData);
         renumber();
         lastUpdateISO = record.meta?.updatedAt || null;
-        setRequisitionState(
-          !!record.meta?.requisition_done,
-          record.meta?.requisition_done_at || null
-        );
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
       } else {
-        setRequisitionState(false, null);
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
         Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
       }
@@ -2231,13 +2104,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       record.items.forEach(addRowFromData);
       renumber();
       lastUpdateISO = record.meta?.updatedAt || null;
-      setRequisitionState(
-        !!record.meta?.requisition_done,
-        record.meta?.requisition_done_at || null
-      );
     } else {
       lastUpdateISO = null;
-      setRequisitionState(false, null);
     }
 
     lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
@@ -2255,52 +2123,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStoreUI();
     currentViewDate = null;
     resetHistoricalUnlock();
-    resetTrasladoUnlock();
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
     if (histDateInput) histDateInput.value = '';
-
-    if (isRestrictedVersion(versionSelect.value)) {
-      const allowed = await promptRestrictedVersionAccess(versionSelect.value);
-      if (!allowed) {
-        versionSelect.value = 'base';
-      } else {
-        trasladoUnlockEnabled = true;
-      }
-    }
-
-    previousVersionValue = versionSelect.value;
 
     await loadStoreStateForToday();
     setHistoricalViewMode(false);
     await refreshHistoryPicker();
   });
 
-  versionSelect.addEventListener('focus', () => {
-    previousVersionValue = versionSelect.value;
-  });
-
-  versionSelect.addEventListener('click', () => {
-    previousVersionValue = versionSelect.value;
-  });
-
   versionSelect.addEventListener('change', async () => {
-    const nextVersion = versionSelect.value;
-    const wasRestricted = isRestrictedVersion(previousVersionValue);
-
-    if (isRestrictedVersion(nextVersion) && !trasladoUnlockEnabled) {
-      const allowed = await promptRestrictedVersionAccess(nextVersion);
-
-      if (!allowed) {
-        versionSelect.value = previousVersionValue || 'base';
-        return;
-      }
-
-      trasladoUnlockEnabled = true;
-    } else if (!isRestrictedVersion(nextVersion) && wasRestricted) {
-      resetTrasladoUnlock();
-    }
-
-    previousVersionValue = versionSelect.value;
     currentViewDate = null;
     resetHistoricalUnlock();
     if (histPicker) { try { histPicker.clear(); } catch (_) {} }
