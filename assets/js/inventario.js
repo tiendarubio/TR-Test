@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let mediaStream = null;
   let scanInterval = null;
   let detector = null;
-  let historicalEditEnabled = false;
+  let protectedEditEnabled = false;
 
   function parseNum(v) {
     const n = parseFloat(v);
@@ -102,21 +102,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     return !!(SELECTED_DATE && today && SELECTED_DATE < today);
   }
 
-  function canUnlockHistoricalEdit() {
-    return isPastHistoricalDateSelected() && !!CURRENT_INVENTORY_ID;
+  function canUnlockProtectedEdit() {
+    if (!CURRENT_INVENTORY_ID) return false;
+    if (CURRENT_STATUS === 'cancelled') return false;
+
+    const today = getTodayString();
+    const isToday = SELECTED_DATE === today;
+    const isPast = !!(SELECTED_DATE && today && SELECTED_DATE < today);
+
+    if (isToday) {
+      return CURRENT_STATUS === 'completed';
+    }
+
+    if (isPast) {
+      return CURRENT_STATUS === 'draft' || CURRENT_STATUS === 'completed';
+    }
+
+    return false;
   }
 
-  function resetHistoricalEditMode() {
-    historicalEditEnabled = false;
+  function resetProtectedEditMode() {
+    protectedEditEnabled = false;
   }
 
   function isEditable() {
     const editableTodayDraft = SELECTED_DATE === getTodayString() && !!CURRENT_INVENTORY_ID && CURRENT_STATUS === 'draft';
-    const editableHistorical = canUnlockHistoricalEdit() && historicalEditEnabled;
-    return editableTodayDraft || editableHistorical;
+    const editableProtected = canUnlockProtectedEdit() && protectedEditEnabled;
+    return editableTodayDraft || editableProtected;
   }
 
-  async function validateHistoricalPassword(password) {
+  async function validateProtectedEditPassword(password) {
     const resp = await fetch('/api/validate-historical-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -132,15 +147,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     return !!data.ok;
   }
 
-  function updateHistoricalEditButtonUI() {
+  function updateProtectedEditButtonUI() {
     if (!btnEdit) return;
 
-    const canRequestEdit = canUnlockHistoricalEdit();
-    const isUnlocked = canRequestEdit && historicalEditEnabled;
+    const canRequestEdit = canUnlockProtectedEdit();
+    const isUnlocked = canRequestEdit && protectedEditEnabled;
 
     btnEdit.disabled = !canRequestEdit && !isUnlocked;
     btnEdit.setAttribute('aria-disabled', String(btnEdit.disabled));
-
     btnEdit.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary');
 
     if (isUnlocked) {
@@ -182,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hasActive = !!CURRENT_INVENTORY_ID;
     const readOnly = hasActive && !editable;
     const historicalSelected = isHistoricalDateSelected();
-    const historicalUnlocked = canUnlockHistoricalEdit() && historicalEditEnabled;
+    const protectedUnlocked = canUnlockProtectedEdit() && protectedEditEnabled;
 
     proveedorInput.disabled = !editable;
     ubicacionInput.disabled = !editable;
@@ -208,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.disabled = !editable;
     });
 
-    updateHistoricalEditButtonUI();
+    updateProtectedEditButtonUI();
 
     if (!CURRENT_INVENTORY_ID) {
       modeLabel.textContent = SELECTED_DATE === getTodayString() ? 'Sin inventario activo' : 'Sin inventario abierto';
@@ -218,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (CURRENT_STATUS === 'draft') {
-      if (historicalUnlocked) {
+      if (protectedUnlocked && historicalSelected) {
         modeLabel.textContent = 'Borrador histórico editable';
         modeLabel.className = 'badge text-bg-success';
       } else if (historicalSelected) {
@@ -229,32 +243,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         modeLabel.className = 'badge text-bg-warning';
       }
     } else if (CURRENT_STATUS === 'completed') {
-      if (historicalUnlocked) {
-        modeLabel.textContent = 'Finalizado con edición histórica habilitada';
-        modeLabel.className = 'badge text-bg-success';
+      if (protectedUnlocked && historicalSelected) {
+        modeLabel.textContent = 'Finalizado histórico editable';
+      } else if (protectedUnlocked) {
+        modeLabel.textContent = 'Finalizado editable temporalmente';
       } else {
         modeLabel.textContent = 'Inventario finalizado';
-        modeLabel.className = 'badge text-bg-success';
       }
+      modeLabel.className = 'badge text-bg-success';
     } else if (CURRENT_STATUS === 'cancelled') {
-      if (historicalUnlocked) {
-        modeLabel.textContent = 'Cancelado con edición histórica habilitada';
-        modeLabel.className = 'badge text-bg-danger';
-      } else {
-        modeLabel.textContent = 'Inventario cancelado';
-        modeLabel.className = 'badge text-bg-danger';
-      }
+      modeLabel.textContent = 'Inventario cancelado';
+      modeLabel.className = 'badge text-bg-danger';
     } else {
       modeLabel.textContent = CURRENT_STATUS || 'Inventario';
       modeLabel.className = 'badge text-bg-secondary';
     }
 
+    const accessLabel = protectedUnlocked
+      ? (historicalSelected ? ' · edición protegida habilitada' : ' · edición temporal habilitada')
+      : (historicalSelected ? ' · solo lectura' : '');
+
     activeInventoryLabel.textContent = CURRENT_INVENTORY_ID
-      ? `ID: ${CURRENT_INVENTORY_ID}${historicalUnlocked ? ' · edición histórica habilitada' : historicalSelected ? ' · solo lectura' : ''}`
+      ? `ID: ${CURRENT_INVENTORY_ID}${accessLabel}`
       : '';
   }
 
-  function updateTotals() {
+
+function updateTotals() {
     let lineas = 0;
     let cantidad = 0;
 
@@ -455,7 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openInventory(dateStr, inventoryId) {
     const shouldResetHistoricalEdit = dateStr !== SELECTED_DATE || inventoryId !== CURRENT_INVENTORY_ID;
     if (shouldResetHistoricalEdit) {
-      resetHistoricalEditMode();
+      resetProtectedEditMode();
     }
 
     const record = await loadInventoryById(dateStr, inventoryId);
@@ -843,30 +858,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnEdit) {
     btnEdit.addEventListener('click', async () => {
-      if (!CURRENT_INVENTORY_ID || !isPastHistoricalDateSelected()) {
+      if (!CURRENT_INVENTORY_ID || !canUnlockProtectedEdit()) {
         await Swal.fire(
           'No aplica',
-          'Selecciona primero un inventario de una fecha anterior para habilitar la edición.',
+          'Solo puedes editar con contraseña inventarios finalizados del día actual, o inventarios draft/finalizados de fechas anteriores.',
           'info'
         );
         return;
       }
 
-      if (historicalEditEnabled) {
-        historicalEditEnabled = false;
+      if (protectedEditEnabled) {
+        protectedEditEnabled = false;
         setControlsState();
 
         await Swal.fire(
           'Bloqueado',
-          'La edición histórica fue bloqueada nuevamente.',
+          'La edición protegida fue bloqueada nuevamente.',
           'success'
         );
         return;
       }
 
+      const isHistorical = isPastHistoricalDateSelected();
+      const title = isHistorical ? 'Habilitar edición histórica' : 'Habilitar edición';
+      const textMsg = isHistorical
+        ? 'Ingresa la contraseña para editar este inventario histórico.'
+        : 'Ingresa la contraseña para editar este inventario finalizado del día actual.';
+
       const result = await Swal.fire({
-        title: 'Habilitar edición histórica',
-        text: 'Ingresa la contraseña para editar este inventario.',
+        title,
+        text: textMsg,
         input: 'password',
         inputLabel: 'Contraseña',
         inputPlaceholder: '••••••••',
@@ -884,7 +905,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
 
           try {
-            const ok = await validateHistoricalPassword(password);
+            const ok = await validateProtectedEditPassword(password);
             if (!ok) {
               Swal.showValidationMessage('Contraseña incorrecta.');
               return false;
@@ -899,12 +920,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (!result.isConfirmed) return;
 
-      historicalEditEnabled = true;
+      protectedEditEnabled = true;
       setControlsState();
 
       await Swal.fire(
         'Edición habilitada',
-        'Ya puedes modificar este inventario histórico hasta que vuelvas a bloquearlo o cambies de inventario.',
+        isHistorical
+          ? 'Ya puedes modificar este inventario histórico hasta que vuelvas a bloquearlo o cambies de inventario.'
+          : 'Ya puedes modificar este inventario finalizado del día actual hasta que vuelvas a bloquearlo o cambies de inventario.',
         'success'
       );
     });
@@ -923,7 +946,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const created = await createInventoryDraft(getTodayString());
-    resetHistoricalEditMode();
+    resetProtectedEditMode();
     SELECTED_DATE = getTodayString();
     CURRENT_INVENTORY_ID = created.inventoryId;
     CURRENT_STATUS = 'draft';
@@ -949,12 +972,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const payload = getPayload();
 
-    if (canUnlockHistoricalEdit() && historicalEditEnabled) {
+    if (canUnlockProtectedEdit() && protectedEditEnabled) {
       await saveInventoryWithStatus(SELECTED_DATE, CURRENT_INVENTORY_ID, payload, CURRENT_STATUS || 'draft');
       await refreshHistoryDates();
       await renderInventoriesList();
-      showMessage('Cambios históricos guardados correctamente.');
-      Swal.fire('Guardado', 'Los cambios del inventario histórico se guardaron correctamente.', 'success');
+      showMessage('Cambios guardados correctamente.');
+      Swal.fire('Guardado', 'Los cambios del inventario se guardaron correctamente.', 'success');
       return;
     }
 
@@ -1158,7 +1181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         SELECTED_DATE = dateStr || getTodayString();
         CURRENT_INVENTORY_ID = null;
         CURRENT_STATUS = null;
-        resetHistoricalEditMode();
+        resetProtectedEditMode();
         clearEditor();
         setControlsState();
         await renderInventoriesList();
@@ -1176,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     SELECTED_DATE = getTodayString();
     CURRENT_INVENTORY_ID = null;
     CURRENT_STATUS = null;
-    resetHistoricalEditMode();
+    resetProtectedEditMode();
     clearEditor();
     setControlsState();
     if (fpHistory) fpHistory.setDate(SELECTED_DATE, true);
