@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   const btnSave = $('btnSave');
+  const btnToggleRequisition = $('btnToggleRequisition');
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
@@ -46,7 +47,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentViewDate = null; // null = hoy (editable)
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
+  let protectedVersionUnlockEnabled = false;
   let historicalSelectionMode = false;
+  let requisitionDone = false;
+  let requisitionDoneAt = null;
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
@@ -65,6 +69,99 @@ document.addEventListener('DOMContentLoaded', async () => {
   function getTargetChecklistDate() {
     const today = (typeof getTodayString === 'function') ? getTodayString() : null;
     return currentViewDate || today;
+  }
+
+  function isProtectedVersionSelected() {
+    const versionKey = String(versionSelect?.value || '');
+    if (typeof isProtectedVersionKey === 'function') {
+      return !!isProtectedVersionKey(versionKey);
+    }
+    return versionKey === 'traslado';
+  }
+
+  function isProtectedVersionEditingLocked() {
+    return isProtectedVersionSelected() && !protectedVersionUnlockEnabled;
+  }
+
+  function getActiveEditingContexts() {
+    const contexts = [];
+
+    if (isHistoricalDateSelected()) {
+      contexts.push(currentViewDate ? ('histórico (' + currentViewDate + ')') : 'histórico');
+    }
+
+    if (isProtectedVersionSelected()) {
+      contexts.push('protegido (' + getVersionLabel(versionSelect.value) + ')');
+    }
+
+    return contexts;
+  }
+
+  function getEditingModeMessage() {
+    const contexts = getActiveEditingContexts();
+    if (!contexts.length) {
+      return {
+        text: 'Modo: checklist del día actual (editable).',
+        className: 'text-muted'
+      };
+    }
+
+    if (isEditingLocked()) {
+      return {
+        text: 'Modo ' + contexts.join(' + ') + ': solo lectura.',
+        className: 'text-primary'
+      };
+    }
+
+    return {
+      text: 'Modo ' + contexts.join(' + ') + ': edición habilitada temporalmente.',
+      className: 'text-success'
+    };
+  }
+
+  async function showEditingLockedAlert(actionLabel = 'continuar') {
+    const contexts = getActiveEditingContexts();
+    const contextText = contexts.length
+      ? ('Esta vista está protegida (' + contexts.join(' + ') + ').')
+      : 'Esta vista está protegida.';
+
+    await Swal.fire(
+      'Edición bloqueada',
+      'Para ' + actionLabel + ', desbloquea la edición o cambia de vista. ' + contextText,
+      'info'
+    );
+  }
+
+  function buildChecklistMeta(options = {}) {
+    const storeKey = options.storeKey ?? storeSelect.value;
+    const storeName = options.storeName ?? storeSelect.options[storeSelect.selectedIndex].text;
+    const versionKey = options.versionKey ?? versionSelect.value;
+    const updatedAt = options.updatedAt || new Date().toISOString();
+    const reqDone = typeof options.requisitionDone === 'boolean'
+      ? options.requisitionDone
+      : requisitionDone;
+    const reqDoneAt = reqDone
+      ? (options.requisitionDoneAt ?? requisitionDoneAt ?? updatedAt)
+      : null;
+
+    return {
+      tienda_key: storeKey,
+      tienda: storeName,
+      version: versionKey,
+      version_label: getVersionLabel(versionKey),
+      requisition_done: reqDone,
+      requisition_done_at: reqDoneAt,
+      updatedAt
+    };
+  }
+
+  function applyChecklistMeta(meta = {}) {
+    requisitionDone = !!meta?.requisition_done;
+    requisitionDoneAt = requisitionDone
+      ? String(meta?.requisition_done_at || '').trim() || null
+      : null;
+
+    updateRequisitionUI();
   }
 
   function getVersionLabel(versionKey) {
@@ -312,13 +409,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (!destinationRecord || !Array.isArray(destinationRecord.items)) {
         destinationRecord = {
-          meta: {
-            tienda_key: storeKey,
-            tienda: tiendaName,
-            version: toKey,
-            version_label: getVersionLabel(toKey),
+          meta: buildChecklistMeta({
+            storeKey,
+            storeName: tiendaName,
+            versionKey: toKey,
+            requisitionDone: false,
+            requisitionDoneAt: null,
             updatedAt: null
-          },
+          }),
           items: []
         };
       }
@@ -352,12 +450,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       destinationRecord.items = destinationItems;
-      destinationRecord.meta = destinationRecord.meta || {};
-      destinationRecord.meta.tienda_key = storeKey;
-      destinationRecord.meta.tienda = tiendaName;
-      destinationRecord.meta.version = toKey;
-      destinationRecord.meta.version_label = getVersionLabel(toKey);
-      destinationRecord.meta.updatedAt = new Date().toISOString();
+      destinationRecord.meta = buildChecklistMeta({
+        storeKey,
+        storeName: tiendaName,
+        versionKey: toKey,
+        requisitionDone: !!destinationRecord.meta?.requisition_done,
+        requisitionDoneAt: destinationRecord.meta?.requisition_done_at || null
+      });
 
       await saveChecklistToFirestore(toDoc, destinationRecord, today);
       rememberHistoryDate(toDoc, today);
@@ -390,47 +489,79 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateHistoricalLockUI() {
     if (!btnToggleHistLock) return;
 
-    const isHistorical = isHistoricalDateSelected();
     const isPastHistorical = isPastHistoricalDateSelected();
+    const isProtected = isProtectedVersionSelected();
+    const shouldShow = isPastHistorical || isProtected;
+    const isUnlocked =
+      (isPastHistorical && historicalUnlockEnabled) ||
+      (isProtected && protectedVersionUnlockEnabled);
 
     if (btnHistToday) {
-      btnHistToday.disabled = !isHistorical;
-      btnHistToday.setAttribute('aria-disabled', String(!isHistorical));
+      btnHistToday.disabled = !isHistoricalDateSelected();
+      btnHistToday.setAttribute('aria-disabled', String(!isHistoricalDateSelected()));
     }
 
-    btnToggleHistLock.disabled = !isPastHistorical;
-    btnToggleHistLock.setAttribute('aria-disabled', String(!isPastHistorical));
-    btnToggleHistLock.classList.toggle('d-none', !isPastHistorical);
-
+    btnToggleHistLock.disabled = !shouldShow;
+    btnToggleHistLock.setAttribute('aria-disabled', String(!shouldShow));
+    btnToggleHistLock.classList.toggle('d-none', !shouldShow);
     btnToggleHistLock.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary');
 
-    if (!isPastHistorical) {
+    if (!shouldShow) {
       btnToggleHistLock.classList.add('btn-outline-secondary');
       btnToggleHistLock.innerHTML = `
         <i class="fa-solid fa-unlock-keyhole me-1"></i>
-        Desbloquear
+        Desbloquear edición
       `;
       return;
     }
 
-    if (historicalUnlockEnabled) {
+    if (isUnlocked) {
       btnToggleHistLock.classList.add('btn-outline-success');
       btnToggleHistLock.innerHTML = `
         <i class="fa-solid fa-lock me-1"></i>
-        Bloquear
+        Bloquear edición
       `;
     } else {
       btnToggleHistLock.classList.add('btn-outline-warning');
       btnToggleHistLock.innerHTML = `
         <i class="fa-solid fa-unlock-keyhole me-1"></i>
-        Desbloquear
+        Desbloquear edición
       `;
+    }
+  }
+
+  function updateRequisitionUI() {
+    if (!btnToggleRequisition) return;
+
+    const locked = isEditingLocked();
+    btnToggleRequisition.disabled = locked;
+    btnToggleRequisition.setAttribute('aria-disabled', String(locked));
+    btnToggleRequisition.classList.remove('btn-outline-secondary', 'btn-success', 'text-white');
+
+    if (requisitionDone) {
+      btnToggleRequisition.classList.add('btn-success', 'text-white');
+      btnToggleRequisition.innerHTML = `
+        <i class="fa-solid fa-flag me-1"></i>
+        Requisición hecha
+      `;
+      btnToggleRequisition.title = requisitionDoneAt
+        ? ('Marcada como hecha: ' + formatSV(requisitionDoneAt))
+        : 'Marcada como requisición hecha.';
+    } else {
+      btnToggleRequisition.classList.add('btn-outline-secondary');
+      btnToggleRequisition.innerHTML = `
+        <i class="fa-regular fa-flag me-1"></i>
+        Requisición pendiente
+      `;
+      btnToggleRequisition.title = 'Marcar esta lista como requisición hecha.';
     }
   }
 
   function resetHistoricalUnlock() {
     historicalUnlockEnabled = false;
+    protectedVersionUnlockEnabled = false;
     updateHistoricalLockUI();
+    updateRequisitionUI();
   }
 
   async function validateHistoricalPassword(password) {
@@ -449,30 +580,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return !!data.ok;
   }
 
-  function setHistoricalViewMode(isHistorical) {
+  function setHistoricalViewMode(_isHistorical) {
     const histModeText = document.getElementById('histViewModeText');
-    const labelDate = currentViewDate || '';
-    const disableEditing = isHistorical && !historicalUnlockEnabled;
+    const disableEditing = isEditingLocked();
+    const modeMessage = getEditingModeMessage();
 
     if (histModeText) {
       histModeText.classList.remove('text-muted', 'text-primary', 'text-success');
-
-      if (isHistorical) {
-        if (historicalUnlockEnabled) {
-          histModeText.textContent = labelDate
-            ? ('Modo histórico (' + labelDate + '): edición habilitada temporalmente.')
-            : 'Modo histórico: edición habilitada temporalmente.';
-          histModeText.classList.add('text-success');
-        } else {
-          histModeText.textContent = labelDate
-            ? ('Modo histórico (' + labelDate + '): solo lectura.')
-            : 'Modo histórico: solo lectura.';
-          histModeText.classList.add('text-primary');
-        }
-      } else {
-        histModeText.textContent = 'Modo: checklist del día actual (editable).';
-        histModeText.classList.add('text-muted');
-      }
+      histModeText.textContent = modeMessage.text;
+      histModeText.classList.add(modeMessage.className);
     }
 
     if (searchInput) searchInput.disabled = disableEditing;
@@ -505,6 +621,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateHistoricalLockUI();
     updateHistoricalSelectionUI();
+    updateRequisitionUI();
+  }
+
+  function isEditingLocked() {
+    return isHistoricalEditingLocked() || isProtectedVersionEditingLocked();
   }
 
   // --- Centrar siempre el elemento que tiene el foco (buscador o cantidad) ---
@@ -682,12 +803,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       showSuccess = true
     } = options || {};
 
-    if (isHistoricalEditingLocked()) {
-      await Swal.fire(
-        'Vista histórica',
-        'Estás viendo el checklist del ' + currentViewDate + '. Desbloquea los controles o vuelve a hoy para guardar cambios.',
-        'info'
-      );
+    if (isEditingLocked()) {
+      await showEditingLockedAlert('guardar cambios');
       return { ok: false, reason: 'locked' };
     }
 
@@ -810,20 +927,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function collectPayload() {
-    const tiendaKey = storeSelect.value;
-    const tiendaName = storeSelect.options[storeSelect.selectedIndex].text;
-    const versionKey = versionSelect.value;
-
     const items = [...body.getElementsByTagName('tr')].map(buildChecklistItemFromRow);
 
     return {
-      meta: {
-        tienda_key: tiendaKey,
-        tienda: tiendaName,
-        version: versionKey,
-        version_label: getVersionLabel(versionKey),
-        updatedAt: new Date().toISOString()
-      },
+      meta: buildChecklistMeta(),
       items
     };
   }
@@ -831,16 +938,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // === MOVER ÍTEM ENTRE LISTAS (persistiendo origen y destino) ===
   async function moveRowToAnotherList(tr) {
     try {
-      const today = (typeof getTodayString === 'function') ? getTodayString() : null;
-      const lockedHistorical =
-        currentViewDate && today && currentViewDate !== today && !historicalUnlockEnabled;
-
-      if (lockedHistorical) {
-        await Swal.fire(
-          'Vista histórica',
-          'Para mover productos, desbloquea los controles o vuelve al día actual.',
-          'info'
-        );
+      if (isEditingLocked()) {
+        await showEditingLockedAlert('mover productos');
         return;
       }
 
@@ -898,24 +997,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       let destRec = await loadChecklistFromFirestore(toDoc, day);
       if (!destRec || !Array.isArray(destRec.items)) {
         destRec = {
-          meta: {
-            tienda_key: storeKey,
-            tienda: tiendaName,
-            version: toKey,
-            version_label: getVersionLabel(toKey),
+          meta: buildChecklistMeta({
+            storeKey,
+            storeName: tiendaName,
+            versionKey: toKey,
+            requisitionDone: false,
+            requisitionDoneAt: null,
             updatedAt: null
-          },
+          }),
           items: []
         };
       }
 
       destRec.items.push(item);
-      destRec.meta = destRec.meta || {};
-      destRec.meta.tienda_key = storeKey;
-      destRec.meta.tienda = tiendaName;
-      destRec.meta.version = toKey;
-      destRec.meta.version_label = getVersionLabel(toKey);
-      destRec.meta.updatedAt = new Date().toISOString();
+      destRec.meta = buildChecklistMeta({
+        storeKey,
+        storeName: tiendaName,
+        versionKey: toKey,
+        requisitionDone: !!destRec.meta?.requisition_done,
+        requisitionDoneAt: destRec.meta?.requisition_done_at || null
+      });
 
       await saveChecklistToFirestore(toDoc, destRec, day);
 
@@ -1393,16 +1494,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Clear & persist empty (solo hoy)
   btnClear.addEventListener('click', async () => {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
-    const lockedHistorical =
-      currentViewDate && today && currentViewDate !== today && !historicalUnlockEnabled;
-
-    if (lockedHistorical) {
-      Swal.fire(
-        'Vista histórica',
-        'Para limpiar esta fecha, primero desbloquea los controles o vuelve al día actual.',
-        'info'
-      );
+    if (isEditingLocked()) {
+      await showEditingLockedAlert('limpiar la lista');
       return;
     }
 
@@ -1446,6 +1539,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       Swal.fire('Error', String(e), 'error');
     }
   });
+
+  if (btnToggleRequisition) {
+    btnToggleRequisition.addEventListener('click', async () => {
+      if (isEditingLocked()) {
+        await showEditingLockedAlert('marcar la requisición');
+        return;
+      }
+
+      const prevDone = requisitionDone;
+      const prevDoneAt = requisitionDoneAt;
+      const nextDone = !requisitionDone;
+
+      requisitionDone = nextDone;
+      requisitionDoneAt = nextDone ? new Date().toISOString() : null;
+      updateRequisitionUI();
+
+      try {
+        await persistCurrentChecklist({
+          successTitle: nextDone ? 'Requisición marcada' : 'Requisición pendiente',
+          successMessage: nextDone
+            ? 'La lista quedó marcada como requisición hecha.'
+            : 'La lista quedó marcada como requisición pendiente.'
+        });
+      } catch (e) {
+        requisitionDone = prevDone;
+        requisitionDoneAt = prevDoneAt;
+        updateRequisitionUI();
+        await Swal.fire('Error', String(e), 'error');
+      }
+    });
+  }
 
   // ===== Histórico =====
 
@@ -1771,7 +1895,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (today && dateStr === today) {
         currentViewDate = null;
-        historicalUnlockEnabled = false;
+        resetHistoricalUnlock();
         clearHistoricalSelection();
 
         if (histPicker) {
@@ -1786,7 +1910,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       currentViewDate = dateStr;
-      historicalUnlockEnabled = false;
+      resetHistoricalUnlock();
       clearHistoricalSelection();
 
       body.innerHTML = '';
@@ -1794,6 +1918,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const docId = getDocIdForCurrentList();
       const record = await loadChecklistFromFirestore(docId, dateStr);
+      applyChecklistMeta(record?.meta || {});
 
       if (record && Array.isArray(record.items) && record.items.length) {
         record.items.forEach(addRowFromData);
@@ -1801,6 +1926,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         lastUpdateISO = record.meta?.updatedAt || null;
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
       } else {
+        lastUpdateISO = record?.meta?.updatedAt || null;
         lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
         Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
       }
@@ -1868,30 +1994,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnToggleHistLock) {
     btnToggleHistLock.addEventListener('click', async () => {
-      if (!isHistoricalDateSelected()) {
+      const canUnlockHistorical = isPastHistoricalDateSelected();
+      const canUnlockProtected = isProtectedVersionSelected();
+      const canUnlockAny = canUnlockHistorical || canUnlockProtected;
+
+      if (!canUnlockAny) {
         await Swal.fire(
           'No aplica',
-          'Este botón solo se usa cuando estás viendo una fecha anterior.',
+          'Este botón solo se usa cuando estás viendo una fecha anterior o una lista protegida.',
           'info'
         );
         return;
       }
 
-      if (historicalUnlockEnabled) {
+      const hasActiveUnlock =
+        (canUnlockHistorical && historicalUnlockEnabled) ||
+        (canUnlockProtected && protectedVersionUnlockEnabled);
+
+      if (hasActiveUnlock) {
         historicalUnlockEnabled = false;
-        setHistoricalViewMode(true);
+        protectedVersionUnlockEnabled = false;
+        setHistoricalViewMode(isHistoricalDateSelected());
 
         await Swal.fire(
           'Bloqueado',
-          'Los controles de la lista histórica fueron bloqueados nuevamente.',
+          'Los controles protegidos fueron bloqueados nuevamente.',
           'success'
         );
         return;
       }
 
+      const contexts = [];
+      if (canUnlockHistorical) contexts.push('la vista histórica');
+      if (canUnlockProtected) contexts.push('la lista ' + getVersionLabel(versionSelect.value));
+
       const result = await Swal.fire({
-        title: 'Desbloquear controles',
-        text: 'Ingresa la contraseña para habilitar edición en esta fecha.',
+        title: 'Desbloquear edición',
+        text: 'Ingresa la contraseña para habilitar edición en ' + contexts.join(' y ') + '.',
         input: 'password',
         inputLabel: 'Contraseña',
         inputPlaceholder: '••••••••',
@@ -1923,12 +2062,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (result.isConfirmed) {
-        historicalUnlockEnabled = true;
-        setHistoricalViewMode(true);
+        historicalUnlockEnabled = canUnlockHistorical;
+        protectedVersionUnlockEnabled = canUnlockProtected;
+        setHistoricalViewMode(isHistoricalDateSelected());
 
         await Swal.fire(
           'Desbloqueado',
-          'Ya puedes editar la lista histórica hasta que vuelvas a bloquearla.',
+          'Ya puedes editar esta vista hasta que vuelvas a bloquearla.',
           'success'
         );
       }
@@ -2100,6 +2240,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const docId = getDocIdForCurrentList();
     const record = await loadChecklistFromFirestore(docId); // hoy
+    applyChecklistMeta(record?.meta || {});
+
     if (record && Array.isArray(record.items)) {
       record.items.forEach(addRowFromData);
       renumber();
@@ -2109,6 +2251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+    updateRequisitionUI();
   }
 
   await loadStoreStateForToday();

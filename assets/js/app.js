@@ -42,6 +42,12 @@ function getListLabel(versionKey) {
   return labels[versionKey] || versionKey;
 }
 
+const PROTECTED_VERSION_KEYS = ['traslado'];
+
+function isProtectedVersionKey(versionKey) {
+  return PROTECTED_VERSION_KEYS.includes(versionKey);
+}
+
 let CATALOGO_CACHE = null;
 
 function preloadCatalog() {
@@ -186,4 +192,6 @@ function formatSV(iso) {
 
 try {
   window.STORE_BINS = STORE_BINS;
+  window.PROTECTED_VERSION_KEYS = PROTECTED_VERSION_KEYS;
+  window.isProtectedVersionKey = isProtectedVersionKey;
 } catch (_) {}
