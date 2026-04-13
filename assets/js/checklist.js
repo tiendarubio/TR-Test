@@ -53,6 +53,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   let requisitionDoneAt = null;
   let lastCommittedVersionValue = versionSelect?.value || 'base';
 
+  function setToolbarButtonContent(btn, iconClassName, label) {
+    if (!btn) return;
+    btn.innerHTML = `
+      <i class="${iconClassName}" aria-hidden="true"></i>
+      <span>${escapeHtml(label)}</span>
+    `;
+  }
+
+
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
   }
@@ -329,9 +338,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnHistoricalSelectMode.classList.toggle('btn-outline-info', !showSelection);
       btnHistoricalSelectMode.classList.toggle('btn-info', showSelection);
       btnHistoricalSelectMode.classList.toggle('text-white', showSelection);
-      btnHistoricalSelectMode.innerHTML = showSelection
-        ? '<i class="fa-solid fa-check-double me-1"></i> Selección activa'
-        : '<i class="fa-regular fa-square-check me-1"></i> Seleccionar productos';
+      setToolbarButtonContent(
+        btnHistoricalSelectMode,
+        showSelection ? 'fa-solid fa-check-double' : 'fa-regular fa-square-check',
+        showSelection ? 'Selección activa' : 'Seleccionar productos'
+      );
     }
 
     if (thHistorySelect) {
@@ -573,25 +584,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!shouldShow) {
       btnToggleHistLock.classList.add('btn-outline-secondary');
-      btnToggleHistLock.innerHTML = `
-        <i class="fa-solid fa-unlock-keyhole me-1"></i>
-        Desbloquear edición
-      `;
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
       return;
     }
 
     if (isUnlocked) {
       btnToggleHistLock.classList.add('btn-outline-success');
-      btnToggleHistLock.innerHTML = `
-        <i class="fa-solid fa-lock me-1"></i>
-        Bloquear edición
-      `;
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-lock', 'Bloquear edición');
     } else {
       btnToggleHistLock.classList.add('btn-outline-warning');
-      btnToggleHistLock.innerHTML = `
-        <i class="fa-solid fa-unlock-keyhole me-1"></i>
-        Desbloquear edición
-      `;
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
     }
   }
 
@@ -605,19 +607,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (requisitionDone) {
       btnToggleRequisition.classList.add('btn-success', 'text-white');
-      btnToggleRequisition.innerHTML = `
-        <i class="fa-solid fa-flag me-1"></i>
-        Requisición hecha
-      `;
+      setToolbarButtonContent(btnToggleRequisition, 'fa-solid fa-flag', 'Requisición hecha');
       btnToggleRequisition.title = requisitionDoneAt
         ? ('Marcada como hecha: ' + formatSV(requisitionDoneAt))
         : 'Marcada como requisición hecha.';
     } else {
       btnToggleRequisition.classList.add('btn-outline-secondary');
-      btnToggleRequisition.innerHTML = `
-        <i class="fa-regular fa-flag me-1"></i>
-        Requisición pendiente
-      `;
+      setToolbarButtonContent(btnToggleRequisition, 'fa-regular fa-flag', 'Requisición pendiente');
       btnToggleRequisition.title = 'Marcar esta lista como requisición hecha.';
     }
   }
