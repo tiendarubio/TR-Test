@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     btnEdit.disabled = !canRequestEdit && !isUnlocked;
     btnEdit.setAttribute('aria-disabled', String(btnEdit.disabled));
-    btnEdit.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary', 'btn-outline-edit-lock');
+    btnEdit.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary', 'btn-outline-edit-lock', 'btn-outline-edit-access');
 
     if (isUnlocked) {
       btnEdit.classList.add('btn-outline-edit-lock');
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (canRequestEdit) {
-      btnEdit.classList.add('btn-outline-warning');
+      btnEdit.classList.add('btn-outline-edit-access');
       btnEdit.innerHTML = '<i class="fa-solid fa-unlock-keyhole me-1"></i>Editar';
       return;
     }

@@ -979,12 +979,35 @@ hr {
 }
 
 
+/* Acciones de edición protegida: tonos sobrios para no competir con Finalizar */
+.btn-outline-edit-access {
+  color: #8a6508;
+  border-color: #d6b25e;
+  background: #fffdf7;
+}
 
-/* Botón de bloqueo de edición: tono verde-azulado distinto al éxito/finalización */
-.btn-outline-edit-lock {
-  color: #0f766e;
-  border-color: #14b8a6;
+.btn-outline-edit-access:hover,
+.btn-outline-edit-access:focus,
+.btn-outline-edit-access:active,
+.btn-outline-edit-access.active,
+.btn-check:checked + .btn-outline-edit-access {
+  color: #6b4f07;
+  background: #f8f1de;
+  border-color: #c9a24d;
+  box-shadow: 0 6px 16px rgba(180, 138, 38, 0.14);
+}
+
+.btn-outline-edit-access:disabled,
+.btn-outline-edit-access.disabled {
+  color: #98a2b3;
+  border-color: var(--tr-border-strong);
   background: #fff;
+}
+
+.btn-outline-edit-lock {
+  color: #475467;
+  border-color: #98a2b3;
+  background: #fcfcfd;
 }
 
 .btn-outline-edit-lock:hover,
@@ -992,10 +1015,10 @@ hr {
 .btn-outline-edit-lock:active,
 .btn-outline-edit-lock.active,
 .btn-check:checked + .btn-outline-edit-lock {
-  color: #fff;
-  background: #0f766e;
-  border-color: #0f766e;
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
+  color: #ffffff;
+  background: #475467;
+  border-color: #475467;
+  box-shadow: 0 6px 16px rgba(71, 84, 103, 0.16);
 }
 
 .btn-outline-edit-lock:disabled,
