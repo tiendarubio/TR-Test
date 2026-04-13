@@ -856,6 +856,18 @@ function updateTotals() {
   btnScan.addEventListener('click', startScanner);
   btnScanStop.addEventListener('click', stopScanner);
 
+
+  async function reopenCompletedInventoryForEditing() {
+    if (!CURRENT_INVENTORY_ID || CURRENT_STATUS !== 'completed') return false;
+
+    const payload = getPayload();
+    await saveInventoryWithStatus(SELECTED_DATE, CURRENT_INVENTORY_ID, payload, 'draft');
+    CURRENT_STATUS = 'draft';
+    await refreshHistoryDates();
+    await renderInventoriesList();
+    return true;
+  }
+
   if (btnEdit) {
     btnEdit.addEventListener('click', async () => {
       if (!CURRENT_INVENTORY_ID || !canUnlockProtectedEdit()) {
@@ -920,16 +932,43 @@ function updateTotals() {
 
       if (!result.isConfirmed) return;
 
-      protectedEditEnabled = true;
-      setControlsState();
+      try {
+        const wasCompleted = CURRENT_STATUS === 'completed';
+        let reopenedAsDraft = false;
 
-      await Swal.fire(
-        'Edición habilitada',
-        isHistorical
-          ? 'Ya puedes modificar este inventario histórico hasta que vuelvas a bloquearlo o cambies de inventario.'
-          : 'Ya puedes modificar este inventario finalizado del día actual hasta que vuelvas a bloquearlo o cambies de inventario.',
-        'success'
-      );
+        if (wasCompleted) {
+          reopenedAsDraft = await reopenCompletedInventoryForEditing();
+        }
+
+        protectedEditEnabled = isPastHistoricalDateSelected();
+        setControlsState();
+
+        if (reopenedAsDraft) {
+          await Swal.fire(
+            'Edición habilitada',
+            isHistorical
+              ? 'Este inventario pasó a borrador y ya puedes editarlo. Para volver a dejarlo como completado debes finalizarlo nuevamente.'
+              : 'Este inventario pasó a borrador y ya puedes editarlo. Para volver a dejarlo como completado debes finalizarlo nuevamente.',
+            'success'
+          );
+          return;
+        }
+
+        await Swal.fire(
+          'Edición habilitada',
+          isHistorical
+            ? 'Ya puedes modificar este inventario histórico hasta que vuelvas a bloquearlo o cambies de inventario.'
+            : 'Ya puedes modificar este inventario finalizado del día actual hasta que vuelvas a bloquearlo o cambies de inventario.',
+          'success'
+        );
+      } catch (err) {
+        console.error(err);
+        await Swal.fire(
+          'Error',
+          'No se pudo habilitar la edición del inventario.',
+          'error'
+        );
+      }
     });
   }
 
