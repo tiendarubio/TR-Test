@@ -8,9 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const successMessage = $('successMessage');
   const historyDateInput = $('historyDate');
   const btnToday = $('btnToday');
-  const btnToggleHistLock = $('btnToggleHistLock');
   const historyHint = $('historyHint');
-  const histViewModeText = $('histViewModeText');
   const listWrap = $('inventoriesList');
 
   const proveedorInput = $('proveedorInput');
@@ -22,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const body = $('recepcionBody');
   const btnNew = $('btnNewInventory');
   const btnSave = $('saveInventory');
+  const btnEdit = $('editInventory');
   const btnFinalize = $('finalizeInventory');
   const btnCancel = $('cancelInventory');
   const btnClearDraft = $('clearDraft');
@@ -50,10 +49,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let CURRENT_STATUS = null;
   let historySet = new Set();
   let fpHistory = null;
-  let historicalUnlockEnabled = false;
   let mediaStream = null;
   let scanInterval = null;
   let detector = null;
+  let historicalEditEnabled = false;
 
   function parseNum(v) {
     const n = parseFloat(v);
@@ -103,89 +102,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     return !!(SELECTED_DATE && today && SELECTED_DATE < today);
   }
 
-  function canEditHistoricalInventory() {
-    return !!(CURRENT_INVENTORY_ID && isPastHistoricalDateSelected() && historicalUnlockEnabled);
+  function canUnlockHistoricalEdit() {
+    return isPastHistoricalDateSelected() && !!CURRENT_INVENTORY_ID;
+  }
+
+  function resetHistoricalEditMode() {
+    historicalEditEnabled = false;
   }
 
   function isEditable() {
-    if (!CURRENT_INVENTORY_ID) return false;
-    if (SELECTED_DATE === getTodayString()) {
-      return CURRENT_STATUS === 'draft';
-    }
-    return canEditHistoricalInventory();
-  }
-
-  function updateHistoricalLockUI() {
-    if (btnToday) {
-      const isHistorical = isHistoricalDateSelected();
-      btnToday.disabled = !isHistorical;
-      btnToday.setAttribute('aria-disabled', String(!isHistorical));
-    }
-
-    if (!btnToggleHistLock) return;
-
-    const isPastHistorical = isPastHistoricalDateSelected();
-    const hasActiveInventory = !!CURRENT_INVENTORY_ID;
-
-    btnToggleHistLock.classList.toggle('d-none', !isPastHistorical);
-    btnToggleHistLock.disabled = !isPastHistorical || !hasActiveInventory;
-    btnToggleHistLock.setAttribute('aria-disabled', String(btnToggleHistLock.disabled));
-    btnToggleHistLock.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary');
-
-    if (!isPastHistorical) {
-      btnToggleHistLock.classList.add('btn-outline-secondary');
-      btnToggleHistLock.innerHTML = '<i class="fa-solid fa-unlock-keyhole me-1"></i>Desbloquear histórico';
-      return;
-    }
-
-    if (historicalUnlockEnabled) {
-      btnToggleHistLock.classList.add('btn-outline-success');
-      btnToggleHistLock.innerHTML = '<i class="fa-solid fa-lock me-1"></i>Bloquear histórico';
-      return;
-    }
-
-    btnToggleHistLock.classList.add('btn-outline-warning');
-    btnToggleHistLock.innerHTML = '<i class="fa-solid fa-unlock-keyhole me-1"></i>Desbloquear histórico';
-  }
-
-  function setHistoricalViewMode() {
-    const isHistorical = isHistoricalDateSelected();
-    const hasInventory = !!CURRENT_INVENTORY_ID;
-
-    if (histViewModeText) {
-      histViewModeText.classList.remove('text-muted', 'text-primary', 'text-success');
-
-      if (!isHistorical) {
-        histViewModeText.textContent = 'Modo: inventario del día actual (editable si está en borrador).';
-        histViewModeText.classList.add('text-muted');
-      } else if (!hasInventory) {
-        histViewModeText.textContent = SELECTED_DATE
-          ? `Modo histórico (${SELECTED_DATE}): selecciona un inventario para ver su detalle.`
-          : 'Modo histórico: selecciona un inventario para ver su detalle.';
-        histViewModeText.classList.add('text-primary');
-      } else if (historicalUnlockEnabled) {
-        histViewModeText.textContent = SELECTED_DATE
-          ? `Modo histórico (${SELECTED_DATE}): edición habilitada temporalmente.`
-          : 'Modo histórico: edición habilitada temporalmente.';
-        histViewModeText.classList.add('text-success');
-      } else {
-        histViewModeText.textContent = SELECTED_DATE
-          ? `Modo histórico (${SELECTED_DATE}): solo lectura.`
-          : 'Modo histórico: solo lectura.';
-        histViewModeText.classList.add('text-primary');
-      }
-    }
-
-    if (!canEditHistoricalInventory() && mediaStream) {
-      stopScanner();
-    }
-
-    updateHistoricalLockUI();
-  }
-
-  function resetHistoricalUnlock() {
-    historicalUnlockEnabled = false;
-    updateHistoricalLockUI();
+    const editableTodayDraft = SELECTED_DATE === getTodayString() && !!CURRENT_INVENTORY_ID && CURRENT_STATUS === 'draft';
+    const editableHistorical = canUnlockHistoricalEdit() && historicalEditEnabled;
+    return editableTodayDraft || editableHistorical;
   }
 
   async function validateHistoricalPassword(password) {
@@ -202,6 +130,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     return !!data.ok;
+  }
+
+  function updateHistoricalEditButtonUI() {
+    if (!btnEdit) return;
+
+    const canRequestEdit = canUnlockHistoricalEdit();
+    const isUnlocked = canRequestEdit && historicalEditEnabled;
+
+    btnEdit.disabled = !canRequestEdit && !isUnlocked;
+    btnEdit.setAttribute('aria-disabled', String(btnEdit.disabled));
+
+    btnEdit.classList.remove('btn-outline-warning', 'btn-outline-success', 'btn-outline-secondary');
+
+    if (isUnlocked) {
+      btnEdit.classList.add('btn-outline-success');
+      btnEdit.innerHTML = '<i class="fa-solid fa-lock me-1"></i>Bloquear edición';
+      return;
+    }
+
+    if (canRequestEdit) {
+      btnEdit.classList.add('btn-outline-warning');
+      btnEdit.innerHTML = '<i class="fa-solid fa-unlock-keyhole me-1"></i>Editar';
+      return;
+    }
+
+    btnEdit.classList.add('btn-outline-secondary');
+    btnEdit.innerHTML = '<i class="fa-solid fa-pen-to-square me-1"></i>Editar';
   }
 
   function centerOnElement(el) {
@@ -225,8 +180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const editable = isEditable();
     const hasItems = body.rows.length > 0;
     const hasActive = !!CURRENT_INVENTORY_ID;
-    const isHistorical = isHistoricalDateSelected();
     const readOnly = hasActive && !editable;
+    const historicalSelected = isHistoricalDateSelected();
+    const historicalUnlocked = canUnlockHistoricalEdit() && historicalEditEnabled;
 
     proveedorInput.disabled = !editable;
     ubicacionInput.disabled = !editable;
@@ -235,8 +191,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnScan.disabled = !editable;
 
     btnSave.disabled = !editable;
-    btnFinalize.disabled = !editable || !hasItems || isHistorical;
-    btnCancel.disabled = !hasActive || CURRENT_STATUS !== 'draft' || isHistorical;
+    btnFinalize.disabled = !editable || !hasItems || CURRENT_STATUS === 'completed' || CURRENT_STATUS === 'cancelled';
+    btnCancel.disabled = !editable || !hasActive || CURRENT_STATUS !== 'draft';
     btnClearDraft.disabled = !editable || (!hasItems && !(proveedorInput.value.trim() || ubicacionInput.value.trim()));
 
     btnPDF.disabled = !hasItems;
@@ -252,35 +208,50 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.disabled = !editable;
     });
 
+    updateHistoricalEditButtonUI();
+
     if (!CURRENT_INVENTORY_ID) {
       modeLabel.textContent = SELECTED_DATE === getTodayString() ? 'Sin inventario activo' : 'Sin inventario abierto';
       modeLabel.className = 'badge text-bg-secondary';
       activeInventoryLabel.textContent = '';
-      setHistoricalViewMode();
       return;
     }
 
     if (CURRENT_STATUS === 'draft') {
-      modeLabel.textContent = editable ? 'Borrador activo' : 'Borrador en solo lectura';
-      modeLabel.className = 'badge text-bg-warning';
+      if (historicalUnlocked) {
+        modeLabel.textContent = 'Borrador histórico editable';
+        modeLabel.className = 'badge text-bg-success';
+      } else if (historicalSelected) {
+        modeLabel.textContent = 'Borrador histórico en solo lectura';
+        modeLabel.className = 'badge text-bg-warning';
+      } else {
+        modeLabel.textContent = editable ? 'Borrador activo' : 'Borrador en solo lectura';
+        modeLabel.className = 'badge text-bg-warning';
+      }
     } else if (CURRENT_STATUS === 'completed') {
-      modeLabel.textContent = 'Inventario finalizado';
-      modeLabel.className = 'badge text-bg-success';
+      if (historicalUnlocked) {
+        modeLabel.textContent = 'Finalizado con edición histórica habilitada';
+        modeLabel.className = 'badge text-bg-success';
+      } else {
+        modeLabel.textContent = 'Inventario finalizado';
+        modeLabel.className = 'badge text-bg-success';
+      }
     } else if (CURRENT_STATUS === 'cancelled') {
-      modeLabel.textContent = 'Inventario cancelado';
-      modeLabel.className = 'badge text-bg-danger';
+      if (historicalUnlocked) {
+        modeLabel.textContent = 'Cancelado con edición histórica habilitada';
+        modeLabel.className = 'badge text-bg-danger';
+      } else {
+        modeLabel.textContent = 'Inventario cancelado';
+        modeLabel.className = 'badge text-bg-danger';
+      }
     } else {
       modeLabel.textContent = CURRENT_STATUS || 'Inventario';
       modeLabel.className = 'badge text-bg-secondary';
     }
 
-    if (isHistorical && historicalUnlockEnabled) {
-      activeInventoryLabel.textContent = CURRENT_INVENTORY_ID ? `ID: ${CURRENT_INVENTORY_ID} · edición habilitada` : '';
-    } else {
-      activeInventoryLabel.textContent = CURRENT_INVENTORY_ID ? `ID: ${CURRENT_INVENTORY_ID}` : '';
-    }
-
-    setHistoricalViewMode();
+    activeInventoryLabel.textContent = CURRENT_INVENTORY_ID
+      ? `ID: ${CURRENT_INVENTORY_ID}${historicalUnlocked ? ' · edición histórica habilitada' : historicalSelected ? ' · solo lectura' : ''}`
+      : '';
   }
 
   function updateTotals() {
@@ -482,13 +453,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function openInventory(dateStr, inventoryId) {
+    const shouldResetHistoricalEdit = dateStr !== SELECTED_DATE || inventoryId !== CURRENT_INVENTORY_ID;
+    if (shouldResetHistoricalEdit) {
+      resetHistoricalEditMode();
+    }
+
     const record = await loadInventoryById(dateStr, inventoryId);
     if (!record || !record.inventoryId) {
       Swal.fire('No encontrado', 'No se pudo cargar el inventario seleccionado.', 'error');
       return;
     }
 
-    resetHistoricalUnlock();
     SELECTED_DATE = dateStr;
     CURRENT_INVENTORY_ID = record.inventoryId;
     CURRENT_STATUS = record.status || 'draft';
@@ -866,6 +841,75 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnScan.addEventListener('click', startScanner);
   btnScanStop.addEventListener('click', stopScanner);
 
+  if (btnEdit) {
+    btnEdit.addEventListener('click', async () => {
+      if (!CURRENT_INVENTORY_ID || !isPastHistoricalDateSelected()) {
+        await Swal.fire(
+          'No aplica',
+          'Selecciona primero un inventario de una fecha anterior para habilitar la edición.',
+          'info'
+        );
+        return;
+      }
+
+      if (historicalEditEnabled) {
+        historicalEditEnabled = false;
+        setControlsState();
+
+        await Swal.fire(
+          'Bloqueado',
+          'La edición histórica fue bloqueada nuevamente.',
+          'success'
+        );
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Habilitar edición histórica',
+        text: 'Ingresa la contraseña para editar este inventario.',
+        input: 'password',
+        inputLabel: 'Contraseña',
+        inputPlaceholder: '••••••••',
+        inputAttributes: {
+          autocapitalize: 'off',
+          autocorrect: 'off'
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Editar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: async (password) => {
+          if (!password) {
+            Swal.showValidationMessage('Debes ingresar la contraseña.');
+            return false;
+          }
+
+          try {
+            const ok = await validateHistoricalPassword(password);
+            if (!ok) {
+              Swal.showValidationMessage('Contraseña incorrecta.');
+              return false;
+            }
+            return true;
+          } catch (err) {
+            Swal.showValidationMessage(String(err.message || err));
+            return false;
+          }
+        }
+      });
+
+      if (!result.isConfirmed) return;
+
+      historicalEditEnabled = true;
+      setControlsState();
+
+      await Swal.fire(
+        'Edición habilitada',
+        'Ya puedes modificar este inventario histórico hasta que vuelvas a bloquearlo o cambies de inventario.',
+        'success'
+      );
+    });
+  }
+
   btnNew.addEventListener('click', async () => {
     if (CURRENT_INVENTORY_ID && CURRENT_STATUS === 'draft' && isEditable() && (body.rows.length > 0 || proveedorInput.value.trim() || ubicacionInput.value.trim())) {
       const res = await Swal.fire({
@@ -879,7 +923,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const created = await createInventoryDraft(getTodayString());
-    resetHistoricalUnlock();
+    resetHistoricalEditMode();
     SELECTED_DATE = getTodayString();
     CURRENT_INVENTORY_ID = created.inventoryId;
     CURRENT_STATUS = 'draft';
@@ -903,10 +947,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (isHistoricalDateSelected()) {
-      await saveInventoryRecord(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload(), {
-        status: CURRENT_STATUS || 'draft'
-      });
+    const payload = getPayload();
+
+    if (canUnlockHistoricalEdit() && historicalEditEnabled) {
+      await saveInventoryWithStatus(SELECTED_DATE, CURRENT_INVENTORY_ID, payload, CURRENT_STATUS || 'draft');
       await refreshHistoryDates();
       await renderInventoriesList();
       showMessage('Cambios históricos guardados correctamente.');
@@ -914,7 +958,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    await saveInventoryDraft(SELECTED_DATE, CURRENT_INVENTORY_ID, getPayload());
+    await saveInventoryDraft(SELECTED_DATE, CURRENT_INVENTORY_ID, payload);
     await refreshHistoryDates();
     await renderInventoriesList();
     showMessage('Avance guardado correctamente.');
@@ -1111,10 +1155,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       defaultDate: SELECTED_DATE,
       locale: 'es',
       onChange: async (_sel, dateStr) => {
-        resetHistoricalUnlock();
         SELECTED_DATE = dateStr || getTodayString();
         CURRENT_INVENTORY_ID = null;
         CURRENT_STATUS = null;
+        resetHistoricalEditMode();
         clearEditor();
         setControlsState();
         await renderInventoriesList();
@@ -1128,71 +1172,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (btnToggleHistLock) {
-    btnToggleHistLock.addEventListener('click', async () => {
-      if (!isPastHistoricalDateSelected()) {
-        await Swal.fire('No aplica', 'Este botón solo se usa cuando estás viendo una fecha anterior.', 'info');
-        return;
-      }
-
-      if (!CURRENT_INVENTORY_ID) {
-        await Swal.fire('Selecciona un inventario', 'Primero abre un inventario histórico para poder desbloquearlo.', 'info');
-        return;
-      }
-
-      if (historicalUnlockEnabled) {
-        historicalUnlockEnabled = false;
-        setControlsState();
-        await Swal.fire('Bloqueado', 'Los controles del inventario histórico fueron bloqueados nuevamente.', 'success');
-        return;
-      }
-
-      const result = await Swal.fire({
-        title: 'Desbloquear inventario histórico',
-        text: 'Ingresa la misma contraseña usada en TRLista para habilitar edición en esta fecha.',
-        input: 'password',
-        inputLabel: 'Contraseña',
-        inputPlaceholder: '••••••••',
-        inputAttributes: {
-          autocapitalize: 'off',
-          autocorrect: 'off'
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Desbloquear',
-        cancelButtonText: 'Cancelar',
-        preConfirm: async (password) => {
-          if (!password) {
-            Swal.showValidationMessage('Debes ingresar la contraseña.');
-            return false;
-          }
-
-          try {
-            const ok = await validateHistoricalPassword(password);
-            if (!ok) {
-              Swal.showValidationMessage('Contraseña incorrecta.');
-              return false;
-            }
-            return true;
-          } catch (err) {
-            Swal.showValidationMessage(String(err.message || err));
-            return false;
-          }
-        }
-      });
-
-      if (result.isConfirmed) {
-        historicalUnlockEnabled = true;
-        setControlsState();
-        await Swal.fire('Desbloqueado', 'Ya puedes editar este inventario histórico hasta que vuelvas a bloquearlo.', 'success');
-      }
-    });
-  }
-
   btnToday.addEventListener('click', async () => {
-    resetHistoricalUnlock();
     SELECTED_DATE = getTodayString();
     CURRENT_INVENTORY_ID = null;
     CURRENT_STATUS = null;
+    resetHistoricalEditMode();
     clearEditor();
     setControlsState();
     if (fpHistory) fpHistory.setDate(SELECTED_DATE, true);

@@ -138,49 +138,80 @@ async function createInventoryDraft(dateStr) {
   return { inventoryId, ...payload };
 }
 
-async function saveInventoryRecord(dateStr, inventoryId, payload = {}, options = {}) {
+async function saveInventoryDraft(dateStr, inventoryId, payload) {
   const { fb, db } = await getDB();
   const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
-  const status = String(options.status || 'draft').trim() || 'draft';
 
   await parentRef.set({
     date: dateStr,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
-  const docPayload = {
+  await parentRef.collection('inventarios').doc(inventoryId).set({
+    ...payload,
+    inventoryId,
+    date: dateStr,
+    status: 'draft',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+
+async function saveInventoryWithStatus(dateStr, inventoryId, payload, currentStatus = 'draft') {
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+  const allowedStatuses = new Set(['draft', 'completed', 'cancelled']);
+  const status = allowedStatuses.has(currentStatus) ? currentStatus : 'draft';
+
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('inventarios').doc(inventoryId).set({
     ...payload,
     inventoryId,
     date: dateStr,
     status,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
-  };
-
-  if (Object.prototype.hasOwnProperty.call(options, 'completedAt')) {
-    docPayload.completedAt = options.completedAt;
-  }
-
-  await parentRef.collection('inventarios').doc(inventoryId).set(docPayload, { merge: true });
-}
-
-async function saveInventoryDraft(dateStr, inventoryId, payload) {
-  await saveInventoryRecord(dateStr, inventoryId, payload, {
-    status: 'draft'
-  });
+  }, { merge: true });
 }
 
 async function finalizeInventory(dateStr, inventoryId, payload) {
-  const { fb } = await getDB();
-  await saveInventoryRecord(dateStr, inventoryId, payload, {
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('inventarios').doc(inventoryId).set({
+    ...payload,
+    inventoryId,
+    date: dateStr,
     status: 'completed',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp(),
     completedAt: fb.firestore.FieldValue.serverTimestamp()
-  });
+  }, { merge: true });
 }
 
 async function cancelInventory(dateStr, inventoryId, payload = {}) {
-  await saveInventoryRecord(dateStr, inventoryId, payload, {
-    status: 'cancelled'
-  });
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('inventarios').doc(inventoryId).set({
+    ...payload,
+    inventoryId,
+    date: dateStr,
+    status: 'cancelled',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
 }
 
 async function loadInventoryById(dateStr, inventoryId) {
