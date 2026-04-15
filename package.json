@@ -1,7 +1,7 @@
 {
-  "name": "trinventario-firebase-v2",
+  "name": "trrecepcion-firebase-v2",
   "private": true,
   "type": "module",
   "version": "2.0.0",
-  "description": "TRInventario con Firestore usando inventarios por fecha + inventarios independientes, sin sistema de hojas."
+  "description": "TRRecepción con Firestore usando recepciones por fecha + edición protegida para hoy e histórico."
 }
