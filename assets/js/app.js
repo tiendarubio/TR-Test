@@ -1,4 +1,3 @@
-
 let CATALOGO_CACHE = null;
 let PROVIDERS_CACHE = null;
 let __FIREBASE_READY = null;
@@ -92,13 +91,13 @@ async function getDB() {
 
 async function ensureDateDocument(dateStr) {
   const { fb, db } = await getDB();
-  await db.collection('tr_recepciones_fechas').doc(dateStr).set({
+  await db.collection('tr_inventario_fechas').doc(dateStr).set({
     date: dateStr,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
 
-function generateReceptionId() {
+function generateInventoryId() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const y = now.getFullYear();
@@ -108,80 +107,88 @@ function generateReceptionId() {
   const mm = pad(now.getMinutes());
   const ss = pad(now.getSeconds());
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `RX-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
+  return `INV-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
 }
 
-async function createReceptionDraft(dateStr) {
+async function createInventoryDraft(dateStr) {
   const { fb, db } = await getDB();
-  const receptionId = generateReceptionId();
-  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
-  const ref = parentRef.collection('recepciones').doc(receptionId);
+  const inventoryId = generateInventoryId();
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+  const ref = parentRef.collection('inventarios').doc(inventoryId);
 
   const payload = {
-    receptionId,
+    inventoryId,
     date: dateStr,
     status: 'draft',
     proveedor: '',
-    numeroCreditoFiscal: '',
+    ubicacion: '',
     tienda: 'AVENIDA MORAZÁN',
     items: [],
     totales: {
       lineas: 0,
-      cantidad_total: 0,
-      total_sin_iva: 0,
-      total_con_iva: 0
+      cantidad_total: 0
     },
     createdAt: fb.firestore.FieldValue.serverTimestamp(),
     updatedAt: fb.firestore.FieldValue.serverTimestamp(),
     completedAt: null
   };
 
-  await parentRef.set({
-    date: dateStr,
-    updatedAt: fb.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-
+  await ensureDateDocument(dateStr);
   await ref.set(payload);
-  return { receptionId, ...payload };
+  return { inventoryId, ...payload };
 }
 
-async function saveReceptionDraft(dateStr, receptionId, payload) {
-  return saveReceptionWithStatus(dateStr, receptionId, payload, 'draft');
-}
-
-async function saveReceptionWithStatus(dateStr, receptionId, payload, status = 'draft') {
+async function saveInventoryDraft(dateStr, inventoryId, payload) {
   const { fb, db } = await getDB();
-  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+
   await parentRef.set({
     date: dateStr,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
-  const normalizedStatus = ['draft', 'completed', 'cancelled'].includes(status) ? status : 'draft';
-
-  await parentRef.collection('recepciones').doc(receptionId).set({
+  await parentRef.collection('inventarios').doc(inventoryId).set({
     ...payload,
-    receptionId,
+    inventoryId,
     date: dateStr,
-    status: normalizedStatus,
-    updatedAt: fb.firestore.FieldValue.serverTimestamp(),
-    completedAt: normalizedStatus === 'completed'
-      ? fb.firestore.FieldValue.serverTimestamp()
-      : null
+    status: 'draft',
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
 
-async function finalizeReception(dateStr, receptionId, payload) {
+
+async function saveInventoryWithStatus(dateStr, inventoryId, payload, currentStatus = 'draft') {
   const { fb, db } = await getDB();
-  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+  const allowedStatuses = new Set(['draft', 'completed', 'cancelled']);
+  const status = allowedStatuses.has(currentStatus) ? currentStatus : 'draft';
+
   await parentRef.set({
     date: dateStr,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
-  await parentRef.collection('recepciones').doc(receptionId).set({
+  await parentRef.collection('inventarios').doc(inventoryId).set({
     ...payload,
-    receptionId,
+    inventoryId,
+    date: dateStr,
+    status,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function finalizeInventory(dateStr, inventoryId, payload) {
+  const { fb, db } = await getDB();
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+
+  await parentRef.set({
+    date: dateStr,
+    updatedAt: fb.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await parentRef.collection('inventarios').doc(inventoryId).set({
+    ...payload,
+    inventoryId,
     date: dateStr,
     status: 'completed',
     updatedAt: fb.firestore.FieldValue.serverTimestamp(),
@@ -189,49 +196,56 @@ async function finalizeReception(dateStr, receptionId, payload) {
   }, { merge: true });
 }
 
-async function cancelReception(dateStr, receptionId, payload = {}) {
+async function cancelInventory(dateStr, inventoryId, payload = {}) {
   const { fb, db } = await getDB();
-  const parentRef = db.collection('tr_recepciones_fechas').doc(dateStr);
+  const parentRef = db.collection('tr_inventario_fechas').doc(dateStr);
+
   await parentRef.set({
     date: dateStr,
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
-  await parentRef.collection('recepciones').doc(receptionId).set({
+  await parentRef.collection('inventarios').doc(inventoryId).set({
     ...payload,
-    receptionId,
+    inventoryId,
     date: dateStr,
     status: 'cancelled',
     updatedAt: fb.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
 
-async function loadReceptionById(dateStr, receptionId) {
-  if (!dateStr || !receptionId) return {};
+async function loadInventoryById(dateStr, inventoryId) {
+  if (!dateStr || !inventoryId) return {};
   try {
     const { db } = await getDB();
-    const snap = await db.collection('tr_recepciones_fechas').doc(dateStr).collection('recepciones').doc(receptionId).get();
+    const snap = await db
+      .collection('tr_inventario_fechas')
+      .doc(dateStr)
+      .collection('inventarios')
+      .doc(inventoryId)
+      .get();
+
     return snap.exists ? (snap.data() || {}) : {};
   } catch (error) {
-    console.error('Error al cargar recepción:', error);
+    console.error('Error al cargar inventario:', error);
     return {};
   }
 }
 
-async function listReceptionsByDate(dateStr) {
+async function listInventoriesByDate(dateStr) {
   if (!dateStr) return [];
   try {
     const { db } = await getDB();
     const snap = await db
-      .collection('tr_recepciones_fechas')
+      .collection('tr_inventario_fechas')
       .doc(dateStr)
-      .collection('recepciones')
+      .collection('inventarios')
       .orderBy('updatedAt', 'desc')
       .get();
 
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error al listar recepciones por fecha:', error);
+    console.error('Error al listar inventarios por fecha:', error);
     return [];
   }
 }
@@ -239,7 +253,7 @@ async function listReceptionsByDate(dateStr) {
 async function getHistoryDates() {
   try {
     const { db } = await getDB();
-    const snap = await db.collection('tr_recepciones_fechas').get();
+    const snap = await db.collection('tr_inventario_fechas').get();
     return snap.docs.map((d) => d.id).filter(Boolean).sort();
   } catch (error) {
     console.error('Error al listar fechas del historial:', error);
