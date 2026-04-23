@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>TRLista</title>
   <link rel="icon" type="image/png" href="assets/img/trlogo.png">
 
@@ -136,7 +136,7 @@
                   Checklist de productos
                 </h6>
                 <div class="workspace-status-inline">
-                  <span class="badge bg-secondary workspace-status-badge" id="lastSaved">
+                  <span class="workspace-status-badge" id="lastSaved">
                     <i class="fa-solid fa-clock-rotate-left me-1"></i>
                     Aún no guardado.
                   </span>
@@ -145,47 +145,43 @@
 
               <!-- Toolbar -->
               <div class="btn-toolbar gap-2 checklist-actions-toolbar" role="toolbar" aria-label="Toolbar">
-                <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm d-none" disabled aria-disabled="true">
+                <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm d-none" disabled aria-disabled="true" title="Desbloquear edición">
                   <i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i>
-                  <span>Desbloquear edición</span>
+                  <span>Desbloq.</span>
                 </button>
-                <button type="button" id="btnHistoricalSelectMode" class="btn btn-outline-info btn-sm d-none" disabled aria-disabled="true">
-                  <i class="fa-regular fa-square-check" aria-hidden="true"></i>
-                  <span>Seleccionar productos</span>
-                </button>
-                <button type="button" id="btnMergeSelectedToToday" class="btn btn-outline-primary btn-sm d-none" disabled aria-disabled="true">
+                <button type="button" id="btnMergeSelectedToToday" class="btn btn-outline-primary btn-sm d-none" disabled aria-disabled="true" title="Enviar seleccionados a hoy">
                   <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
-                  <span>Enviar a hoy</span>
+                  <span>Enviar hoy</span>
                 </button>
-                <button type="button" id="btnToggleRequisition" class="btn btn-outline-secondary btn-sm">
+                <button type="button" id="btnToggleRequisition" class="btn btn-outline-secondary btn-sm" title="Estado de requisición">
                   <i class="fa-regular fa-flag" aria-hidden="true"></i>
-                  <span>Requisición pendiente</span>
+                  <span>Req.</span>
                 </button>
-                <button id="btnSave" class="btn btn-primary btn-sm">
+                <button id="btnSave" class="btn btn-primary btn-sm" title="Guardar checklist">
                   <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
                   <span>Guardar</span>
                 </button>
-                <button id="btnPDF" class="btn btn-outline-danger btn-sm">
+                <button id="btnPDF" class="btn btn-outline-danger btn-sm" title="Descargar PDF">
                   <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
                   <span>PDF</span>
                 </button>
-                <button id="btnExcel" class="btn btn-outline-success btn-sm">
+                <button id="btnExcel" class="btn btn-outline-success btn-sm" title="Descargar Excel">
                   <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
                   <span>Excel</span>
                 </button>
                 <button id="btnReviewSelected" class="btn btn-outline-primary btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como revisados">
                   <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
-                  <span>Revisar seleccionados</span>
+                  <span>Rev. sel.</span>
                 </button>
                 <button id="btnDispatchSelected" class="btn btn-outline-success btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como despachados">
                   <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
-                  <span>Despachar seleccionados</span>
+                  <span>Desp. sel.</span>
                 </button>
-                <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" disabled aria-disabled="true">
+                <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" disabled aria-disabled="true" title="Eliminar seleccionados">
                   <i class="fa-solid fa-trash-can-list" aria-hidden="true"></i>
-                  <span>Eliminar seleccionados</span>
+                  <span>Elim. sel.</span>
                 </button>
-                <button id="btnClear" class="btn btn-outline-secondary btn-sm">
+                <button id="btnClear" class="btn btn-outline-secondary btn-sm" title="Limpiar checklist">
                   <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                   <span>Limpiar</span>
                 </button>
@@ -258,26 +254,18 @@
                     <th class="text-center text-nowrap bulk-select-col sticky-col-select">
                       <div class="d-inline-flex align-items-center justify-content-center gap-2 bulk-select-header-wrap">
                         <input id="chkSelectAllRows" class="form-check-input mt-0" type="checkbox" aria-label="Seleccionar todas las filas de la tabla">
-                        <span class="d-none d-md-inline">Seleccionar</span>
+                        <span class="d-none d-md-inline">Sel.</span>
                       </div>
                     </th>
                     <th class="text-center" style="width: 48px;">#</th>
                     <th>Cód. barras</th>
                     <th>Nombre</th>
-                    <th class="text-nowrap">Cód. inventario</th>
+                    <th class="text-nowrap">Cód. inv.</th>
                     <th id="thBodega" style="cursor:pointer;">
                       Bodega <i class="fa-solid fa-arrow-up-wide-short ms-1 text-muted"></i>
                     </th>
                     <th class="text-center text-nowrap">Cant.</th>
-                    <th class="text-center text-nowrap">Revisado</th>
-                    <th class="text-center text-nowrap">Despachado</th>
                     <th class="text-center text-nowrap">Acciones</th>
-                    <th id="thHistorySelect" class="text-center text-nowrap d-none history-select-col">
-                      <div class="d-inline-flex align-items-center gap-2 history-select-all-wrap">
-                        <input id="chkSelectAllHistory" class="form-check-input mt-0" type="checkbox" aria-label="Seleccionar todos los productos históricos">
-                        <span>Seleccionar</span>
-                      </div>
-                    </th>
                   </tr>
                 </thead>
                 <tbody id="chkBody"></tbody>
@@ -298,6 +286,8 @@
       <div id="appLoadingText" class="app-loading-text">Cargando checklist...</div>
     </div>
   </div>
+
+  <div id="qtyPreviewBubble" class="qty-preview-bubble d-none" aria-hidden="true"></div>
 
   <!-- Bootstrap + SweetAlert -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

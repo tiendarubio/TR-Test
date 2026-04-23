@@ -22,15 +22,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const chkSelectAllRows = $('chkSelectAllRows');
   const appLoadingOverlay = $('appLoadingOverlay');
   const appLoadingText = $('appLoadingText');
+  const qtyPreviewBubble = $('qtyPreviewBubble');
 
   // Histórico
   const histDateInput = $('histDateInput');
   const btnHistToday = $('btnHistToday');
   const btnToggleHistLock = $('btnToggleHistLock');
-  const btnHistoricalSelectMode = $('btnHistoricalSelectMode');
   const btnMergeSelectedToToday = $('btnMergeSelectedToToday');
-  const chkSelectAllHistory = $('chkSelectAllHistory');
-  const thHistorySelect = $('thHistorySelect');
   const btnHistCalendar = $('btnHistCalendar');
   const histCalendarPanel = $('histCalendarPanel');
 
@@ -55,7 +53,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
   let protectedVersionUnlockEnabled = false;
-  let historicalSelectionMode = false;
   let requisitionDone = false;
   let requisitionDoneAt = null;
   let lastCommittedVersionValue = versionSelect?.value || 'base';
@@ -68,10 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     inventoryCode: 4,
     warehouse: 5,
     quantity: 6,
-    reviewed: 7,
-    dispatched: 8,
-    actions: 9,
-    historicalSelect: 10
+    actions: 7
   };
 
 
@@ -114,6 +108,68 @@ document.addEventListener('DOMContentLoaded', async () => {
       <span>${escapeHtml(label)}</span>
     `;
   }
+
+
+  function getReviewButton(tr) {
+    return tr?.querySelector('.btn-toggle-review') || null;
+  }
+
+  function getDispatchButton(tr) {
+    return tr?.querySelector('.btn-toggle-dispatch') || null;
+  }
+
+  function getMoveButton(tr) {
+    return tr?.querySelector('.btn-move-list') || null;
+  }
+
+  function getDeleteButton(tr) {
+    return tr?.querySelector('.btn-delete-row') || null;
+  }
+
+  function updateQtyPreview(input) {
+    if (!qtyPreviewBubble) return;
+
+    const value = String(input?.value || '').trim();
+    const shouldShow = !!input && document.activeElement === input && value.length > 10;
+
+    if (!shouldShow) {
+      qtyPreviewBubble.classList.add('d-none');
+      qtyPreviewBubble.setAttribute('aria-hidden', 'true');
+      return;
+    }
+
+    qtyPreviewBubble.textContent = value;
+    const rect = input.getBoundingClientRect();
+    qtyPreviewBubble.classList.remove('d-none');
+    qtyPreviewBubble.setAttribute('aria-hidden', 'false');
+    qtyPreviewBubble.style.left = Math.max(12, Math.min(window.innerWidth - qtyPreviewBubble.offsetWidth - 12, rect.left)) + 'px';
+    qtyPreviewBubble.style.top = Math.min(window.innerHeight - 16, rect.bottom + 10) + 'px';
+  }
+
+  function bindQtyPreview(input) {
+    if (!input) return;
+
+    const sync = () => {
+      input.setAttribute('title', input.value || '');
+      updateQtyPreview(input);
+    };
+
+    input.addEventListener('focus', sync);
+    input.addEventListener('click', sync);
+    input.addEventListener('input', sync);
+    input.addEventListener('blur', () => updateQtyPreview(null));
+    sync();
+  }
+
+  window.addEventListener('resize', () => {
+    const active = document.activeElement;
+    updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
+  });
+
+  document.addEventListener('scroll', () => {
+    const active = document.activeElement;
+    updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
+  }, true);
 
 
   function getDocIdForCurrentList() {
@@ -341,6 +397,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+
+  function clearHistoricalSelection() {
+    clearBulkSelection();
+    updateHistoricalSelectionUI();
+  }
+
   function updateBulkSelectionUI() {
     const checkboxes = getBulkSelectionCheckboxes();
     const selectableCheckboxes = checkboxes.filter(cb => !cb.disabled);
@@ -349,7 +411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const editingLocked = isEditingLocked();
 
     if (chkSelectAllRows) {
-      chkSelectAllRows.disabled = !hasRows || editingLocked;
+      chkSelectAllRows.disabled = !hasRows;
       chkSelectAllRows.setAttribute('aria-disabled', String(chkSelectAllRows.disabled));
       chkSelectAllRows.checked = !!selectableCheckboxes.length && selectedCount === selectableCheckboxes.length;
       chkSelectAllRows.indeterminate = selectedCount > 0 && selectedCount < selectableCheckboxes.length;
@@ -357,8 +419,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnReviewSelected) {
       const label = selectedCount > 0
-        ? 'Revisar seleccionados (' + selectedCount + ')'
-        : 'Revisar seleccionados';
+        ? ('Rev. sel. (' + selectedCount + ')')
+        : 'Rev. sel.';
 
       btnReviewSelected.disabled = editingLocked || selectedCount === 0;
       btnReviewSelected.setAttribute('aria-disabled', String(btnReviewSelected.disabled));
@@ -367,8 +429,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnDispatchSelected) {
       const label = selectedCount > 0
-        ? 'Despachar seleccionados (' + selectedCount + ')'
-        : 'Despachar seleccionados';
+        ? ('Desp. sel. (' + selectedCount + ')')
+        : 'Desp. sel.';
 
       btnDispatchSelected.disabled = editingLocked || selectedCount === 0;
       btnDispatchSelected.setAttribute('aria-disabled', String(btnDispatchSelected.disabled));
@@ -377,14 +439,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnDeleteSelected) {
       const label = selectedCount > 0
-        ? 'Eliminar seleccionados (' + selectedCount + ')'
-        : 'Eliminar seleccionados';
+        ? ('Elim. sel. (' + selectedCount + ')')
+        : 'Elim. sel.';
 
       btnDeleteSelected.disabled = editingLocked || selectedCount === 0;
       btnDeleteSelected.setAttribute('aria-disabled', String(btnDeleteSelected.disabled));
       setToolbarButtonContent(btnDeleteSelected, 'fa-solid fa-trash-can-list', label);
     }
+
+    updateHistoricalSelectionUI();
   }
+
 
   async function markSelectedRowsWithState(kind) {
     if (isEditingLocked()) {
@@ -402,26 +467,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const columnIndex = kind === 'reviewed' ? COL_INDEX.reviewed : COL_INDEX.dispatched;
     const actionLabel = kind === 'reviewed' ? 'revisadas' : 'despachadas';
 
     let changedCount = 0;
 
     selectedRows.forEach(tr => {
-      const btn = tr.cells[columnIndex]?.querySelector('button');
+      const btn = kind === 'reviewed' ? getReviewButton(tr) : getDispatchButton(tr);
       if (!btn || btn.classList.contains('on')) return;
       setToggleState(btn, true);
       changedCount += 1;
     });
 
+    clearBulkSelection();
     updateBulkSelectionUI();
 
     await Swal.fire(
-      'Acción aplicada',
-      changedCount > 0
-        ? ('Se marcaron ' + changedCount + ' fila(s) como ' + actionLabel + '. Recuerda guardar para persistir el cambio.')
-        : ('Las filas seleccionadas ya estaban marcadas como ' + actionLabel + '.'),
-      changedCount > 0 ? 'success' : 'info'
+      changedCount ? 'Actualizado' : 'Sin cambios',
+      changedCount
+        ? ('Se marcaron ' + changedCount + ' fila(s) como ' + actionLabel + '.')
+        : ('Las filas seleccionadas ya estaban ' + actionLabel + '.'),
+      changedCount ? 'success' : 'info'
     );
   }
 
@@ -455,7 +520,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectedRows.forEach(tr => tr.remove());
     renumber();
     updateBulkSelectionUI();
-    updateHistorySelectAllState();
 
     await Swal.fire(
       'Filas eliminadas',
@@ -466,59 +530,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function isHistoricalSelectionAvailable() {
     return isPastHistoricalDateSelected();
-  }
-
-  function getHistoricalSelectionCells() {
-    return [...body.querySelectorAll('.history-select-cell')];
-  }
-
-  function getHistoricalSelectionCheckboxes() {
-    return [...body.querySelectorAll('.row-history-select-checkbox')];
-  }
-
-  function getSelectedHistoricalRows() {
-    return getHistoricalSelectionCheckboxes()
-      .filter(cb => cb.checked)
-      .map(cb => cb.closest('tr'))
-      .filter(Boolean);
-  }
-
-  function clearHistoricalSelection(options = {}) {
-    const { keepMode = false } = options || {};
-
-    getHistoricalSelectionCheckboxes().forEach(cb => {
-      cb.checked = false;
-    });
-
-    if (chkSelectAllHistory) {
-      chkSelectAllHistory.checked = false;
-      chkSelectAllHistory.indeterminate = false;
-    }
-
-    if (!keepMode) {
-      historicalSelectionMode = false;
-    }
-  }
-
-  function updateHistorySelectAllState() {
-    if (!chkSelectAllHistory) return;
-
-    const canSelect = historicalSelectionMode && isHistoricalSelectionAvailable();
-    const checkboxes = getHistoricalSelectionCheckboxes();
-    const enabledCheckboxes = checkboxes.filter(cb => !cb.disabled);
-    const checkedCount = enabledCheckboxes.filter(cb => cb.checked).length;
-
-    chkSelectAllHistory.disabled = !canSelect || !enabledCheckboxes.length;
-    chkSelectAllHistory.setAttribute('aria-disabled', String(chkSelectAllHistory.disabled));
-    chkSelectAllHistory.checked = !!enabledCheckboxes.length && checkedCount === enabledCheckboxes.length;
-    chkSelectAllHistory.indeterminate = checkedCount > 0 && checkedCount < enabledCheckboxes.length;
-
-    if (btnMergeSelectedToToday) {
-      const shouldShow = canSelect;
-      btnMergeSelectedToToday.classList.toggle('d-none', !shouldShow);
-      btnMergeSelectedToToday.disabled = !shouldShow || checkedCount === 0;
-      btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
-    }
   }
 
   if (chkSelectAllRows) {
@@ -550,54 +561,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateHistoricalSelectionUI() {
-    const canSelectFromThisView = isHistoricalSelectionAvailable();
-    const showSelection = canSelectFromThisView && historicalSelectionMode;
+    const canMerge = isHistoricalSelectionAvailable();
 
-    if (!canSelectFromThisView && historicalSelectionMode) {
-      clearHistoricalSelection();
-      historicalSelectionMode = false;
+    if (btnMergeSelectedToToday) {
+      btnMergeSelectedToToday.classList.toggle('d-none', !canMerge);
+
+      const selectedCount = getSelectedTableRows().length;
+      btnMergeSelectedToToday.disabled = !canMerge || selectedCount === 0;
+      btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
+      btnMergeSelectedToToday.title = canMerge
+        ? 'Enviar productos seleccionados a la lista de hoy'
+        : '';
     }
-
-    if (btnHistoricalSelectMode) {
-      btnHistoricalSelectMode.classList.toggle('d-none', !canSelectFromThisView);
-      btnHistoricalSelectMode.disabled = !canSelectFromThisView;
-      btnHistoricalSelectMode.setAttribute('aria-disabled', String(btnHistoricalSelectMode.disabled));
-      btnHistoricalSelectMode.classList.toggle('btn-outline-info', !showSelection);
-      btnHistoricalSelectMode.classList.toggle('btn-info', showSelection);
-      btnHistoricalSelectMode.classList.toggle('text-white', showSelection);
-      setToolbarButtonContent(
-        btnHistoricalSelectMode,
-        showSelection ? 'fa-solid fa-check-double' : 'fa-regular fa-square-check',
-        showSelection ? 'Selección activa' : 'Seleccionar productos'
-      );
-    }
-
-    if (thHistorySelect) {
-      thHistorySelect.classList.toggle('d-none', !showSelection);
-    }
-
-    getHistoricalSelectionCells().forEach(cell => {
-      cell.classList.toggle('d-none', !showSelection);
-      const checkbox = cell.querySelector('.row-history-select-checkbox');
-      if (checkbox) {
-        checkbox.disabled = !showSelection;
-        checkbox.setAttribute('aria-disabled', String(checkbox.disabled));
-        if (!showSelection) checkbox.checked = false;
-      }
-    });
-
-    updateHistorySelectAllState();
   }
 
+
   function buildChecklistItemFromRow(tr) {
+    const reviewBtn = getReviewButton(tr);
+    const dispatchBtn = getDispatchButton(tr);
+
     return {
       codigo_barras: tr.cells[COL_INDEX.barcode].innerText.trim(),
       nombre: tr.cells[COL_INDEX.name].innerText.trim(),
       codigo_inventario: tr.cells[COL_INDEX.inventoryCode].innerText.trim(),
       bodega: tr.cells[COL_INDEX.warehouse].innerText.trim(),
       cantidad: (tr.querySelector('.qty')?.value || '').trim(),
-      revisado: tr.cells[COL_INDEX.reviewed].querySelector('button').classList.contains('on'),
-      despachado: tr.cells[COL_INDEX.dispatched].querySelector('button').classList.contains('on')
+      revisado: reviewBtn ? reviewBtn.classList.contains('on') : false,
+      despachado: dispatchBtn ? dispatchBtn.classList.contains('on') : false
     };
   }
 
@@ -636,7 +626,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const selectedRows = getSelectedHistoricalRows();
+      const selectedRows = getSelectedTableRows();
       if (!selectedRows.length) {
         await Swal.fire(
           'Sin selección',
@@ -743,8 +733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (!addedItems.length) {
-        updateHistorySelectAllState();
-        await Swal.fire(
+            await Swal.fire(
           'Sin cambios',
           'Todos los productos seleccionados ya existen en la lista de hoy elegida. No se agregó nada.',
           'info'
@@ -765,8 +754,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       rememberHistoryDate(toDoc, today);
       await refreshHistoryPicker();
 
-      clearHistoricalSelection({ keepMode: true });
-      updateHistoricalSelectionUI();
+      clearBulkSelection();
+      updateBulkSelectionUI();
 
       await Swal.fire({
         title: 'Productos enviados',
@@ -811,16 +800,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!shouldShow) {
       btnToggleHistLock.classList.add('btn-outline-secondary');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloq.');
+      btnToggleHistLock.title = 'Desbloquear edición';
       return;
     }
 
     if (isUnlocked) {
       btnToggleHistLock.classList.add('btn-outline-success');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-lock', 'Bloquear edición');
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-lock', 'Bloquear');
+      btnToggleHistLock.title = 'Bloquear edición';
     } else {
       btnToggleHistLock.classList.add('btn-outline-warning');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloq.');
+      btnToggleHistLock.title = 'Desbloquear edición';
     }
   }
 
@@ -834,13 +826,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (requisitionDone) {
       btnToggleRequisition.classList.add('btn-success', 'text-white');
-      setToolbarButtonContent(btnToggleRequisition, 'fa-solid fa-flag', 'Requisición hecha');
+      setToolbarButtonContent(btnToggleRequisition, 'fa-solid fa-flag', 'Req. hecha');
       btnToggleRequisition.title = requisitionDoneAt
         ? ('Marcada como hecha: ' + formatSV(requisitionDoneAt))
         : 'Marcada como requisición hecha.';
     } else {
       btnToggleRequisition.classList.add('btn-outline-secondary');
-      setToolbarButtonContent(btnToggleRequisition, 'fa-regular fa-flag', 'Requisición pendiente');
+      setToolbarButtonContent(btnToggleRequisition, 'fa-regular fa-flag', 'Req. pend.');
       btnToggleRequisition.title = 'Marcar esta lista como requisición hecha.';
     }
   }
@@ -890,11 +882,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
-      const btnRev = tr.cells[COL_INDEX.reviewed]?.querySelector('button');
-      const btnDes = tr.cells[COL_INDEX.dispatched]?.querySelector('button');
-      const btnMove = tr.querySelector('.btn-move-list');
-      const btnDel = tr.querySelector('.btn-delete-row');
-      const rowSelect = tr.querySelector('.row-history-select-checkbox');
+      const btnRev = getReviewButton(tr);
+      const btnDes = getDispatchButton(tr);
+      const btnMove = getMoveButton(tr);
+      const btnDel = getDeleteButton(tr);
       const bulkSelect = tr.querySelector('.row-bulk-select-checkbox');
 
       if (qty) qty.disabled = disableEditing;
@@ -903,13 +894,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (btnMove) btnMove.disabled = disableEditing;
       if (btnDel) btnDel.disabled = disableEditing;
       if (bulkSelect) {
-        bulkSelect.disabled = disableEditing;
-        bulkSelect.setAttribute('aria-disabled', String(bulkSelect.disabled));
-        if (disableEditing) bulkSelect.checked = false;
-      }
-      if (rowSelect) {
-        rowSelect.disabled = !(historicalSelectionMode && isPastHistoricalDateSelected());
-        rowSelect.setAttribute('aria-disabled', String(rowSelect.disabled));
+        bulkSelect.disabled = false;
+        bulkSelect.setAttribute('aria-disabled', 'false');
       }
     });
 
@@ -918,6 +904,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBulkSelectionUI();
     updateRequisitionUI();
   }
+
 
   function isEditingLocked() {
     return isHistoricalEditingLocked() || isProtectedVersionEditingLocked();
@@ -1045,8 +1032,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.setTimeout(() => {
       const qtyInput = tr.querySelector('.qty');
-      const dispatchBtn = tr.cells[COL_INDEX.dispatched]?.querySelector('button');
-      const reviewBtn = tr.cells[COL_INDEX.reviewed]?.querySelector('button');
+      const dispatchBtn = getDispatchButton(tr);
+      const reviewBtn = getReviewButton(tr);
       const focusTarget =
         (preferredTarget === 'dispatch' ? dispatchBtn : null) ||
         qtyInput ||
@@ -1067,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function ensureRowDispatched(tr) {
-    const btnDes = tr?.cells?.[COL_INDEX.dispatched]?.querySelector('button');
+    const btnDes = getDispatchButton(tr);
     if (!btnDes) return false;
 
     const wasDispatched = btnDes.classList.contains('on');
@@ -1076,6 +1063,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     return !wasDispatched;
   }
+
 
   function isHistoricalEditingLocked() {
     const today = (typeof getTodayString === 'function') ? getTodayString() : null;
@@ -1121,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function promptExistingRowAction(item, existingRow) {
-    const isAlreadyDispatched = existingRow?.cells?.[7]?.querySelector('button')?.classList.contains('on');
+    const isAlreadyDispatched = getDispatchButton(existingRow)?.classList.contains('on');
     const safeName = escapeHtml(item?.nombre || 'Este producto');
     let selectedAction = 'cancel';
 
@@ -1189,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (action === 'dispatch') {
-      const dispatchBtn = existingRow?.cells?.[7]?.querySelector('button');
+      const dispatchBtn = getDispatchButton(existingRow);
       const changed = ensureRowDispatched(existingRow);
       flashAndFocusRow(existingRow, 'dispatch');
 
@@ -1370,45 +1358,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         <input type="text" class="form-control form-control-sm qty" value="${qtyValue}" placeholder="0">
       </td>
       <td class="text-center">
-        <button class="btn btn-sm btn-outline-primary btn-toggle ${item.revisado ? 'on' : 'off'}" title="Revisado">
-          <i class="fa-solid fa-clipboard-check"></i>
-        </button>
-      </td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-success btn-toggle ${item.despachado ? 'on' : 'off'}" title="Despachado">
-          <i class="fa-solid fa-truck-ramp-box"></i>
-        </button>
-      </td>
-      <td class="text-center">
-        <div class="btn-group btn-group-sm" role="group">
-          <button class="btn btn-outline-warning btn-move-list" title="Mover a otra lista" aria-label="Mover a otra lista">
+        <div class="row-actions-grid" role="group" aria-label="Acciones de fila">
+          <button class="btn btn-sm btn-outline-primary btn-toggle btn-toggle-review ${item.revisado ? 'on' : 'off'}" title="Revisado" aria-label="Marcar revisado">
+            <i class="fa-solid fa-clipboard-check"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-success btn-toggle btn-toggle-dispatch ${item.despachado ? 'on' : 'off'}" title="Despachado" aria-label="Marcar despachado">
+            <i class="fa-solid fa-truck-ramp-box"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-warning btn-move-list" title="Mover a otra lista" aria-label="Mover a otra lista">
             <i class="fa-solid fa-right-left"></i>
           </button>
-          <button class="btn btn-outline-secondary btn-delete-row" title="Eliminar">
+          <button class="btn btn-sm btn-outline-secondary btn-delete-row" title="Eliminar fila" aria-label="Eliminar fila">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>
-      </td>
-      <td class="text-center history-select-cell d-none">
-        <input
-          type="checkbox"
-          class="form-check-input row-history-select-checkbox"
-          aria-label="Seleccionar producto histórico para enviar a hoy"
-        >
       </td>
     `;
     body.insertBefore(tr, body.firstChild);
     renumber();
 
-    const btnRev = tr.cells[COL_INDEX.reviewed].querySelector('button');
-    const btnDes = tr.cells[COL_INDEX.dispatched].querySelector('button');
-    const btnMove = tr.cells[COL_INDEX.actions].querySelector('.btn-move-list');
-    const btnDel = tr.cells[COL_INDEX.actions].querySelector('.btn-delete-row');
-    const rowSelect = tr.querySelector('.row-history-select-checkbox');
+    const btnRev = getReviewButton(tr);
+    const btnDes = getDispatchButton(tr);
+    const btnMove = getMoveButton(tr);
+    const btnDel = getDeleteButton(tr);
     const bulkSelect = tr.querySelector('.row-bulk-select-checkbox');
 
-    btnRev.addEventListener('click', () => toggleBtn(btnRev));
-    btnDes.addEventListener('click', () => toggleBtn(btnDes));
+    if (btnRev) {
+      btnRev.addEventListener('click', () => toggleBtn(btnRev));
+    }
+
+    if (btnDes) {
+      btnDes.addEventListener('click', () => toggleBtn(btnDes));
+    }
 
     if (bulkSelect) {
       bulkSelect.addEventListener('change', () => {
@@ -1416,15 +1397,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
-    if (rowSelect) {
-      rowSelect.addEventListener('change', () => {
-        updateHistorySelectAllState();
-      });
-    }
-
     if (btnMove) {
-      btnMove.title = 'Mover a otra lista';
-      btnMove.setAttribute('aria-label', 'Mover a otra lista');
       btnMove.addEventListener('click', async () => {
         await moveRowToAnotherList(tr);
       });
@@ -1442,7 +1415,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tr.remove();
             renumber();
             updateBulkSelectionUI();
-            updateHistorySelectAllState();
+            updateHistoricalSelectionUI();
           }
         });
       });
@@ -1451,9 +1424,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateHistoricalSelectionUI();
     updateBulkSelectionUI();
 
-    // → Foco en Cantidad y ciclo Enter → barra de búsqueda
     const qtyInput = tr.querySelector('.qty');
     if (qtyInput) {
+      bindQtyPreview(qtyInput);
       qtyInput.focus();
       qtyInput.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter') {
@@ -1463,6 +1436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
   }
+
 
   // --- Autocomplete search ---
   let currentFocus = -1;
@@ -1564,64 +1538,147 @@ document.addEventListener('DOMContentLoaded', async () => {
     return groups;
   }
 
-  // Helpers para exportar PDF
-  async function exportPDFPorBodega() {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-    const zip = new JSZip();
-    const { jsPDF } = window.jspdf;
+  function getWarehouseNames() {
+    return Object.keys(groupByBodega()).sort((a, b) => a.localeCompare(b, 'es'));
+  }
 
-    const groups = groupByBodega();
-    for (const [bodega, rowsTr] of Object.entries(groups)) {
-      const doc = new jsPDF();
-      doc.setFontSize(12);
-      doc.text(`Tienda: ${tienda}`, 10, 10);
-      doc.text(`Fecha: ${fechaActual}`, 10, 18);
-      const upd = formatSV(lastUpdateISO);
-      doc.text(`Última actualización (guardado): ${upd}`, 10, 26);
-      const hasViewLine = !!currentViewDate;
-      const startY = hasViewLine ? 50 : 42;
+  function sanitizeFilePart(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'archivo';
+  }
 
-      if (hasViewLine) {
-        doc.text(`Vista: ${currentViewDate}`, 10, 34);
-        doc.text(`Bodega: ${bodega}`, 10, 42);
-      } else {
-        doc.text(`Bodega: ${bodega}`, 10, 34);
-      }
+  async function promptExportMode(formatLabel) {
+    const result = await Swal.fire({
+      title: 'Exportar ' + formatLabel,
+      text: '¿Deseas exportar todo o elegir bodegas específicas?',
+      icon: 'question',
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: 'Elegir bodegas',
+      denyButtonText: 'Todo',
+      cancelButtonText: 'Cancelar'
+    });
 
-      const rows = rowsTr.map((tr, i) => {
-        const codBar = tr.cells[COL_INDEX.barcode].innerText.trim();
-        const nombre = tr.cells[COL_INDEX.name].innerText.trim();
-        const codInv = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
-        const cantidadTxt = tr.querySelector('.qty')?.value.trim() || '';
-        const revisado = tr.cells[COL_INDEX.reviewed].querySelector('button').classList.contains('on') ? 'Sí' : 'No';
-        return [i + 1, codBar, nombre, codInv, bodega, cantidadTxt, revisado];
-      });
+    if (result.isDismissed) return null;
+    return result.isConfirmed ? 'warehouses' : 'general';
+  }
 
-      doc.autoTable({
-        startY,
-        head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
-        body: rows,
-        pageBreak: 'auto'
-      });
+  async function promptWarehouseSelection(formatLabel) {
+    const warehouseNames = getWarehouseNames();
 
-      const pdfBlob = doc.output('blob');
-      const pdfFileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_${bodega.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaActual}_Checklist.pdf`;
-      zip.file(pdfFileName, pdfBlob);
+    if (!warehouseNames.length) {
+      await Swal.fire('Sin bodegas', 'No se encontraron bodegas disponibles para exportar.', 'info');
+      return null;
     }
 
-    const content = await zip.generateAsync({ type: 'blob' });
-    const zipFileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_Checklist_${fechaActual}_PDF.zip`;
+    const optionsHtml = warehouseNames.map((name, index) => `
+      <label class="warehouse-export-option">
+        <input type="checkbox" class="form-check-input warehouse-export-checkbox" value="${htmlAttrEscape(name)}" ${index === 0 && warehouseNames.length === 1 ? 'checked' : ''}>
+        <span>${escapeHtml(name)}</span>
+      </label>
+    `).join('');
+
+    const result = await Swal.fire({
+      title: 'Bodegas para ' + formatLabel,
+      html: `
+        <div class="text-start">
+          <label class="warehouse-export-option warehouse-export-option-all">
+            <input type="checkbox" id="warehouseExportAll" class="form-check-input">
+            <span>Todas las bodegas</span>
+          </label>
+          <div class="warehouse-export-list">
+            ${optionsHtml}
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Exportar',
+      cancelButtonText: 'Cancelar',
+      focusConfirm: false,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return;
+
+        const master = popup.querySelector('#warehouseExportAll');
+        const checkboxes = [...popup.querySelectorAll('.warehouse-export-checkbox')];
+
+        const syncMaster = () => {
+          const checkedCount = checkboxes.filter(cb => cb.checked).length;
+          master.checked = checkedCount === checkboxes.length;
+          master.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+        };
+
+        master?.addEventListener('change', () => {
+          const shouldCheck = !!master.checked;
+          checkboxes.forEach(cb => {
+            cb.checked = shouldCheck;
+          });
+          syncMaster();
+        });
+
+        checkboxes.forEach(cb => cb.addEventListener('change', syncMaster));
+        syncMaster();
+      },
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+        const checkboxes = popup ? [...popup.querySelectorAll('.warehouse-export-checkbox:checked')] : [];
+        const selected = checkboxes.map(cb => String(cb.value || '').trim()).filter(Boolean);
+
+        if (!selected.length) {
+          Swal.showValidationMessage('Selecciona al menos una bodega.');
+          return false;
+        }
+
+        return selected;
+      }
+    });
+
+    return result.isConfirmed ? (result.value || []) : null;
+  }
+
+  function buildPdfRows(rowsTr) {
+    return rowsTr.map((tr, i) => {
+      const codBar = tr.cells[COL_INDEX.barcode].innerText.trim();
+      const nombre = tr.cells[COL_INDEX.name].innerText.trim();
+      const codInv = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
+      const bodega = tr.cells[COL_INDEX.warehouse].innerText.trim();
+      const cantidadTxt = tr.querySelector('.qty')?.value.trim() || '';
+      const revisado = getReviewButton(tr)?.classList.contains('on') ? 'Sí' : 'No';
+      return [i + 1, codBar, nombre, codInv, bodega, cantidadTxt, revisado];
+    });
+  }
+
+  function writePdfHeader(doc, tienda, fechaActual, subtitle) {
+    doc.setFontSize(12);
+    doc.text(`Tienda: ${tienda}`, 10, 10);
+    doc.text(`Fecha: ${fechaActual}`, 10, 18);
+    doc.text(`Última actualización: ${formatSV(lastUpdateISO)}`, 10, 26);
+
+    let nextY = 34;
+    if (currentViewDate) {
+      doc.text(`Vista consultada: ${currentViewDate}`, 10, 34);
+      nextY = 42;
+    }
+
+    if (subtitle) {
+      doc.text(subtitle, 10, nextY);
+      nextY += 8;
+    }
+
+    return nextY;
+  }
+
+  function saveBlobFile(blob, fileName) {
     const link = document.createElement('a');
-    const objectUrl = URL.createObjectURL(content);
-    link.href = objectUrl;
-    link.download = zipFileName;
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-
-    Swal.fire('Éxito', 'Se generaron los PDF por bodega.', 'success');
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
 
   function exportPDFGeneral() {
@@ -1629,26 +1686,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFontSize(12);
-    doc.text(`Tienda: ${tienda}`, 10, 10);
-    doc.text(`Fecha: ${fechaActual}`, 10, 18);
-    const upd = formatSV(lastUpdateISO);
-    doc.text(`Última actualización (guardado): ${upd}`, 10, 26);
-    if (currentViewDate) {
-      doc.text(`Vista: ${currentViewDate}`, 10, 34);
-    }
 
-    const rows = [...body.getElementsByTagName('tr')].map((tr, i) => {
-      const codBar = tr.cells[COL_INDEX.barcode].innerText.trim();
-      const nombre = tr.cells[COL_INDEX.name].innerText.trim();
-      const codInv = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
-      const bodega = tr.cells[COL_INDEX.warehouse].innerText.trim();
-      const cantidadTxt = tr.querySelector('.qty')?.value.trim() || '';
-      const revisado = tr.cells[COL_INDEX.reviewed].querySelector('button').classList.contains('on') ? 'Sí' : 'No';
-      return [i + 1, codBar, nombre, codInv, bodega, cantidadTxt, revisado];
-    });
-
-    const startY = currentViewDate ? 42 : 34;
+    const rows = buildPdfRows([...body.getElementsByTagName('tr')]);
+    const startY = writePdfHeader(doc, tienda, fechaActual, 'Checklist general');
 
     doc.autoTable({
       startY,
@@ -1657,94 +1697,65 @@ document.addEventListener('DOMContentLoaded', async () => {
       pageBreak: 'auto'
     });
 
-    const fileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaActual}_Checklist_GENERAL.pdf`;
+    const fileName = `${sanitizeFilePart(tienda)}_${fechaActual}_Checklist_GENERAL.pdf`;
     doc.save(fileName);
     Swal.fire('Éxito', 'Se generó el PDF general.', 'success');
   }
 
-  btnPDF.addEventListener('click', async () => {
-    if (body.rows.length === 0) {
-      Swal.fire('Error', 'No hay productos en la lista para generar PDF.', 'error');
+  async function exportPDFPorBodega(selectedWarehouses) {
+    const fechaActual = new Date().toISOString().split('T')[0];
+    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
+    const groups = groupByBodega();
+    const selectedGroups = selectedWarehouses
+      .filter(name => groups[name]?.length)
+      .map(name => [name, groups[name]]);
+
+    if (!selectedGroups.length) {
+      await Swal.fire('Sin datos', 'No hay productos para las bodegas seleccionadas.', 'info');
       return;
     }
-    const result = await Swal.fire({
-      title: 'Tipo de PDF',
-      text: '¿Cómo deseas generar el PDF?',
-      icon: 'question',
-      showCancelButton: true,
-      showDenyButton: true,
-      confirmButtonText: 'Por bodega',
-      denyButtonText: 'General',
-      cancelButtonText: 'Cancelar'
-    });
-    if (result.isConfirmed) {
-      await withLoading('Generando PDF por bodega...', async () => {
-        await exportPDFPorBodega();
-      });
-    } else if (result.isDenied) {
-      await withLoading('Generando PDF...', async () => {
-        exportPDFGeneral();
-      });
-    }
-  });
 
-  // Helpers para exportar Excel
-  async function exportExcelPorBodega() {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
+    const { jsPDF } = window.jspdf;
+
+    if (selectedGroups.length === 1) {
+      const [bodega, rowsTr] = selectedGroups[0];
+      const doc = new jsPDF();
+      const startY = writePdfHeader(doc, tienda, fechaActual, `Bodega: ${bodega}`);
+      doc.autoTable({
+        startY,
+        head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
+        body: buildPdfRows(rowsTr),
+        pageBreak: 'auto'
+      });
+      doc.save(`${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.pdf`);
+      await Swal.fire('Éxito', 'Se generó el PDF de la bodega seleccionada.', 'success');
+      return;
+    }
+
     const zip = new JSZip();
-
-    const groups = groupByBodega();
-    for (const [bodega, rowsTr] of Object.entries(groups)) {
-      const productos = rowsTr.map(tr => {
-        const codigo = tr.cells[COL_INDEX.inventoryCode].innerText.trim(); // codigo_inventario
-        const descripcion = tr.cells[COL_INDEX.name].innerText.trim();
-        const cantidadInput = tr.querySelector('.qty')?.value.trim() || '0';
-        const cantidad = (cantidadInput.match(/\d+/g)) ? parseInt(cantidadInput.match(/\d+/g).join('')) : 0;
-        const lote = '';
-        const fechaVence = new Date(1900, 0, 1);
-        return [codigo, descripcion, cantidad, lote, fechaVence];
+    selectedGroups.forEach(([bodega, rowsTr]) => {
+      const doc = new jsPDF();
+      const startY = writePdfHeader(doc, tienda, fechaActual, `Bodega: ${bodega}`);
+      doc.autoTable({
+        startY,
+        head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
+        body: buildPdfRows(rowsTr),
+        pageBreak: 'auto'
       });
-
-      const finalData = [['Codigo', 'Descripcion', 'Cantidad', 'Lote', 'FechaVence'], ...productos];
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(finalData);
-
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      for (let C = 0; C <= range.e.c; ++C) {
-        for (let R = 1; R <= range.e.r; ++R) {
-          const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-          if (!ws[cellRef]) continue;
-          if (C === 0 || C === 1 || C === 3) ws[cellRef].t = 's';
-          else if (C === 2) ws[cellRef].t = 'n';
-          else if (C === 4) { ws[cellRef].t = 'd'; ws[cellRef].z = 'm/d/yyyy'; }
-        }
-      }
-      XLSX.utils.book_append_sheet(wb, ws, 'Lista de Pedido');
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const excelFileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_${bodega.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaActual}_Checklist.xlsx`;
-      zip.file(excelFileName, wbout);
-    }
+      zip.file(
+        `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.pdf`,
+        doc.output('arraybuffer')
+      );
+    });
 
     const content = await zip.generateAsync({ type: 'blob' });
-    const zipFileName = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_Checklist_${fechaActual}.zip`;
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(content);
-    link.download = zipFileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    Swal.fire('Éxito', 'Se generaron los Excel por bodega.', 'success');
+    saveBlobFile(content, `${sanitizeFilePart(tienda)}_PDF_BODEGAS_${fechaActual}.zip`);
+    await Swal.fire('Éxito', 'Se generó un ZIP con los PDFs de las bodegas seleccionadas.', 'success');
   }
 
-  function exportExcelGeneral() {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-
-    const rowsTr = [...body.getElementsByTagName('tr')];
-    const productos = rowsTr.map(tr => {
-      const codigo = tr.cells[COL_INDEX.inventoryCode].innerText.trim(); // codigo_inventario
+  function buildExcelRows(rowsTr) {
+    return rowsTr.map(tr => {
+      const codigo = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
       const descripcion = tr.cells[COL_INDEX.name].innerText.trim();
       const cantidadInput = tr.querySelector('.qty')?.value.trim() || '0';
       const cantidad = (cantidadInput.match(/\d+/g)) ? parseInt(cantidadInput.match(/\d+/g).join('')) : 0;
@@ -1752,8 +1763,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const fechaVence = new Date(1900, 0, 1);
       return [codigo, descripcion, cantidad, lote, fechaVence];
     });
+  }
 
-    const finalData = [['Codigo', 'Descripcion', 'Cantidad', 'Lote', 'FechaVence'], ...productos];
+  function buildExcelWorkbook(rowsTr) {
+    const finalData = [['Codigo', 'Descripcion', 'Cantidad', 'Lote', 'FechaVence'], ...buildExcelRows(rowsTr)];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(finalData);
 
@@ -1764,47 +1777,113 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!ws[cellRef]) continue;
         if (C === 0 || C === 1 || C === 3) ws[cellRef].t = 's';
         else if (C === 2) ws[cellRef].t = 'n';
-        else if (C === 4) { ws[cellRef].t = 'd'; ws[cellRef].z = 'm/d/yyyy'; }
+        else if (C === 4) {
+          ws[cellRef].t = 'd';
+          ws[cellRef].z = 'm/d/yyyy';
+        }
       }
     }
+
     XLSX.utils.book_append_sheet(wb, ws, 'Lista de Pedido');
+    return wb;
+  }
+
+  async function exportExcelPorBodega(selectedWarehouses) {
+    const fechaActual = new Date().toISOString().split('T')[0];
+    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
+    const groups = groupByBodega();
+    const selectedGroups = selectedWarehouses
+      .filter(name => groups[name]?.length)
+      .map(name => [name, groups[name]]);
+
+    if (!selectedGroups.length) {
+      await Swal.fire('Sin datos', 'No hay productos para las bodegas seleccionadas.', 'info');
+      return;
+    }
+
+    if (selectedGroups.length === 1) {
+      const [bodega, rowsTr] = selectedGroups[0];
+      const wb = buildExcelWorkbook(rowsTr);
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      saveBlobFile(blob, `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.xlsx`);
+      await Swal.fire('Éxito', 'Se generó el Excel de la bodega seleccionada.', 'success');
+      return;
+    }
+
+    const zip = new JSZip();
+    selectedGroups.forEach(([bodega, rowsTr]) => {
+      const wb = buildExcelWorkbook(rowsTr);
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      zip.file(
+        `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.xlsx`,
+        wbout
+      );
+    });
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    saveBlobFile(content, `${sanitizeFilePart(tienda)}_EXCEL_BODEGAS_${fechaActual}.zip`);
+    await Swal.fire('Éxito', 'Se generó un ZIP con los Excel de las bodegas seleccionadas.', 'success');
+  }
+
+  function exportExcelGeneral() {
+    const fechaActual = new Date().toISOString().split('T')[0];
+    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
+    const wb = buildExcelWorkbook([...body.getElementsByTagName('tr')]);
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${tienda.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaActual}_Checklist_GENERAL.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
+    saveBlobFile(blob, `${sanitizeFilePart(tienda)}_${fechaActual}_Checklist_GENERAL.xlsx`);
     Swal.fire('Éxito', 'Se generó el Excel general.', 'success');
   }
+
+  btnPDF.addEventListener('click', async () => {
+    if (body.rows.length === 0) {
+      Swal.fire('Error', 'No hay productos en la lista para generar PDF.', 'error');
+      return;
+    }
+
+    const mode = await promptExportMode('PDF');
+    if (!mode) return;
+
+    if (mode === 'general') {
+      await withLoading('Generando PDF...', async () => {
+        exportPDFGeneral();
+      });
+      return;
+    }
+
+    const warehouses = await promptWarehouseSelection('PDF');
+    if (!warehouses) return;
+
+    await withLoading('Generando PDF por bodega...', async () => {
+      await exportPDFPorBodega(warehouses);
+    });
+  });
 
   btnExcel.addEventListener('click', async () => {
     if (body.rows.length === 0) {
       Swal.fire('Error', 'No hay productos en la lista para generar Excel.', 'error');
       return;
     }
-    const result = await Swal.fire({
-      title: 'Tipo de Excel',
-      text: '¿Cómo deseas generar el Excel?',
-      icon: 'question',
-      showCancelButton: true,
-      showDenyButton: true,
-      confirmButtonText: 'Por bodega',
-      denyButtonText: 'General',
-      cancelButtonText: 'Cancelar'
-    });
-    if (result.isConfirmed) {
-      await withLoading('Generando Excel por bodega...', async () => {
-        await exportExcelPorBodega();
-      });
-    } else if (result.isDenied) {
+
+    const mode = await promptExportMode('Excel');
+    if (!mode) return;
+
+    if (mode === 'general') {
       await withLoading('Generando Excel...', async () => {
         exportExcelGeneral();
       });
+      return;
     }
+
+    const warehouses = await promptWarehouseSelection('Excel');
+    if (!warehouses) return;
+
+    await withLoading('Generando Excel por bodega...', async () => {
+      await exportExcelPorBodega(warehouses);
+    });
   });
+
 
   // Sort by Bodega via header only
   function sortByBodega() {
@@ -2293,36 +2372,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (searchInput) searchInput.focus();
-    });
-  }
-
-  if (chkSelectAllHistory) {
-    chkSelectAllHistory.addEventListener('change', () => {
-      const shouldCheck = !!chkSelectAllHistory.checked;
-      getHistoricalSelectionCheckboxes().forEach(cb => {
-        if (!cb.disabled) cb.checked = shouldCheck;
-      });
-      updateHistorySelectAllState();
-    });
-  }
-
-  if (btnHistoricalSelectMode) {
-    btnHistoricalSelectMode.addEventListener('click', async () => {
-      if (!isHistoricalSelectionAvailable()) {
-        await Swal.fire(
-          'No aplica',
-          'La selección múltiple solo está disponible cuando estás viendo una fecha anterior.',
-          'info'
-        );
-        return;
-      }
-
-      historicalSelectionMode = !historicalSelectionMode;
-      if (!historicalSelectionMode) {
-        clearHistoricalSelection({ keepMode: true });
-      }
-
-      updateHistoricalSelectionUI();
     });
   }
 
