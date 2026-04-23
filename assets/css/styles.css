@@ -832,20 +832,55 @@ main.container-fluid {
 }
 
 /* Simetría segura para acciones principales del checklist */
-/* Toolbar de acciones con tamaño uniforme y layout estable */
-.checklist-actions-toolbar {
-  --toolbar-btn-width: 10.75rem;
+/* Toolbar compacta en una sola fila con scroll horizontal si hace falta */
+.checklist-heading-block {
+  min-width: 0;
+}
+
+.workspace-status-inline {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.workspace-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #eef2f7 !important;
+  color: #344054 !important;
+  border: 1px solid #d7dee8;
+}
+
+.checklist-actions-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
   gap: 0.65rem;
   width: 100%;
   align-items: stretch;
   justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+}
+
+.checklist-actions-toolbar::-webkit-scrollbar {
+  height: 8px;
+}
+
+.checklist-actions-toolbar::-webkit-scrollbar-thumb {
+  background: rgba(108, 117, 125, 0.28);
+  border-radius: 999px;
 }
 
 .checklist-actions-toolbar > .btn {
-  flex: 0 0 var(--toolbar-btn-width);
-  width: var(--toolbar-btn-width);
+  flex: 0 0 auto;
+  width: auto;
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -868,18 +903,31 @@ main.container-fluid {
   text-overflow: ellipsis;
 }
 
-@media (max-width: 991.98px) {
+@media (max-width: 1199.98px) {
   .checklist-actions-toolbar > .btn {
-    flex: 1 1 calc(50% - 0.65rem);
-    width: auto;
-    min-width: min(100%, 10rem);
+    min-height: 40px;
+    padding-inline: 0.8rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .checklist-actions-toolbar {
+    gap: 0.5rem;
+  }
+
+  .checklist-actions-toolbar > .btn {
+    padding-inline: 0.75rem;
   }
 }
 
 @media (max-width: 575.98px) {
-  .checklist-actions-toolbar > .btn {
-    flex-basis: 100%;
-    min-width: 100%;
+  .workspace-status-inline {
+    margin-top: 0.45rem;
+  }
+
+  .workspace-status-badge {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1114,5 +1162,58 @@ main.container-fluid {
   .bulk-select-col {
     min-width: 54px;
     width: 54px;
+  }
+}
+
+
+/* Loader global */
+.app-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(248, 250, 252, 0.76);
+  backdrop-filter: blur(2px);
+}
+
+.app-loading-overlay.d-none {
+  display: none !important;
+}
+
+.app-loading-card {
+  min-width: min(100%, 280px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(13, 110, 253, 0.12);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+  animation: appLoadingFloat 1.2s ease-in-out infinite alternate;
+}
+
+.app-loading-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.app-loading-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #274c77;
+  text-align: center;
+}
+
+@keyframes appLoadingFloat {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
   }
 }

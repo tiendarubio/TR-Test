@@ -15,9 +15,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
+  const btnReviewSelected = $('btnReviewSelected');
+  const btnDispatchSelected = $('btnDispatchSelected');
   const btnDeleteSelected = $('btnDeleteSelected');
   const thBodega = $('thBodega');
   const chkSelectAllRows = $('chkSelectAllRows');
+  const appLoadingOverlay = $('appLoadingOverlay');
+  const appLoadingText = $('appLoadingText');
 
   // Histórico
   const histDateInput = $('histDateInput');
@@ -39,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let sortAsc = true;
   let lastUpdateISO = null;
+  let loadingCounter = 0;
 
   let mediaStream = null;
   let scanInterval = null;
@@ -68,6 +73,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     actions: 9,
     historicalSelect: 10
   };
+
+
+  function setLoadingState(isLoading, message = 'Cargando...') {
+    if (!appLoadingOverlay) return;
+
+    if (isLoading) {
+      loadingCounter += 1;
+      if (appLoadingText) {
+        appLoadingText.textContent = message || 'Cargando...';
+      }
+      appLoadingOverlay.classList.remove('d-none');
+      appLoadingOverlay.setAttribute('aria-hidden', 'false');
+      return;
+    }
+
+    loadingCounter = Math.max(0, loadingCounter - 1);
+
+    if (loadingCounter === 0) {
+      appLoadingOverlay.classList.add('d-none');
+      appLoadingOverlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  async function withLoading(message, task) {
+    setLoadingState(true, message);
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+    try {
+      return await task();
+    } finally {
+      setLoadingState(false);
+    }
+  }
 
   function setToolbarButtonContent(btn, iconClassName, label) {
     if (!btn) return;
@@ -317,6 +355,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       chkSelectAllRows.indeterminate = selectedCount > 0 && selectedCount < selectableCheckboxes.length;
     }
 
+    if (btnReviewSelected) {
+      const label = selectedCount > 0
+        ? 'Revisar seleccionados (' + selectedCount + ')'
+        : 'Revisar seleccionados';
+
+      btnReviewSelected.disabled = editingLocked || selectedCount === 0;
+      btnReviewSelected.setAttribute('aria-disabled', String(btnReviewSelected.disabled));
+      setToolbarButtonContent(btnReviewSelected, 'fa-solid fa-clipboard-check', label);
+    }
+
+    if (btnDispatchSelected) {
+      const label = selectedCount > 0
+        ? 'Despachar seleccionados (' + selectedCount + ')'
+        : 'Despachar seleccionados';
+
+      btnDispatchSelected.disabled = editingLocked || selectedCount === 0;
+      btnDispatchSelected.setAttribute('aria-disabled', String(btnDispatchSelected.disabled));
+      setToolbarButtonContent(btnDispatchSelected, 'fa-solid fa-truck-ramp-box', label);
+    }
+
     if (btnDeleteSelected) {
       const label = selectedCount > 0
         ? 'Eliminar seleccionados (' + selectedCount + ')'
@@ -326,6 +384,84 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnDeleteSelected.setAttribute('aria-disabled', String(btnDeleteSelected.disabled));
       setToolbarButtonContent(btnDeleteSelected, 'fa-solid fa-trash-can-list', label);
     }
+  }
+
+  async function markSelectedRowsWithState(kind) {
+    if (isEditingLocked()) {
+      await showEditingLockedAlert(kind === 'reviewed' ? 'marcar múltiples filas como revisadas' : 'marcar múltiples filas como despachadas');
+      return;
+    }
+
+    const selectedRows = getSelectedTableRows();
+    if (!selectedRows.length) {
+      await Swal.fire(
+        'Sin selección',
+        'Selecciona al menos una fila para aplicar esta acción masiva.',
+        'info'
+      );
+      return;
+    }
+
+    const columnIndex = kind === 'reviewed' ? COL_INDEX.reviewed : COL_INDEX.dispatched;
+    const actionLabel = kind === 'reviewed' ? 'revisadas' : 'despachadas';
+
+    let changedCount = 0;
+
+    selectedRows.forEach(tr => {
+      const btn = tr.cells[columnIndex]?.querySelector('button');
+      if (!btn || btn.classList.contains('on')) return;
+      setToggleState(btn, true);
+      changedCount += 1;
+    });
+
+    updateBulkSelectionUI();
+
+    await Swal.fire(
+      'Acción aplicada',
+      changedCount > 0
+        ? ('Se marcaron ' + changedCount + ' fila(s) como ' + actionLabel + '. Recuerda guardar para persistir el cambio.')
+        : ('Las filas seleccionadas ya estaban marcadas como ' + actionLabel + '.'),
+      changedCount > 0 ? 'success' : 'info'
+    );
+  }
+
+  async function deleteSelectedRows() {
+    if (isEditingLocked()) {
+      await showEditingLockedAlert('eliminar múltiples filas');
+      return;
+    }
+
+    const selectedRows = getSelectedTableRows();
+    if (!selectedRows.length) {
+      await Swal.fire(
+        'Sin selección',
+        'Selecciona al menos una fila para eliminarla de la tabla actual.',
+        'info'
+      );
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: '¿Eliminar filas seleccionadas?',
+      html: '<div class="small text-muted">Se eliminarán <strong>' + selectedRows.length + '</strong> fila(s) de la tabla actual. Recuerda guardar para persistir el cambio.</div>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Eliminar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    selectedRows.forEach(tr => tr.remove());
+    renumber();
+    updateBulkSelectionUI();
+    updateHistorySelectAllState();
+
+    await Swal.fire(
+      'Filas eliminadas',
+      'Se eliminaron ' + selectedRows.length + ' fila(s) de la tabla actual.',
+      'success'
+    );
   }
 
   function isHistoricalSelectionAvailable() {
@@ -354,57 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       cb.checked = false;
     });
 
-    if (chkSelectAllRows) {
-    chkSelectAllRows.addEventListener('change', () => {
-      const shouldCheck = !!chkSelectAllRows.checked;
-      getBulkSelectionCheckboxes().forEach(cb => {
-        if (!cb.disabled) cb.checked = shouldCheck;
-      });
-      updateBulkSelectionUI();
-    });
-  }
-
-  if (btnDeleteSelected) {
-    btnDeleteSelected.addEventListener('click', async () => {
-      if (isEditingLocked()) {
-        await showEditingLockedAlert('eliminar múltiples filas');
-        return;
-      }
-
-      const selectedRows = getSelectedTableRows();
-      if (!selectedRows.length) {
-        await Swal.fire(
-          'Sin selección',
-          'Selecciona al menos una fila para eliminarla de la tabla actual.',
-          'info'
-        );
-        return;
-      }
-
-      const result = await Swal.fire({
-        title: '¿Eliminar filas seleccionadas?',
-        html: '<div class="small text-muted">Se eliminarán <strong>' + selectedRows.length + '</strong> fila(s) de la tabla actual. Recuerda guardar para persistir el cambio.</div>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Eliminar'
-      });
-
-      if (!result.isConfirmed) return;
-
-      selectedRows.forEach(tr => tr.remove());
-      renumber();
-      updateBulkSelectionUI();
-      updateHistorySelectAllState();
-
-      await Swal.fire(
-        'Filas eliminadas',
-        'Se eliminaron ' + selectedRows.length + ' fila(s) de la tabla actual.',
-        'success'
-      );
-    });
-  }
-
-  if (chkSelectAllHistory) {
+    if (chkSelectAllHistory) {
       chkSelectAllHistory.checked = false;
       chkSelectAllHistory.indeterminate = false;
     }
@@ -433,6 +519,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnMergeSelectedToToday.disabled = !shouldShow || checkedCount === 0;
       btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
     }
+  }
+
+  if (chkSelectAllRows) {
+    chkSelectAllRows.addEventListener('change', () => {
+      const shouldCheck = !!chkSelectAllRows.checked;
+      getBulkSelectionCheckboxes().forEach(cb => {
+        if (!cb.disabled) cb.checked = shouldCheck;
+      });
+      updateBulkSelectionUI();
+    });
+  }
+
+  if (btnReviewSelected) {
+    btnReviewSelected.addEventListener('click', async () => {
+      await markSelectedRowsWithState('reviewed');
+    });
+  }
+
+  if (btnDispatchSelected) {
+    btnDispatchSelected.addEventListener('click', async () => {
+      await markSelectedRowsWithState('dispatched');
+    });
+  }
+
+  if (btnDeleteSelected) {
+    btnDeleteSelected.addEventListener('click', async () => {
+      await deleteSelectedRows();
+    });
   }
 
   function updateHistoricalSelectionUI() {
@@ -852,7 +966,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   updateStoreUI();
 
-  await preloadCatalog();
 
   function htmlAttrEscape(v) {
     if (v === null || v === undefined) return '';
@@ -989,20 +1102,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       return { ok: false, reason: 'locked' };
     }
 
-    const docId = getDocIdForCurrentList();
-    const payload = collectPayload();
-    const targetDay = getTargetChecklistDate();
+    return withLoading('Guardando checklist...', async () => {
+      const docId = getDocIdForCurrentList();
+      const payload = collectPayload();
+      const targetDay = getTargetChecklistDate();
 
-    await saveChecklistToFirestore(docId, payload, targetDay);
-    rememberHistoryDate(docId, targetDay);
-    updateLastSavedText(payload.meta?.updatedAt || null);
-    await refreshHistoryPicker();
+      await saveChecklistToFirestore(docId, payload, targetDay);
+      rememberHistoryDate(docId, targetDay);
+      updateLastSavedText(payload.meta?.updatedAt || null);
+      await refreshHistoryPicker();
 
-    if (showSuccess) {
-      await Swal.fire(successTitle, successMessage, successIcon);
-    }
+      if (showSuccess) {
+        await Swal.fire(successTitle, successMessage, successIcon);
+      }
 
-    return { ok: true, docId, payload, targetDay };
+      return { ok: true, docId, payload, targetDay };
+    });
   }
 
   async function promptExistingRowAction(item, existingRow) {
@@ -1563,9 +1678,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       cancelButtonText: 'Cancelar'
     });
     if (result.isConfirmed) {
-      await exportPDFPorBodega();
+      await withLoading('Generando PDF por bodega...', async () => {
+        await exportPDFPorBodega();
+      });
     } else if (result.isDenied) {
-      exportPDFGeneral();
+      await withLoading('Generando PDF...', async () => {
+        exportPDFGeneral();
+      });
     }
   });
 
@@ -1677,9 +1796,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       cancelButtonText: 'Cancelar'
     });
     if (result.isConfirmed) {
-      await exportExcelPorBodega();
+      await withLoading('Generando Excel por bodega...', async () => {
+        await exportExcelPorBodega();
+      });
     } else if (result.isDenied) {
-      exportExcelGeneral();
+      await withLoading('Generando Excel...', async () => {
+        exportExcelGeneral();
+      });
     }
   });
 
@@ -1718,22 +1841,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       confirmButtonText: 'Limpiar'
     }).then(async res => {
       if (res.isConfirmed) {
-        body.innerHTML = '';
-        renumber();
-        updateBulkSelectionUI();
+        await withLoading('Limpiando checklist...', async () => {
+          body.innerHTML = '';
+          renumber();
+          updateBulkSelectionUI();
 
-        const docId = getDocIdForCurrentList();
-        const payload = collectPayload();
+          const docId = getDocIdForCurrentList();
+          const payload = collectPayload();
 
-        await saveChecklistToFirestore(docId, payload, targetDay);
-        rememberHistoryDate(docId, targetDay);
-        lastUpdateISO = payload.meta.updatedAt;
-        lastSaved.innerHTML =
-          '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
-          'Última actualización: ' +
-          formatSV(lastUpdateISO);
+          await saveChecklistToFirestore(docId, payload, targetDay);
+          rememberHistoryDate(docId, targetDay);
+          lastUpdateISO = payload.meta.updatedAt;
+          lastSaved.innerHTML =
+            '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
+            'Última actualización: ' +
+            formatSV(lastUpdateISO);
 
-        await refreshHistoryPicker();
+          await refreshHistoryPicker();
+        });
 
         Swal.fire('Listo', 'Checklist guardado vacío correctamente.', 'success');
       }
@@ -2098,69 +2223,75 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function loadHistoryForDate(dateStr) {
     if (!dateStr) return;
-    try {
-      const today = (typeof getTodayString === 'function') ? getTodayString() : null;
 
-      if (today && dateStr === today) {
-        currentViewDate = null;
+    return withLoading('Cargando historial...', async () => {
+      try {
+        const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+
+        if (today && dateStr === today) {
+          currentViewDate = null;
+          resetHistoricalUnlock();
+          clearHistoricalSelection();
+
+          if (histPicker) {
+            histPicker.clear();
+          } else if (histDateInput) {
+            histDateInput.value = '';
+          }
+
+          await loadStoreStateForToday();
+          setHistoricalViewMode(false);
+          return;
+        }
+
+        currentViewDate = dateStr;
         resetHistoricalUnlock();
         clearHistoricalSelection();
 
+        body.innerHTML = '';
+        renumber();
+        updateBulkSelectionUI();
+
+        const docId = getDocIdForCurrentList();
+        const record = await loadChecklistFromFirestore(docId, dateStr);
+        applyChecklistMeta(record?.meta || {});
+
+        if (record && Array.isArray(record.items) && record.items.length) {
+          record.items.forEach(addRowFromData);
+          renumber();
+          lastUpdateISO = record.meta?.updatedAt || null;
+          lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+        } else {
+          lastUpdateISO = record?.meta?.updatedAt || null;
+          lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
+          Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
+        }
+
+        const isHistorical = (today ? (dateStr !== today) : true);
+        setHistoricalViewMode(isHistorical);
+      } catch (e) {
+        console.error('Error al cargar histórico:', e);
+        Swal.fire('Error', 'No se pudo cargar el histórico para esa fecha.', 'error');
+      }
+    });
+  }
+
+  if (btnHistToday) {
+    btnHistToday.addEventListener('click', async () => {
+      await withLoading('Volviendo a hoy...', async () => {
         if (histPicker) {
           histPicker.clear();
         } else if (histDateInput) {
           histDateInput.value = '';
         }
 
-        await loadStoreStateForToday();
+        currentViewDate = null;
+        resetHistoricalUnlock();
+        clearHistoricalSelection();
+        await loadStoreStateForToday(); // vuelve a hoy
         setHistoricalViewMode(false);
-        return;
-      }
+      });
 
-      currentViewDate = dateStr;
-      resetHistoricalUnlock();
-      clearHistoricalSelection();
-
-      body.innerHTML = '';
-      renumber();
-      updateBulkSelectionUI();
-
-      const docId = getDocIdForCurrentList();
-      const record = await loadChecklistFromFirestore(docId, dateStr);
-      applyChecklistMeta(record?.meta || {});
-
-      if (record && Array.isArray(record.items) && record.items.length) {
-        record.items.forEach(addRowFromData);
-        renumber();
-        lastUpdateISO = record.meta?.updatedAt || null;
-        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
-      } else {
-        lastUpdateISO = record?.meta?.updatedAt || null;
-        lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
-        Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
-      }
-
-      const isHistorical = (today ? (dateStr !== today) : true);
-      setHistoricalViewMode(isHistorical);
-    } catch (e) {
-      console.error('Error al cargar histórico:', e);
-      Swal.fire('Error', 'No se pudo cargar el histórico para esa fecha.', 'error');
-    }
-  }
-
-  if (btnHistToday) {
-    btnHistToday.addEventListener('click', async () => {
-      if (histPicker) {
-        histPicker.clear();
-      } else if (histDateInput) {
-        histDateInput.value = '';
-      }
-
-      currentViewDate = null;
-      resetHistoricalUnlock();
-      clearHistoricalSelection();
-      await loadStoreStateForToday(); // vuelve a hoy
-      setHistoricalViewMode(false);
       if (searchInput) searchInput.focus();
     });
   }
@@ -2416,47 +2547,62 @@ document.addEventListener('DOMContentLoaded', async () => {
   setScanButtonState(false);
 
   // ===== Carga inicial (hoy) =====
-  async function loadStoreStateForToday() {
-    clearHistoricalSelection();
-    clearBulkSelection();
-    body.innerHTML = '';
+  async function loadStoreStateForToday(options = {}) {
+    const { withLoader = false } = options || {};
 
-    const docId = getDocIdForCurrentList();
-    const record = await loadChecklistFromFirestore(docId); // hoy
-    applyChecklistMeta(record?.meta || {});
+    const run = async () => {
+      clearHistoricalSelection();
+      clearBulkSelection();
+      body.innerHTML = '';
 
-    if (record && Array.isArray(record.items)) {
-      record.items.forEach(addRowFromData);
-      renumber();
-      lastUpdateISO = record.meta?.updatedAt || null;
-    } else {
-      lastUpdateISO = null;
+      const docId = getDocIdForCurrentList();
+      const record = await loadChecklistFromFirestore(docId); // hoy
+      applyChecklistMeta(record?.meta || {});
+
+      if (record && Array.isArray(record.items)) {
+        record.items.forEach(addRowFromData);
+        renumber();
+        lastUpdateISO = record.meta?.updatedAt || null;
+      } else {
+        lastUpdateISO = null;
+      }
+
+      lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+      updateBulkSelectionUI();
+      updateRequisitionUI();
+    };
+
+    if (withLoader) {
+      return withLoading('Cargando checklist actual...', run);
     }
 
-    lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
-    updateBulkSelectionUI();
-    updateRequisitionUI();
+    return run();
   }
 
-  await loadStoreStateForToday();
-  setHistoricalViewMode(false);
-  await refreshHistoryPicker();
+  await withLoading('Cargando checklist...', async () => {
+    await preloadCatalog();
+    await loadStoreStateForToday();
+    setHistoricalViewMode(false);
+    await refreshHistoryPicker();
+  });
 
   // → Enfocar la barra de búsqueda al iniciar
   searchInput.focus();
 
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
-    updateStoreUI();
-    currentViewDate = null;
-    resetHistoricalUnlock();
-    if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-    if (histDateInput) histDateInput.value = '';
+    await withLoading('Cambiando tienda...', async () => {
+      updateStoreUI();
+      currentViewDate = null;
+      resetHistoricalUnlock();
+      if (histPicker) { try { histPicker.clear(); } catch (_) {} }
+      if (histDateInput) histDateInput.value = '';
 
-    await loadStoreStateForToday();
-    setHistoricalViewMode(false);
-    await refreshHistoryPicker();
-    lastCommittedVersionValue = versionSelect.value;
+      await loadStoreStateForToday();
+      setHistoricalViewMode(false);
+      await refreshHistoryPicker();
+      lastCommittedVersionValue = versionSelect.value;
+    });
   });
 
   versionSelect.addEventListener('change', async () => {
@@ -2478,16 +2624,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    currentViewDate = null;
-    historicalUnlockEnabled = false;
-    protectedVersionUnlockEnabled = !!isProtectedRequest;
+    await withLoading('Cargando lista...', async () => {
+      currentViewDate = null;
+      historicalUnlockEnabled = false;
+      protectedVersionUnlockEnabled = !!isProtectedRequest;
 
-    if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-    if (histDateInput) histDateInput.value = '';
+      if (histPicker) { try { histPicker.clear(); } catch (_) {} }
+      if (histDateInput) histDateInput.value = '';
 
-    await loadStoreStateForToday();
-    setHistoricalViewMode(false);
-    await refreshHistoryPicker();
-    lastCommittedVersionValue = versionSelect.value;
+      await loadStoreStateForToday();
+      setHistoricalViewMode(false);
+      await refreshHistoryPicker();
+      lastCommittedVersionValue = versionSelect.value;
+    });
   });
 });

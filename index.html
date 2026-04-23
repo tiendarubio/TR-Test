@@ -30,12 +30,7 @@
         <span class="fw-semibold">TRLista</span>
       </a>
 
-      <div class="d-flex align-items-center gap-3 ms-auto">
-        <span class="badge bg-secondary" id="lastSaved">
-          <i class="fa-solid fa-clock-rotate-left me-1"></i>
-          Aún no guardado.
-        </span>
-      </div>
+      <div class="ms-auto"></div>
     </div>
   </nav>
 
@@ -135,11 +130,17 @@
         <div class="card shadow-sm">
           <div class="card-header bg-white border-0">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
+              <div class="checklist-heading-block">
                 <h6 class="card-title mb-1">
                   <i class="fa-solid fa-list-check me-2 text-primary"></i>
                   Checklist de productos
                 </h6>
+                <div class="workspace-status-inline">
+                  <span class="badge bg-secondary workspace-status-badge" id="lastSaved">
+                    <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                    Aún no guardado.
+                  </span>
+                </div>
               </div>
 
               <!-- Toolbar -->
@@ -171,6 +172,14 @@
                 <button id="btnExcel" class="btn btn-outline-success btn-sm">
                   <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
                   <span>Excel</span>
+                </button>
+                <button id="btnReviewSelected" class="btn btn-outline-primary btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como revisados">
+                  <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                  <span>Revisar seleccionados</span>
+                </button>
+                <button id="btnDispatchSelected" class="btn btn-outline-success btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como despachados">
+                  <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
+                  <span>Despachar seleccionados</span>
                 </button>
                 <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" disabled aria-disabled="true">
                   <i class="fa-solid fa-trash-can-list" aria-hidden="true"></i>
@@ -282,6 +291,13 @@
       </div><!-- /panel principal -->
     </div><!-- /row -->
   </main>
+
+  <div id="appLoadingOverlay" class="app-loading-overlay d-none" aria-hidden="true">
+    <div class="app-loading-card" role="status" aria-live="polite" aria-atomic="true">
+      <div class="spinner-border text-primary app-loading-spinner" aria-hidden="true"></div>
+      <div id="appLoadingText" class="app-loading-text">Cargando checklist...</div>
+    </div>
+  </div>
 
   <!-- Bootstrap + SweetAlert -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
