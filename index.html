@@ -128,66 +128,65 @@
 
         <!-- Card: Checklist -->
         <div class="card shadow-sm">
-          <div class="card-header bg-white border-0">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="card-header bg-white border-0 checklist-card-header">
+          <div class="checklist-header-shell">
+            <div class="checklist-header-top">
               <div class="checklist-heading-block">
-                <h6 class="card-title mb-1">
+                <h6 class="card-title mb-0">
                   <i class="fa-solid fa-list-check me-2 text-primary"></i>
                   Checklist de productos
                 </h6>
-                <div class="workspace-status-inline">
-                  <span class="workspace-status-badge" id="lastSaved">
-                    <i class="fa-solid fa-clock-rotate-left me-1"></i>
-                    Aún no guardado.
-                  </span>
-                </div>
               </div>
 
-              <!-- Toolbar -->
-              <div class="btn-toolbar gap-2 checklist-actions-toolbar" role="toolbar" aria-label="Toolbar">
-                <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm d-none" disabled aria-disabled="true" title="Desbloquear edición">
-                  <i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i>
-                  <span>Desbloq.</span>
-                </button>
-                <button type="button" id="btnMergeSelectedToToday" class="btn btn-outline-primary btn-sm d-none" disabled aria-disabled="true" title="Enviar seleccionados a hoy">
-                  <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
-                  <span>Enviar hoy</span>
-                </button>
-                <button type="button" id="btnToggleRequisition" class="btn btn-outline-secondary btn-sm" title="Estado de requisición">
-                  <i class="fa-regular fa-flag" aria-hidden="true"></i>
-                  <span>Req.</span>
-                </button>
-                <button id="btnSave" class="btn btn-primary btn-sm" title="Guardar checklist">
-                  <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-                  <span>Guardar</span>
-                </button>
-                <button id="btnPDF" class="btn btn-outline-danger btn-sm" title="Descargar PDF">
-                  <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
-                  <span>PDF</span>
-                </button>
-                <button id="btnExcel" class="btn btn-outline-success btn-sm" title="Descargar Excel">
-                  <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
-                  <span>Excel</span>
-                </button>
-                <button id="btnReviewSelected" class="btn btn-outline-primary btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como revisados">
-                  <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
-                  <span>Rev. sel.</span>
-                </button>
-                <button id="btnDispatchSelected" class="btn btn-outline-success btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como despachados">
-                  <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
-                  <span>Desp. sel.</span>
-                </button>
-                <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" disabled aria-disabled="true" title="Eliminar seleccionados">
-                  <i class="fa-solid fa-trash-can-list" aria-hidden="true"></i>
-                  <span>Elim. sel.</span>
-                </button>
-                <button id="btnClear" class="btn btn-outline-secondary btn-sm" title="Limpiar checklist">
-                  <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-                  <span>Limpiar</span>
-                </button>
+              <div class="workspace-status-inline">
+                <span class="workspace-status-badge" id="lastSaved">
+                  <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                  Aún no guardado.
+                </span>
               </div>
             </div>
+
+            <div class="checklist-primary-toolbar" role="toolbar" aria-label="Acciones principales">
+              <button id="btnSave" class="btn btn-primary btn-sm" title="Guardar checklist">
+                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                <span>Guardar</span>
+              </button>
+              <button id="btnPDF" class="btn btn-outline-danger btn-sm" title="Descargar PDF">
+                <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+                <span>PDF</span>
+              </button>
+              <button id="btnExcel" class="btn btn-outline-success btn-sm" title="Descargar Excel">
+                <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
+                <span>Excel</span>
+              </button>
+              <button id="btnClear" class="btn btn-outline-secondary btn-sm" title="Limpiar checklist">
+                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                <span>Limpiar</span>
+              </button>
+
+              <details class="toolbar-menu" id="moreActionsMenu">
+                <summary class="btn btn-outline-secondary btn-sm toolbar-menu-toggle" title="Más acciones">
+                  <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+                  <span>Más</span>
+                </summary>
+
+                <div class="toolbar-menu-panel">
+                  <div class="toolbar-menu-title">Acciones especiales</div>
+                  <div class="toolbar-menu-actions">
+                    <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm d-none" disabled aria-disabled="true" title="Desbloquear edición">
+                      <i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i>
+                      <span>Desbloq.</span>
+                    </button>
+                    <button type="button" id="btnToggleRequisition" class="btn btn-outline-secondary btn-sm" title="Estado de requisición">
+                      <i class="fa-regular fa-flag" aria-hidden="true"></i>
+                      <span>Req.</span>
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </div>
           </div>
+        </div>
 
           <div class="card-body border-top">
             <div class="checklist-workspace">
@@ -244,9 +243,37 @@
                     <div class="scan-overlay"></div>
                   </div>
                 </div>
-              </div>
+</div>
 
-              <div class="table-checklist-shell mt-3">
+<div id="bulkSelectionBar" class="bulk-selection-bar d-none" aria-hidden="true">
+  <div class="bulk-selection-summary">
+    <span class="bulk-selection-count-pill">
+      <i class="fa-regular fa-square-check" aria-hidden="true"></i>
+      <span id="bulkSelectionCount">0 filas seleccionadas</span>
+    </span>
+  </div>
+
+  <div class="bulk-selection-actions" role="toolbar" aria-label="Acciones sobre selección">
+    <button id="btnReviewSelected" class="btn btn-outline-primary btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como revisados">
+      <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+      <span>Revisar</span>
+    </button>
+    <button id="btnDispatchSelected" class="btn btn-outline-success btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como despachados">
+      <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
+      <span>Despachar</span>
+    </button>
+    <button type="button" id="btnMergeSelectedToToday" class="btn btn-outline-primary btn-sm d-none" disabled aria-disabled="true" title="Enviar seleccionados a hoy">
+      <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
+      <span>Enviar hoy</span>
+    </button>
+    <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" disabled aria-disabled="true" title="Eliminar seleccionados">
+      <i class="fa-solid fa-trash-can-list" aria-hidden="true"></i>
+      <span>Eliminar</span>
+    </button>
+  </div>
+</div>
+
+<div class="table-checklist-shell mt-3">
                 <div class="table-responsive table-checklist-wrapper">
               <table class="table table-sm table-bordered align-middle mb-0" id="chkTable">
                 <thead class="table-light">

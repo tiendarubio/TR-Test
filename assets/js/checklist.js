@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnDeleteSelected = $('btnDeleteSelected');
   const thBodega = $('thBodega');
   const chkSelectAllRows = $('chkSelectAllRows');
+  const bulkSelectionBar = $('bulkSelectionBar');
+  const bulkSelectionCount = $('bulkSelectionCount');
+  const moreActionsMenu = $('moreActionsMenu');
   const appLoadingOverlay = $('appLoadingOverlay');
   const appLoadingText = $('appLoadingText');
   const qtyPreviewBubble = $('qtyPreviewBubble');
@@ -107,6 +110,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       <i class="${iconClassName}" aria-hidden="true"></i>
       <span>${escapeHtml(label)}</span>
     `;
+  }
+
+  function closeMoreActionsMenu() {
+    if (moreActionsMenu?.hasAttribute('open')) {
+      moreActionsMenu.removeAttribute('open');
+    }
   }
 
 
@@ -417,34 +426,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       chkSelectAllRows.indeterminate = selectedCount > 0 && selectedCount < selectableCheckboxes.length;
     }
 
-    if (btnReviewSelected) {
-      const label = selectedCount > 0
-        ? ('Rev. sel. (' + selectedCount + ')')
-        : 'Rev. sel.';
+    if (bulkSelectionBar) {
+      const shouldShow = selectedCount > 0;
+      bulkSelectionBar.classList.toggle('d-none', !shouldShow);
+      bulkSelectionBar.setAttribute('aria-hidden', String(!shouldShow));
+    }
 
+    if (bulkSelectionCount) {
+      bulkSelectionCount.textContent = selectedCount === 1
+        ? '1 fila seleccionada'
+        : (selectedCount + ' filas seleccionadas');
+    }
+
+    if (btnReviewSelected) {
       btnReviewSelected.disabled = editingLocked || selectedCount === 0;
       btnReviewSelected.setAttribute('aria-disabled', String(btnReviewSelected.disabled));
-      setToolbarButtonContent(btnReviewSelected, 'fa-solid fa-clipboard-check', label);
+      setToolbarButtonContent(btnReviewSelected, 'fa-solid fa-clipboard-check', 'Revisar');
     }
 
     if (btnDispatchSelected) {
-      const label = selectedCount > 0
-        ? ('Desp. sel. (' + selectedCount + ')')
-        : 'Desp. sel.';
-
       btnDispatchSelected.disabled = editingLocked || selectedCount === 0;
       btnDispatchSelected.setAttribute('aria-disabled', String(btnDispatchSelected.disabled));
-      setToolbarButtonContent(btnDispatchSelected, 'fa-solid fa-truck-ramp-box', label);
+      setToolbarButtonContent(btnDispatchSelected, 'fa-solid fa-truck-ramp-box', 'Despachar');
     }
 
     if (btnDeleteSelected) {
-      const label = selectedCount > 0
-        ? ('Elim. sel. (' + selectedCount + ')')
-        : 'Elim. sel.';
-
       btnDeleteSelected.disabled = editingLocked || selectedCount === 0;
       btnDeleteSelected.setAttribute('aria-disabled', String(btnDeleteSelected.disabled));
-      setToolbarButtonContent(btnDeleteSelected, 'fa-solid fa-trash-can-list', label);
+      setToolbarButtonContent(btnDeleteSelected, 'fa-solid fa-trash-can-list', 'Eliminar');
     }
 
     updateHistoricalSelectionUI();
@@ -564,14 +573,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const canMerge = isHistoricalSelectionAvailable();
 
     if (btnMergeSelectedToToday) {
-      btnMergeSelectedToToday.classList.toggle('d-none', !canMerge);
-
       const selectedCount = getSelectedTableRows().length;
+      const shouldShow = canMerge && selectedCount > 0;
+
+      btnMergeSelectedToToday.classList.toggle('d-none', !shouldShow);
       btnMergeSelectedToToday.disabled = !canMerge || selectedCount === 0;
       btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
       btnMergeSelectedToToday.title = canMerge
         ? 'Enviar productos seleccionados a la lista de hoy'
         : '';
+
+      if (shouldShow) {
+        setToolbarButtonContent(btnMergeSelectedToToday, 'fa-solid fa-share-from-square', 'Enviar hoy');
+      }
     }
   }
 
@@ -925,6 +939,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const t = e.target;
     if (t === searchInput || t.classList.contains('qty')) {
       centerOnElement(t);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!moreActionsMenu?.hasAttribute('open')) return;
+    const target = e.target;
+    if (target instanceof Node && !moreActionsMenu.contains(target)) {
+      closeMoreActionsMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeMoreActionsMenu();
     }
   });
 
@@ -1945,6 +1973,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   btnSave.addEventListener('click', async () => {
+    closeMoreActionsMenu();
     try {
       await persistCurrentChecklist();
     } catch (e) {
@@ -1954,6 +1983,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnToggleRequisition) {
     btnToggleRequisition.addEventListener('click', async () => {
+      closeMoreActionsMenu();
       if (isEditingLocked()) {
         await showEditingLockedAlert('marcar la requisición');
         return;
@@ -2383,6 +2413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnToggleHistLock) {
     btnToggleHistLock.addEventListener('click', async () => {
+      closeMoreActionsMenu();
       const canUnlockHistorical = isPastHistoricalDateSelected();
       const canUnlockProtected = isProtectedVersionSelected();
       const canUnlockAny = canUnlockHistorical || canUnlockProtected;
@@ -2640,6 +2671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
+    closeMoreActionsMenu();
     await withLoading('Cambiando tienda...', async () => {
       updateStoreUI();
       currentViewDate = null;
@@ -2655,6 +2687,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   versionSelect.addEventListener('change', async () => {
+    closeMoreActionsMenu();
     const requestedVersion = versionSelect.value;
     const previousVersion = lastCommittedVersionValue || 'base';
     const isProtectedRequest = (typeof isProtectedVersionKey === 'function')
