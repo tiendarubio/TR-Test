@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   const btnSave = $('btnSave');
+  const btnExport = $('btnExport');
   const btnToggleRequisition = $('btnToggleRequisition');
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const chkSelectAllRows = $('chkSelectAllRows');
   const bulkSelectionBar = $('bulkSelectionBar');
   const bulkSelectionCount = $('bulkSelectionCount');
+  const btnClearSelection = $('btnClearSelection');
   const moreActionsMenu = $('moreActionsMenu');
   const appLoadingOverlay = $('appLoadingOverlay');
   const appLoadingText = $('appLoadingText');
@@ -71,6 +73,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     actions: 7
   };
 
+  const MOBILE_BREAKPOINT = 767.98;
+  const ROW_CELL_LABELS = {
+    [COL_INDEX.bulkSelect]: 'Seleccionar',
+    [COL_INDEX.rowNumber]: '#',
+    [COL_INDEX.barcode]: 'Cód. barras',
+    [COL_INDEX.name]: 'Producto',
+    [COL_INDEX.inventoryCode]: 'Cód. inv.',
+    [COL_INDEX.warehouse]: 'Bodega',
+    [COL_INDEX.quantity]: 'Cantidad',
+    [COL_INDEX.actions]: 'Acciones'
+  };
+
 
   function setLoadingState(isLoading, message = 'Cargando...') {
     if (!appLoadingOverlay) return;
@@ -118,6 +132,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  function isCompactScreen() {
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+  }
+
+  function applyResponsiveRowLabels(tr) {
+    if (!tr?.cells) return;
+
+    [...tr.cells].forEach((cell, idx) => {
+      cell.setAttribute('data-label', ROW_CELL_LABELS[idx] || '');
+      if (idx === COL_INDEX.bulkSelect) {
+        cell.classList.add('cell-select');
+      }
+      if (idx === COL_INDEX.name) {
+        cell.classList.add('cell-name');
+      }
+      if (idx === COL_INDEX.inventoryCode) {
+        cell.classList.add('cell-inventory');
+      }
+      if (idx === COL_INDEX.warehouse) {
+        cell.classList.add('cell-warehouse');
+      }
+      if (idx === COL_INDEX.quantity) {
+        cell.classList.add('cell-quantity');
+      }
+      if (idx === COL_INDEX.actions) {
+        cell.classList.add('cell-actions');
+      }
+    });
+  }
+
+  function syncQtyInputMode(input) {
+    if (!input) return;
+    input.readOnly = isCompactScreen();
+    input.classList.toggle('qty-mobile-readonly', input.readOnly);
+    input.setAttribute('inputmode', input.readOnly ? 'none' : 'text');
+  }
+
+  async function openQtyEditor(input) {
+    if (!input) return;
+    const result = await Swal.fire({
+      title: 'Editar cantidad',
+      input: 'text',
+      inputValue: String(input.value || ''),
+      inputLabel: 'Cantidad',
+      inputPlaceholder: 'Escribe la cantidad completa',
+      showCancelButton: true,
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Cancelar',
+      inputAttributes: {
+        autocapitalize: 'off',
+        autocorrect: 'off'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+    input.value = String(result.value || '').trim();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  async function handleQtyInputInteraction(ev) {
+    const input = ev.currentTarget;
+    if (!isCompactScreen() || !input) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    input.blur();
+    await openQtyEditor(input);
+  }
+
 
   function getReviewButton(tr) {
     return tr?.querySelector('.btn-toggle-review') || null;
@@ -158,21 +241,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   function bindQtyPreview(input) {
     if (!input) return;
 
+    syncQtyInputMode(input);
+
     const sync = () => {
       input.setAttribute('title', input.value || '');
       updateQtyPreview(input);
     };
 
     input.addEventListener('focus', sync);
-    input.addEventListener('click', sync);
     input.addEventListener('input', sync);
     input.addEventListener('blur', () => updateQtyPreview(null));
+    input.addEventListener('click', async (ev) => {
+      if (isCompactScreen()) {
+        await handleQtyInputInteraction(ev);
+        return;
+      }
+      sync();
+    });
+    input.addEventListener('keydown', async (ev) => {
+      if (!isCompactScreen()) return;
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        await handleQtyInputInteraction(ev);
+      }
+    });
     sync();
   }
 
   window.addEventListener('resize', () => {
     const active = document.activeElement;
     updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
+    [...body.querySelectorAll('.qty')].forEach(syncQtyInputMode);
   });
 
   document.addEventListener('scroll', () => {
@@ -433,10 +531,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (bulkSelectionCount) {
-      const compactSelectionText = window.matchMedia('(max-width: 575.98px)').matches;
-      bulkSelectionCount.textContent = compactSelectionText
-        ? (selectedCount === 1 ? '1 seleccionada' : (selectedCount + ' seleccionadas'))
-        : (selectedCount === 1 ? '1 fila seleccionada' : (selectedCount + ' filas seleccionadas'));
+      bulkSelectionCount.textContent = selectedCount === 1 ? '1 seleccionada' : (selectedCount + ' seleccionadas');
+    }
+
+    if (btnClearSelection) {
+      btnClearSelection.disabled = selectedCount === 0;
+      btnClearSelection.setAttribute('aria-disabled', String(btnClearSelection.disabled));
     }
 
     if (btnReviewSelected) {
@@ -567,6 +667,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnDeleteSelected) {
     btnDeleteSelected.addEventListener('click', async () => {
       await deleteSelectedRows();
+    });
+  }
+
+  if (btnClearSelection) {
+    btnClearSelection.addEventListener('click', () => {
+      getBulkSelectionCheckboxes().forEach(cb => {
+        cb.checked = false;
+      });
+      updateBulkSelectionUI();
+      updateHistoricalSelectionUI();
     });
   }
 
@@ -1404,6 +1514,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </td>
     `;
     body.insertBefore(tr, body.firstChild);
+    applyResponsiveRowLabels(tr);
     renumber();
 
     const btnRev = getReviewButton(tr);
@@ -1456,9 +1567,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const qtyInput = tr.querySelector('.qty');
     if (qtyInput) {
       bindQtyPreview(qtyInput);
-      qtyInput.focus();
+      if (!isCompactScreen()) {
+        qtyInput.focus();
+      }
       qtyInput.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
+        if (ev.key === 'Enter' && !isCompactScreen()) {
           ev.preventDefault();
           if (searchInput) searchInput.focus();
         }
@@ -1865,53 +1978,81 @@ document.addEventListener('DOMContentLoaded', async () => {
     Swal.fire('Éxito', 'Se generó el Excel general.', 'success');
   }
 
-  btnPDF.addEventListener('click', async () => {
+  async function handleExportRequest(preferredFormat = '') {
     if (body.rows.length === 0) {
-      Swal.fire('Error', 'No hay productos en la lista para generar PDF.', 'error');
+      await Swal.fire('Error', 'No hay productos en la lista para exportar.', 'error');
       return;
     }
 
-    const mode = await promptExportMode('PDF');
+    let format = preferredFormat;
+
+    if (!format) {
+      const formatResult = await Swal.fire({
+        title: 'Exportar checklist',
+        input: 'radio',
+        inputOptions: {
+          pdf: 'PDF',
+          excel: 'Excel'
+        },
+        inputValue: 'pdf',
+        showCancelButton: true,
+        confirmButtonText: 'Continuar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => value ? undefined : 'Selecciona un formato.'
+      });
+
+      if (!formatResult.isConfirmed) return;
+      format = formatResult.value;
+    }
+
+    const mode = await promptExportMode(format === 'pdf' ? 'PDF' : 'Excel');
     if (!mode) return;
 
     if (mode === 'general') {
-      await withLoading('Generando PDF...', async () => {
-        exportPDFGeneral();
-      });
+      if (format === 'pdf') {
+        await withLoading('Generando PDF...', async () => {
+          exportPDFGeneral();
+        });
+      } else {
+        await withLoading('Generando Excel...', async () => {
+          exportExcelGeneral();
+        });
+      }
       return;
     }
 
-    const warehouses = await promptWarehouseSelection('PDF');
+    const warehouses = await promptWarehouseSelection(format === 'pdf' ? 'PDF' : 'Excel');
     if (!warehouses) return;
 
-    await withLoading('Generando PDF por bodega...', async () => {
-      await exportPDFPorBodega(warehouses);
-    });
-  });
-
-  btnExcel.addEventListener('click', async () => {
-    if (body.rows.length === 0) {
-      Swal.fire('Error', 'No hay productos en la lista para generar Excel.', 'error');
-      return;
-    }
-
-    const mode = await promptExportMode('Excel');
-    if (!mode) return;
-
-    if (mode === 'general') {
-      await withLoading('Generando Excel...', async () => {
-        exportExcelGeneral();
+    if (format === 'pdf') {
+      await withLoading('Generando PDF por bodega...', async () => {
+        await exportPDFPorBodega(warehouses);
       });
-      return;
+    } else {
+      await withLoading('Generando Excel por bodega...', async () => {
+        await exportExcelPorBodega(warehouses);
+      });
     }
+  }
 
-    const warehouses = await promptWarehouseSelection('Excel');
-    if (!warehouses) return;
-
-    await withLoading('Generando Excel por bodega...', async () => {
-      await exportExcelPorBodega(warehouses);
+  if (btnExport) {
+    btnExport.addEventListener('click', async () => {
+      closeMoreActionsMenu();
+      await handleExportRequest();
     });
-  });
+  }
+
+  if (btnPDF) {
+    btnPDF.addEventListener('click', async () => {
+      await handleExportRequest('pdf');
+    });
+  }
+
+  if (btnExcel) {
+    btnExcel.addEventListener('click', async () => {
+      await handleExportRequest('excel');
+    });
+  }
 
 
   // Sort by Bodega via header only

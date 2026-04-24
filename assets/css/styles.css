@@ -1977,3 +1977,342 @@ main.container-fluid {
     font-size: 0.88rem;
   }
 }
+
+
+/* === UI v6: patrón tipo apps conocidas === */
+.checklist-primary-toolbar {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.checklist-primary-toolbar > .btn,
+.toolbar-menu-toggle {
+  min-height: 44px;
+}
+
+#btnExport {
+  border-width: 1.5px;
+}
+
+.toolbar-menu-compact {
+  justify-self: end;
+}
+
+.toolbar-menu-compact .toolbar-menu-toggle {
+  min-width: 86px;
+  padding-inline: 0.8rem;
+}
+
+.toolbar-menu-panel {
+  width: min(260px, calc(100vw - 1.5rem));
+}
+
+.bulk-selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  z-index: 1090;
+  width: min(720px, calc(100vw - 1.25rem));
+  margin-top: 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(195, 210, 226, 0.95);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.bulk-selection-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #d5dee8;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bulk-selection-summary {
+  min-width: 0;
+}
+
+.bulk-selection-count-pill {
+  width: max-content;
+  max-width: 100%;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.bulk-selection-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bulk-selection-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.bulk-selection-actions > .btn {
+  min-height: 38px;
+  padding-inline: 0.8rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.table-checklist-shell {
+  margin-bottom: 5.6rem;
+}
+
+.table-checklist-wrapper {
+  overflow-x: auto;
+}
+
+#chkTable .qty.qty-mobile-readonly {
+  cursor: pointer;
+  background-image: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+@media (min-width: 768px) {
+  .toolbar-menu-title {
+    margin-bottom: 0.5rem;
+  }
+
+  .workspace-status-inline {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .checklist-primary-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .checklist-card-header {
+    padding-bottom: 0.75rem;
+  }
+
+  .workspace-status-badge {
+    justify-content: flex-start;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.92rem;
+  }
+
+  .checklist-primary-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.55rem;
+  }
+
+  .checklist-primary-toolbar > .btn,
+  .toolbar-menu-toggle {
+    min-height: 42px;
+    border-radius: 0.9rem;
+  }
+
+  #btnSave span {
+    display: inline;
+  }
+
+  #btnExport span,
+  .toolbar-menu-compact .toolbar-menu-toggle span {
+    display: none;
+  }
+
+  #btnExport,
+  .toolbar-menu-compact .toolbar-menu-toggle {
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
+  }
+
+  .checklist-search-shell {
+    padding: 0.7rem;
+    border-radius: 0.95rem;
+  }
+
+  .search-bar-embedded .form-control,
+  .search-bar-embedded .btn,
+  .search-lead-chip {
+    min-height: 42px;
+  }
+
+  .search-lead-chip span {
+    display: none;
+  }
+
+  .search-lead-chip {
+    min-width: 3.1rem;
+    justify-content: center;
+  }
+
+  .table-checklist-shell {
+    margin-top: 0.85rem;
+    margin-bottom: 6.25rem;
+    border: none;
+    background: transparent;
+  }
+
+  .table-checklist-wrapper {
+    overflow: visible;
+    border-radius: 0;
+    max-height: none;
+  }
+
+  #chkTable {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #chkTable thead {
+    display: none;
+  }
+
+  #chkTable,
+  #chkTable tbody,
+  #chkTable tr,
+  #chkTable td {
+    display: block;
+    width: 100%;
+  }
+
+  #chkTable tbody {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  #chkTable tbody tr {
+    position: relative;
+    padding: 0.9rem 0.9rem 0.85rem;
+    border: 1px solid #dbe5ef;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  #chkTable tbody tr:nth-child(even) {
+    background: #f8fbff;
+  }
+
+  #chkTable tbody tr > td {
+    border: 0 !important;
+    padding: 0;
+    background: transparent !important;
+  }
+
+  #chkTable tbody tr > td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.18rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  #chkTable tbody tr > td:nth-child(2),
+  #chkTable tbody tr > td:nth-child(3) {
+    display: none;
+  }
+
+  #chkTable tbody tr > td.cell-select {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.85rem;
+    width: auto;
+  }
+
+  #chkTable tbody tr > td.cell-select::before {
+    display: none;
+  }
+
+  #chkTable tbody tr > td.cell-name {
+    padding-right: 2.35rem;
+    margin-bottom: 0.65rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  #chkTable tbody tr > td.cell-name::before {
+    content: "Producto";
+  }
+
+  #chkTable tbody tr > td.cell-inventory,
+  #chkTable tbody tr > td.cell-warehouse {
+    margin-bottom: 0.5rem;
+  }
+
+  #chkTable tbody tr > td.cell-quantity {
+    margin-bottom: 0.75rem;
+  }
+
+  #chkTable tbody tr > td.cell-quantity .qty {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    text-align: left;
+    border-radius: 0.8rem;
+  }
+
+  #chkTable tbody tr > td.cell-actions .row-actions-grid {
+    width: 100%;
+    margin: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  #chkTable tbody tr > td.cell-actions .row-actions-grid .btn {
+    width: 100%;
+    height: 40px;
+    border-radius: 0.85rem;
+  }
+
+  .bulk-selection-bar {
+    width: calc(100vw - 1rem);
+    padding: 0.65rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 0.55rem;
+  }
+
+  .bulk-selection-summary {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-selection-count-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bulk-selection-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .bulk-selection-actions > .btn {
+    min-height: 36px;
+    padding-inline: 0.75rem;
+    font-size: 0.88rem;
+  }
+
+  .bulk-selection-close {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    width: 32px;
+    height: 32px;
+  }
+}
