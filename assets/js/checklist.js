@@ -433,9 +433,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (bulkSelectionCount) {
-      bulkSelectionCount.textContent = selectedCount === 1
-        ? '1 fila seleccionada'
-        : (selectedCount + ' filas seleccionadas');
+      const compactSelectionText = window.matchMedia('(max-width: 575.98px)').matches;
+      bulkSelectionCount.textContent = compactSelectionText
+        ? (selectedCount === 1 ? '1 seleccionada' : (selectedCount + ' seleccionadas'))
+        : (selectedCount === 1 ? '1 fila seleccionada' : (selectedCount + ' filas seleccionadas'));
     }
 
     if (btnReviewSelected) {
