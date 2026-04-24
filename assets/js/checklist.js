@@ -28,6 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const appLoadingOverlay = $('appLoadingOverlay');
   const appLoadingText = $('appLoadingText');
   const qtyPreviewBubble = $('qtyPreviewBubble');
+  const mobileFabToggle = $('mobileFabToggle');
+  const mobileFabMenu = $('mobileFabMenu');
+  const mobileFabBackdrop = $('mobileFabBackdrop');
+  const btnFabSave = $('btnFabSave');
+  const btnFabSearchList = $('btnFabSearchList');
+  const btnFabExport = $('btnFabExport');
+  const btnFabScrollTop = $('btnFabScrollTop');
 
   // Histórico
   const histDateInput = $('histDateInput');
@@ -131,6 +138,99 @@ document.addEventListener('DOMContentLoaded', async () => {
       moreActionsMenu.removeAttribute('open');
     }
   }
+
+  function setMobileFabOpen(shouldOpen) {
+    if (!mobileFabToggle || !mobileFabMenu || !mobileFabBackdrop) return;
+    const isOpen = !!shouldOpen;
+    mobileFabMenu.classList.toggle('d-none', !isOpen);
+    mobileFabBackdrop.classList.toggle('d-none', !isOpen);
+    mobileFabMenu.setAttribute('aria-hidden', String(!isOpen));
+    mobileFabToggle.setAttribute('aria-expanded', String(isOpen));
+    mobileFabToggle.closest('.mobile-fab-shell')?.classList.toggle('is-open', isOpen);
+  }
+
+  function closeMobileFab() {
+    setMobileFabOpen(false);
+  }
+
+  function buildRowSearchText(tr) {
+    if (!tr?.cells) return '';
+    return [
+      tr.cells[COL_INDEX.barcode]?.innerText || '',
+      tr.cells[COL_INDEX.name]?.innerText || '',
+      tr.cells[COL_INDEX.inventoryCode]?.innerText || '',
+      tr.cells[COL_INDEX.warehouse]?.innerText || '',
+      tr.querySelector('.qty')?.value || ''
+    ].join(' ').toLowerCase();
+  }
+
+  function buildRowSearchLabel(tr) {
+    const nombre = tr?.cells?.[COL_INDEX.name]?.innerText?.trim() || 'Producto';
+    const codigo = tr?.cells?.[COL_INDEX.inventoryCode]?.innerText?.trim() || 'N/A';
+    const bodega = tr?.cells?.[COL_INDEX.warehouse]?.innerText?.trim() || 'Sin bodega';
+    return `${nombre} · ${codigo} · ${bodega}`;
+  }
+
+  async function openInsertedRowsSearch() {
+    const rows = [...body.querySelectorAll('tr')];
+    if (!rows.length) {
+      await Swal.fire('Sin productos', 'Todavía no hay productos agregados en la lista actual.', 'info');
+      return;
+    }
+
+    closeMobileFab();
+
+    const queryPrompt = await Swal.fire({
+      title: 'Buscar en la lista actual',
+      input: 'text',
+      inputLabel: 'Nombre, código de barras, código inventario o bodega',
+      inputPlaceholder: 'Escribe para ubicar un producto ya agregado',
+      showCancelButton: true,
+      confirmButtonText: 'Buscar',
+      cancelButtonText: 'Cancelar',
+      inputValidator: (value) => {
+        if (!String(value || '').trim()) return 'Escribe algo para buscar.';
+        return undefined;
+      }
+    });
+
+    if (!queryPrompt.isConfirmed) return;
+
+    const needle = String(queryPrompt.value || '').trim().toLowerCase();
+    const matches = rows.filter(tr => buildRowSearchText(tr).includes(needle));
+
+    if (!matches.length) {
+      await Swal.fire('Sin resultados', 'No encontré coincidencias en la lista actual.', 'info');
+      return;
+    }
+
+    if (matches.length === 1) {
+      flashAndFocusRow(matches[0], 'qty');
+      return;
+    }
+
+    const options = Object.fromEntries(
+      matches.slice(0, 50).map((tr, idx) => [String(idx), buildRowSearchLabel(tr)])
+    );
+
+    const choice = await Swal.fire({
+      title: `Coincidencias (${matches.length})`,
+      input: 'select',
+      inputOptions: options,
+      inputPlaceholder: 'Selecciona una fila',
+      showCancelButton: true,
+      confirmButtonText: 'Ir a fila',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!choice.isConfirmed) return;
+
+    const targetRow = matches[Number(choice.value)];
+    if (targetRow) {
+      flashAndFocusRow(targetRow, 'qty');
+    }
+  }
+
 
   function isCompactScreen() {
     return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
@@ -528,6 +628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const shouldShow = selectedCount > 0;
       bulkSelectionBar.classList.toggle('d-none', !shouldShow);
       bulkSelectionBar.setAttribute('aria-hidden', String(!shouldShow));
+      document.body.classList.toggle('has-mobile-selection', shouldShow && isCompactScreen());
     }
 
     if (bulkSelectionCount) {
@@ -2042,6 +2143,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  if (mobileFabToggle) {
+    mobileFabToggle.addEventListener('click', () => {
+      const expanded = mobileFabToggle.getAttribute('aria-expanded') === 'true';
+      setMobileFabOpen(!expanded);
+    });
+  }
+
+  if (mobileFabBackdrop) {
+    mobileFabBackdrop.addEventListener('click', closeMobileFab);
+  }
+
+  if (btnFabSearchList) {
+    btnFabSearchList.addEventListener('click', async () => {
+      await openInsertedRowsSearch();
+    });
+  }
+
+  if (btnFabSave) {
+    btnFabSave.addEventListener('click', async () => {
+      closeMobileFab();
+      await persistCurrentChecklist({
+        successTitle: 'Guardado',
+        successMessage: 'Checklist guardado correctamente.'
+      });
+    });
+  }
+
+  if (btnFabExport) {
+    btnFabExport.addEventListener('click', async () => {
+      closeMobileFab();
+      await handleExportRequest();
+    });
+  }
+
+  if (btnFabScrollTop) {
+    btnFabScrollTop.addEventListener('click', () => {
+      closeMobileFab();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeMobileFab();
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (!isCompactScreen()) {
+      closeMobileFab();
+    }
+  });
+
+
   if (btnPDF) {
     btnPDF.addEventListener('click', async () => {
       await handleExportRequest('pdf');
@@ -2814,6 +2969,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
     closeMoreActionsMenu();
+    closeMobileFab();
     await withLoading('Cambiando tienda...', async () => {
       updateStoreUI();
       currentViewDate = null;
@@ -2830,6 +2986,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   versionSelect.addEventListener('change', async () => {
     closeMoreActionsMenu();
+    closeMobileFab();
     const requestedVersion = versionSelect.value;
     const previousVersion = lastCommittedVersionValue || 'base';
     const isProtectedRequest = (typeof isProtectedVersionKey === 'function')

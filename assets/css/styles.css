@@ -2316,3 +2316,295 @@ main.container-fluid {
     height: 32px;
   }
 }
+
+
+/* === UI v7: tabla móvil compacta + FAB + toolbar sobrio === */
+.checklist-primary-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.checklist-primary-toolbar > .btn,
+.checklist-primary-toolbar .toolbar-menu {
+  flex: 0 0 auto;
+}
+
+.checklist-primary-toolbar > .btn,
+.toolbar-menu-toggle {
+  width: auto;
+  min-height: 36px;
+  padding-inline: 0.8rem;
+  border-radius: 0.78rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  gap: 0.45rem;
+}
+
+.workspace-status-badge {
+  min-height: 1.9rem;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.72rem;
+}
+
+.row-actions-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  width: max-content;
+  margin-inline: auto;
+}
+
+.row-actions-grid .btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 0.6rem;
+}
+
+.bulk-selection-actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.bulk-selection-actions > .btn {
+  flex: 0 0 auto;
+}
+
+.mobile-fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(1px);
+}
+
+.mobile-fab-shell {
+  position: fixed;
+  right: max(0.85rem, env(safe-area-inset-right));
+  bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 0.25rem);
+  z-index: 1055;
+  display: none;
+}
+
+.mobile-fab-toggle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow: 0 14px 34px rgba(13, 110, 253, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.08rem;
+}
+
+.mobile-fab-toggle i {
+  transition: transform 0.18s ease;
+}
+
+.mobile-fab-shell.is-open .mobile-fab-toggle i {
+  transform: rotate(45deg);
+}
+
+.mobile-fab-menu {
+  position: absolute;
+  right: 0;
+  bottom: 68px;
+  min-width: min(82vw, 240px);
+  padding: 0.55rem;
+  border: 1px solid #d8e1ec;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.mobile-fab-menu-btn {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  border-radius: 0.85rem;
+  font-weight: 600;
+}
+
+.mobile-fab-menu-btn i {
+  width: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .mobile-fab-shell {
+    display: block;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .checklist-primary-toolbar {
+    gap: 0.4rem;
+  }
+
+  .checklist-primary-toolbar > .btn,
+  .toolbar-menu-toggle {
+    min-height: 34px;
+    padding-inline: 0.68rem;
+    font-size: 0.78rem;
+  }
+
+  .toolbar-menu-panel {
+    left: auto;
+    right: 0;
+  }
+
+  .workspace-status-badge {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .checklist-search-shell {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 8;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  }
+
+  .table-checklist-wrapper {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 7.25rem;
+    max-height: none;
+  }
+
+  #chkTable {
+    display: table !important;
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #chkTable thead {
+    display: table-header-group !important;
+  }
+
+  #chkTable tbody {
+    display: table-row-group !important;
+  }
+
+  #chkTable tr {
+    display: table-row !important;
+  }
+
+  #chkTable th,
+  #chkTable td {
+    display: table-cell !important;
+    width: auto !important;
+    white-space: nowrap;
+    vertical-align: middle;
+    padding: 0.48rem 0.42rem;
+    font-size: 0.81rem;
+    border-width: 1px;
+    background-clip: padding-box;
+  }
+
+  #chkTable tbody tr {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  #chkTable tbody tr > td::before {
+    display: none !important;
+  }
+
+  #chkTable tbody tr > td:nth-child(2),
+  #chkTable tbody tr > td:nth-child(3) {
+    display: table-cell !important;
+  }
+
+  #chkTable .bulk-select-col {
+    min-width: 46px;
+    width: 46px;
+  }
+
+  #chkTable .qty {
+    min-width: 7rem;
+    max-width: 10rem;
+    min-height: 36px;
+    text-align: left;
+  }
+
+  #chkTable .cell-name {
+    min-width: 13rem;
+  }
+
+  #chkTable .cell-inventory,
+  #chkTable .cell-warehouse,
+  #chkTable td:nth-child(3) {
+    min-width: 8rem;
+  }
+
+  .row-actions-grid {
+    gap: 0.2rem;
+  }
+
+  .row-actions-grid .btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .bulk-selection-bar {
+    position: fixed;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: calc(max(4.8rem, env(safe-area-inset-bottom) + 4.4rem));
+    margin-top: 0;
+    padding: 0.62rem 0.68rem;
+    border-radius: 1rem;
+    z-index: 1045;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(6px);
+  }
+
+  .bulk-selection-summary {
+    width: 100%;
+  }
+
+  .bulk-selection-count-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bulk-selection-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.42rem;
+    padding-bottom: 0.1rem;
+  }
+
+  .bulk-selection-actions > .btn {
+    min-height: 34px;
+    padding-inline: 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .bulk-selection-close {
+    position: absolute;
+    top: 0.42rem;
+    right: 0.42rem;
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-fab-shell,
+  .mobile-fab-backdrop {
+    display: none !important;
+  }
+}
