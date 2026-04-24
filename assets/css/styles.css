@@ -2608,3 +2608,216 @@ main.container-fluid {
     display: none !important;
   }
 }
+
+
+/* === UI v8: correcciones de alineación + cards móviles compactas === */
+@media (max-width: 767.98px) {
+  .toolbar-menu {
+    position: static;
+  }
+
+  .toolbar-menu-panel {
+    position: fixed;
+    right: max(0.75rem, env(safe-area-inset-right));
+    left: auto !important;
+    top: auto;
+    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 4.6rem);
+    width: min(280px, calc(100vw - 1.5rem));
+    z-index: 1086;
+  }
+
+  .bulk-selection-bar {
+    left: max(0.75rem, env(safe-area-inset-left));
+    right: max(0.75rem, env(safe-area-inset-right));
+    width: auto;
+    transform: none;
+    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 4.9rem);
+    padding: 0.62rem 0.7rem;
+    border-radius: 1rem;
+    grid-template-columns: auto 1fr;
+    row-gap: 0.45rem;
+    column-gap: 0.55rem;
+    align-items: start;
+  }
+
+  .bulk-selection-summary {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-selection-count-pill {
+    width: 100%;
+    justify-content: center;
+    padding: 0.38rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .bulk-selection-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .bulk-selection-actions > .btn {
+    min-height: 34px;
+    padding-inline: 0.45rem;
+    font-size: 0.78rem;
+  }
+
+  .bulk-selection-close {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    width: 30px;
+    height: 30px;
+  }
+
+  body.has-mobile-selection .mobile-fab-shell {
+    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 8.2rem);
+  }
+
+  .mobile-fab-shell {
+    right: max(0.85rem, env(safe-area-inset-right));
+  }
+
+  .mobile-fab-menu {
+    right: 0;
+    left: auto;
+    bottom: 68px;
+    min-width: min(86vw, 248px);
+  }
+
+  .table-checklist-shell {
+    margin-bottom: 8.8rem;
+  }
+
+  #chkTable tbody {
+    gap: 0.58rem;
+  }
+
+  #chkTable tbody tr {
+    padding: 0.72rem 0.76rem 0.68rem;
+    border-radius: 0.92rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055);
+  }
+
+  #chkTable tbody tr > td::before {
+    margin-bottom: 0.12rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.02em;
+  }
+
+  #chkTable tbody tr > td:nth-child(2) {
+    display: none;
+  }
+
+  #chkTable tbody tr > td.cell-select {
+    top: 0.62rem;
+    right: 0.68rem;
+  }
+
+  #chkTable tbody tr > td.cell-select .form-check-input {
+    width: 1.08rem;
+    height: 1.08rem;
+  }
+
+  #chkTable tbody tr > td.cell-name {
+    padding-right: 1.85rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.95rem;
+    line-height: 1.25;
+  }
+
+  #chkTable tbody tr > td.cell-barcode {
+    display: inline-flex !important;
+    width: auto !important;
+    margin-bottom: 0.4rem;
+    padding: 0.22rem 0.5rem;
+    border: 1px solid #dbe6f3;
+    border-radius: 999px;
+    background: #f8fbff !important;
+    color: #274c77;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  #chkTable tbody tr > td.cell-barcode::before {
+    content: "Barras";
+    display: inline;
+    margin: 0 0.3rem 0 0;
+    font-size: 0.64rem;
+    color: #64748b;
+  }
+
+  #chkTable tbody tr > td.cell-inventory,
+  #chkTable tbody tr > td.cell-warehouse {
+    display: inline-block !important;
+    width: calc(50% - 0.22rem) !important;
+    vertical-align: top;
+    margin-bottom: 0.42rem;
+  }
+
+  #chkTable tbody tr > td.cell-inventory {
+    margin-right: 0.44rem;
+  }
+
+  #chkTable tbody tr > td.cell-quantity {
+    margin-bottom: 0.52rem;
+  }
+
+  #chkTable tbody tr > td.cell-quantity .qty {
+    min-height: 40px;
+    padding-block: 0.38rem;
+    font-size: 0.9rem;
+  }
+
+  #chkTable tbody tr > td.cell-actions .row-actions-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.04rem;
+  }
+
+  #chkTable tbody tr > td.cell-actions .row-actions-grid .btn {
+    min-width: 38px;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    border-radius: 0.75rem;
+  }
+
+  #chkTable tbody tr > td.cell-actions::before {
+    margin-bottom: 0.26rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .bulk-selection-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-selection-actions > .btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .toolbar-menu-panel {
+    width: min(260px, calc(100vw - 1.25rem));
+  }
+
+  #chkTable tbody tr > td.cell-inventory,
+  #chkTable tbody tr > td.cell-warehouse {
+    width: 100% !important;
+    margin-right: 0;
+  }
+
+  #chkTable tbody tr > td.cell-barcode {
+    max-width: calc(100% - 2rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

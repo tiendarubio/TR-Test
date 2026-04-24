@@ -244,6 +244,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (idx === COL_INDEX.bulkSelect) {
         cell.classList.add('cell-select');
       }
+      if (idx === COL_INDEX.barcode) {
+        cell.classList.add('cell-barcode');
+      }
       if (idx === COL_INDEX.name) {
         cell.classList.add('cell-name');
       }
