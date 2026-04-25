@@ -1,5 +1,13 @@
 // app.js — Config & helpers para TRLista (Vercel)
 
+const DEFAULT_TIME_ZONE = 'America/El_Salvador';
+
+const LIST_LABELS = Object.freeze({
+  base: 'Principal',
+  alterna: 'Alterna',
+  traslado: 'Traslado'
+});
+
 // Identificadores lógicos por tienda/lista — se reutilizan como docId en Firestore
 const STORE_BINS = {
   lista_sexta_calle: {
@@ -19,14 +27,18 @@ const STORE_BINS = {
   }
 };
 
+function getStoreConfig(storeKey) {
+  return STORE_BINS[storeKey] || null;
+}
+
 function getBinId(storeKey, versionKey = 'base') {
-  const rec = STORE_BINS[storeKey];
+  const rec = getStoreConfig(storeKey);
   if (!rec) return null;
   return rec[versionKey] ?? null;
 }
 
 function getStoreVersions(storeKey) {
-  const rec = STORE_BINS[storeKey];
+  const rec = getStoreConfig(storeKey);
   if (!rec) return [];
   return Object.entries(rec)
     .filter(([, docId]) => !!docId)
@@ -34,12 +46,7 @@ function getStoreVersions(storeKey) {
 }
 
 function getListLabel(versionKey) {
-  const labels = {
-    base: 'Principal',
-    alterna: 'Alterna',
-    traslado: 'Traslado'
-  };
-  return labels[versionKey] || versionKey;
+  return LIST_LABELS[versionKey] || versionKey;
 }
 
 const PROTECTED_VERSION_KEYS = ['traslado'];
@@ -104,8 +111,33 @@ function getFirestoreDb() {
   return FIRESTORE_DB;
 }
 
-function getTodayString() {
-  return new Date().toISOString().split('T')[0];
+function getTodayString(timeZone = DEFAULT_TIME_ZONE) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+
+    const map = Object.fromEntries(
+      parts
+        .filter(part => part.type !== 'literal')
+        .map(part => [part.type, part.value])
+    );
+
+    if (map.year && map.month && map.day) {
+      return `${map.year}-${map.month}-${map.day}`;
+    }
+  } catch (err) {
+    console.warn('No se pudo resolver la fecha local con Intl:', err?.message || err);
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function saveChecklistToFirestore(docId, payload, dateStr) {
@@ -190,8 +222,45 @@ function formatSV(iso) {
 }
 
 
+const TRLISTA_APP_API = Object.freeze({
+  constants: Object.freeze({
+    DEFAULT_TIME_ZONE,
+    LIST_LABELS,
+    STORE_BINS,
+    PROTECTED_VERSION_KEYS
+  }),
+  getStoreConfig,
+  getBinId,
+  getStoreVersions,
+  getListLabel,
+  isProtectedVersionKey,
+  preloadCatalog,
+  loadProductsFromGoogleSheets,
+  getFirestoreDb,
+  getTodayString,
+  saveChecklistToFirestore,
+  loadChecklistFromFirestore,
+  getHistoryDates,
+  formatSV
+});
+
 try {
+  window.TRListaApp = TRLISTA_APP_API;
+
+  // Compatibilidad hacia atrás durante la refactorización progresiva.
   window.STORE_BINS = STORE_BINS;
   window.PROTECTED_VERSION_KEYS = PROTECTED_VERSION_KEYS;
+  window.getStoreConfig = getStoreConfig;
+  window.getBinId = getBinId;
+  window.getStoreVersions = getStoreVersions;
+  window.getListLabel = getListLabel;
   window.isProtectedVersionKey = isProtectedVersionKey;
+  window.preloadCatalog = preloadCatalog;
+  window.loadProductsFromGoogleSheets = loadProductsFromGoogleSheets;
+  window.getFirestoreDb = getFirestoreDb;
+  window.getTodayString = getTodayString;
+  window.saveChecklistToFirestore = saveChecklistToFirestore;
+  window.loadChecklistFromFirestore = loadChecklistFromFirestore;
+  window.getHistoryDates = getHistoryDates;
+  window.formatSV = formatSV;
 } catch (_) {}

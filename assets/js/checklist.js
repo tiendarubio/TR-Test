@@ -11,38 +11,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   const btnSave = $('btnSave');
-  const btnSearchList = $('btnSearchList');
-  const btnSearchListInline = $('btnSearchListInline');
-  const btnExport = $('btnExport');
   const btnToggleRequisition = $('btnToggleRequisition');
   const btnExcel = $('btnExcel');
   const btnPDF = $('btnPDF');
   const btnClear = $('btnClear');
-  const btnReviewSelected = $('btnReviewSelected');
-  const btnDispatchSelected = $('btnDispatchSelected');
-  const btnDeleteSelected = $('btnDeleteSelected');
   const thBodega = $('thBodega');
-  const chkSelectAllRows = $('chkSelectAllRows');
-  const bulkSelectionBar = $('bulkSelectionBar');
-  const bulkSelectionCount = $('bulkSelectionCount');
-  const btnClearSelection = $('btnClearSelection');
-  const moreActionsMenu = $('moreActionsMenu');
-  const appLoadingOverlay = $('appLoadingOverlay');
-  const appLoadingText = $('appLoadingText');
-  const qtyPreviewBubble = $('qtyPreviewBubble');
-  const mobileFabToggle = $('mobileFabToggle');
-  const mobileFabMenu = $('mobileFabMenu');
-  const mobileFabBackdrop = $('mobileFabBackdrop');
-  const btnFabSave = $('btnFabSave');
-  const btnFabSearchList = $('btnFabSearchList');
-  const btnFabExport = $('btnFabExport');
-  const btnFabScrollTop = $('btnFabScrollTop');
 
   // Histórico
   const histDateInput = $('histDateInput');
   const btnHistToday = $('btnHistToday');
   const btnToggleHistLock = $('btnToggleHistLock');
+  const btnHistoricalSelectMode = $('btnHistoricalSelectMode');
   const btnMergeSelectedToToday = $('btnMergeSelectedToToday');
+  const chkSelectAllHistory = $('chkSelectAllHistory');
+  const thHistorySelect = $('thHistorySelect');
   const btnHistCalendar = $('btnHistCalendar');
   const histCalendarPanel = $('histCalendarPanel');
 
@@ -55,11 +37,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let sortAsc = true;
   let lastUpdateISO = null;
-  let loadingCounter = 0;
-
-  let mediaStream = null;
-  let scanInterval = null;
-  let detector = null;
 
   // Histórico
   let histPicker = null;
@@ -67,65 +44,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   let histDatesWithData = new Set();
   let historicalUnlockEnabled = false;
   let protectedVersionUnlockEnabled = false;
+  let historicalSelectionMode = false;
   let requisitionDone = false;
   let requisitionDoneAt = null;
   let lastCommittedVersionValue = versionSelect?.value || 'base';
+  let activeUnlockSession = null;
 
-  const COL_INDEX = {
-    bulkSelect: 0,
-    rowNumber: 1,
-    barcode: 2,
-    name: 3,
-    inventoryCode: 4,
-    warehouse: 5,
-    quantity: 6,
-    actions: 7
-  };
+const checklistShared = window.TRListaChecklistShared?.createBridge({
+  storeSelect
+});
 
-  const MOBILE_BREAKPOINT = 767.98;
-  const ROW_CELL_LABELS = {
-    [COL_INDEX.bulkSelect]: 'Seleccionar',
-    [COL_INDEX.rowNumber]: '#',
-    [COL_INDEX.barcode]: 'Cód. barras',
-    [COL_INDEX.name]: 'Producto',
-    [COL_INDEX.inventoryCode]: 'Cód. inv.',
-    [COL_INDEX.warehouse]: 'Bodega',
-    [COL_INDEX.quantity]: 'Cantidad',
-    [COL_INDEX.actions]: 'Acciones'
-  };
+if (!checklistShared) {
+  throw new Error('TRListaChecklistShared no está disponible.');
+}
 
+const {
+  getBinId,
+  getStoreVersions,
+  getListLabel,
+  isProtectedVersionKey,
+  preloadCatalog,
+  saveChecklistToFirestore,
+  loadChecklistFromFirestore,
+  getHistoryDates,
+  getTodayString,
+  formatSV,
+  getCurrentStoreName,
+  sanitizeFileNamePart,
+  downloadBlobFile,
+  parseQuantityToInteger,
+  htmlAttrEscape,
+  escapeHtml,
+  getLocalDateKey
+} = checklistShared;
 
-  function setLoadingState(isLoading, message = 'Cargando...') {
-    if (!appLoadingOverlay) return;
+  const UNLOCK_STORAGE_KEY = 'trlista_unlock_session_v1';
+  const UNLOCK_SCOPE_HISTORICAL = 'historical';
+  const UNLOCK_SCOPE_PROTECTED = 'protected';
 
-    if (isLoading) {
-      loadingCounter += 1;
-      if (appLoadingText) {
-        appLoadingText.textContent = message || 'Cargando...';
-      }
-      appLoadingOverlay.classList.remove('d-none');
-      appLoadingOverlay.setAttribute('aria-hidden', 'false');
-      return;
-    }
-
-    loadingCounter = Math.max(0, loadingCounter - 1);
-
-    if (loadingCounter === 0) {
-      appLoadingOverlay.classList.add('d-none');
-      appLoadingOverlay.setAttribute('aria-hidden', 'true');
-    }
-  }
-
-  async function withLoading(message, task) {
-    setLoadingState(true, message);
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-
-    try {
-      return await task();
-    } finally {
-      setLoadingState(false);
-    }
-  }
 
   function setToolbarButtonContent(btn, iconClassName, label) {
     if (!btn) return;
@@ -135,281 +91,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
   }
 
-  function closeMoreActionsMenu() {
-    if (moreActionsMenu?.hasAttribute('open')) {
-      moreActionsMenu.removeAttribute('open');
-    }
-  }
-
-  function setMobileFabOpen(shouldOpen) {
-    if (!mobileFabToggle || !mobileFabMenu || !mobileFabBackdrop) return;
-    const isOpen = !!shouldOpen;
-    mobileFabMenu.classList.toggle('d-none', !isOpen);
-    mobileFabBackdrop.classList.toggle('d-none', !isOpen);
-    mobileFabMenu.setAttribute('aria-hidden', String(!isOpen));
-    mobileFabToggle.setAttribute('aria-expanded', String(isOpen));
-    mobileFabToggle.closest('.mobile-fab-shell')?.classList.toggle('is-open', isOpen);
-  }
-
-  function closeMobileFab() {
-    setMobileFabOpen(false);
-  }
-
-  function buildRowSearchText(tr) {
-    if (!tr?.cells) return '';
-    return [
-      tr.cells[COL_INDEX.barcode]?.innerText || '',
-      tr.cells[COL_INDEX.name]?.innerText || '',
-      tr.cells[COL_INDEX.inventoryCode]?.innerText || '',
-      tr.cells[COL_INDEX.warehouse]?.innerText || '',
-      tr.querySelector('.qty')?.value || ''
-    ].join(' ').toLowerCase();
-  }
-
-  function buildRowSearchLabel(tr) {
-    const nombre = tr?.cells?.[COL_INDEX.name]?.innerText?.trim() || 'Producto';
-    const codigo = tr?.cells?.[COL_INDEX.inventoryCode]?.innerText?.trim() || 'N/A';
-    const bodega = tr?.cells?.[COL_INDEX.warehouse]?.innerText?.trim() || 'Sin bodega';
-    return `${nombre} · ${codigo} · ${bodega}`;
-  }
-
-  async function openInsertedRowsSearch() {
-    const rows = [...body.querySelectorAll('tr')];
-    if (!rows.length) {
-      await Swal.fire('Sin productos', 'Todavía no hay productos agregados en la lista actual.', 'info');
-      return;
-    }
-
-    closeMobileFab();
-
-    const queryPrompt = await Swal.fire({
-      title: 'Buscar en la lista actual',
-      input: 'text',
-      inputLabel: 'Nombre, código de barras, código inventario o bodega',
-      inputPlaceholder: 'Escribe para ubicar un producto ya agregado',
-      showCancelButton: true,
-      confirmButtonText: 'Buscar',
-      cancelButtonText: 'Cancelar',
-      inputValidator: (value) => {
-        if (!String(value || '').trim()) return 'Escribe algo para buscar.';
-        return undefined;
-      }
-    });
-
-    if (!queryPrompt.isConfirmed) return;
-
-    const needle = String(queryPrompt.value || '').trim().toLowerCase();
-    const matches = rows.filter(tr => buildRowSearchText(tr).includes(needle));
-
-    if (!matches.length) {
-      await Swal.fire('Sin resultados', 'No encontré coincidencias en la lista actual.', 'info');
-      return;
-    }
-
-    if (matches.length === 1) {
-      flashAndFocusRow(matches[0], 'qty');
-      return;
-    }
-
-    const options = Object.fromEntries(
-      matches.slice(0, 50).map((tr, idx) => [String(idx), buildRowSearchLabel(tr)])
-    );
-
-    const choice = await Swal.fire({
-      title: `Coincidencias (${matches.length})`,
-      input: 'select',
-      inputOptions: options,
-      inputPlaceholder: 'Selecciona una fila',
-      showCancelButton: true,
-      confirmButtonText: 'Ir a fila',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (!choice.isConfirmed) return;
-
-    const targetRow = matches[Number(choice.value)];
-    if (targetRow) {
-      flashAndFocusRow(targetRow, 'qty');
-    }
-  }
-
-
-  function isCompactScreen() {
-    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
-  }
-
-  function applyResponsiveRowLabels(tr) {
-    if (!tr?.cells) return;
-
-    [...tr.cells].forEach((cell, idx) => {
-      cell.setAttribute('data-label', ROW_CELL_LABELS[idx] || '');
-      if (idx === COL_INDEX.bulkSelect) {
-        cell.classList.add('cell-select');
-      }
-      if (idx === COL_INDEX.name) {
-        cell.classList.add('cell-name');
-      }
-      if (idx === COL_INDEX.inventoryCode) {
-        cell.classList.add('cell-inventory');
-      }
-      if (idx === COL_INDEX.warehouse) {
-        cell.classList.add('cell-warehouse');
-      }
-      if (idx === COL_INDEX.quantity) {
-        cell.classList.add('cell-quantity');
-      }
-      if (idx === COL_INDEX.actions) {
-        cell.classList.add('cell-actions');
-      }
-    });
-  }
-
-  function syncQtyInputMode(input) {
-    if (!input) return;
-    input.readOnly = isCompactScreen();
-    input.classList.toggle('qty-mobile-readonly', input.readOnly);
-    input.setAttribute('inputmode', input.readOnly ? 'none' : 'text');
-  }
-
-  async function openQtyEditor(input) {
-    if (!input) return;
-    const result = await Swal.fire({
-      title: 'Editar cantidad',
-      input: 'text',
-      inputValue: String(input.value || ''),
-      inputLabel: 'Cantidad',
-      inputPlaceholder: 'Escribe la cantidad completa',
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
-      cancelButtonText: 'Cancelar',
-      inputAttributes: {
-        autocapitalize: 'off',
-        autocorrect: 'off'
-      }
-    });
-
-    if (!result.isConfirmed) return;
-    input.value = String(result.value || '').trim();
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  async function handleQtyInputInteraction(ev) {
-    const input = ev.currentTarget;
-    if (!isCompactScreen() || !input) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    input.blur();
-    await openQtyEditor(input);
-  }
-
-
-  function getReviewButton(tr) {
-    return tr?.querySelector('.btn-toggle-review') || null;
-  }
-
-  function getDispatchButton(tr) {
-    return tr?.querySelector('.btn-toggle-dispatch') || null;
-  }
-
-  function getMoveButton(tr) {
-    return tr?.querySelector('.btn-move-list') || null;
-  }
-
-  function getDeleteButton(tr) {
-    return tr?.querySelector('.btn-delete-row') || null;
-  }
-
-  function updateQtyPreview(input) {
-    if (!qtyPreviewBubble) return;
-
-    const value = String(input?.value || '').trim();
-    const shouldShow = !!input && document.activeElement === input && value.length > 10;
-
-    if (!shouldShow) {
-      qtyPreviewBubble.classList.add('d-none');
-      qtyPreviewBubble.setAttribute('aria-hidden', 'true');
-      return;
-    }
-
-    qtyPreviewBubble.textContent = value;
-    const rect = input.getBoundingClientRect();
-    qtyPreviewBubble.classList.remove('d-none');
-    qtyPreviewBubble.setAttribute('aria-hidden', 'false');
-    qtyPreviewBubble.style.left = Math.max(12, Math.min(window.innerWidth - qtyPreviewBubble.offsetWidth - 12, rect.left)) + 'px';
-    qtyPreviewBubble.style.top = Math.min(window.innerHeight - 16, rect.bottom + 10) + 'px';
-  }
-
-  function bindQtyPreview(input) {
-    if (!input) return;
-
-    syncQtyInputMode(input);
-
-    const sync = () => {
-      input.setAttribute('title', input.value || '');
-      updateQtyPreview(input);
-    };
-
-    input.addEventListener('focus', sync);
-    input.addEventListener('input', sync);
-    input.addEventListener('blur', () => updateQtyPreview(null));
-    input.addEventListener('click', async (ev) => {
-      if (isCompactScreen()) {
-        await handleQtyInputInteraction(ev);
-        return;
-      }
-      sync();
-    });
-    input.addEventListener('keydown', async (ev) => {
-      if (!isCompactScreen()) return;
-      if (ev.key === 'Enter' || ev.key === ' ') {
-        await handleQtyInputInteraction(ev);
-      }
-    });
-    sync();
-  }
-
-  window.addEventListener('resize', () => {
-    const active = document.activeElement;
-    updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
-    [...body.querySelectorAll('.qty')].forEach(syncQtyInputMode);
-  });
-
-  document.addEventListener('scroll', () => {
-    const active = document.activeElement;
-    updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
-  }, true);
-
 
   function getDocIdForCurrentList() {
     return getBinId(storeSelect.value, versionSelect.value);
   }
 
   function isHistoricalDateSelected() {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+    const today = getTodayString();
     return !!(currentViewDate && today && currentViewDate !== today);
   }
 
   function isPastHistoricalDateSelected() {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+    const today = getTodayString();
     return !!(currentViewDate && today && currentViewDate < today);
   }
 
   function getTargetChecklistDate() {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
+    const today = getTodayString();
     return currentViewDate || today;
   }
 
   function isProtectedVersionSelected() {
     const versionKey = String(versionSelect?.value || '');
-    if (typeof isProtectedVersionKey === 'function') {
-      return !!isProtectedVersionKey(versionKey);
-    }
-    return versionKey === 'traslado';
+    return !!isProtectedVersionKey(versionKey);
   }
 
   function isProtectedVersionEditingLocked() {
-    return isProtectedVersionSelected() && !protectedVersionUnlockEnabled;
+    return isProtectedVersionSelected() && !(protectedVersionUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_PROTECTED));
   }
 
   function getActiveEditingContexts() {
@@ -461,10 +169,166 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
   }
 
+  function getUnlockStorage() {
+    try {
+      return window.sessionStorage;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function normalizeUnlockScopes(scopes = []) {
+    const list = Array.isArray(scopes) ? scopes : [scopes];
+
+    return [...new Set(
+      list
+        .map(scope => String(scope || '').trim())
+        .filter(Boolean)
+    )].sort();
+  }
+
+  function getRequestedUnlockScopes(options = {}) {
+    const explicitScopes = normalizeUnlockScopes(options.scopes || []);
+    if (explicitScopes.length) return explicitScopes;
+
+    const derivedScopes = [];
+    if (options.historical) derivedScopes.push(UNLOCK_SCOPE_HISTORICAL);
+    if (options.protected) derivedScopes.push(UNLOCK_SCOPE_PROTECTED);
+    return normalizeUnlockScopes(derivedScopes);
+  }
+
+  function readStoredUnlockSession() {
+    if (activeUnlockSession) {
+      const activeExpiresAt = Date.parse(String(activeUnlockSession.expiresAt || ''));
+      if (Number.isFinite(activeExpiresAt) && activeExpiresAt > Date.now()) {
+        return activeUnlockSession;
+      }
+      activeUnlockSession = null;
+    }
+
+    const storage = getUnlockStorage();
+    if (!storage) return null;
+
+    try {
+      const raw = storage.getItem(UNLOCK_STORAGE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      const token = String(parsed?.token || '').trim();
+      const expiresAt = String(parsed?.expiresAt || '').trim();
+      const scopes = normalizeUnlockScopes(parsed?.scopes || []);
+
+      const expiresAtMs = Date.parse(expiresAt);
+
+      if (!token || !expiresAt || !scopes.length || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+        storage.removeItem(UNLOCK_STORAGE_KEY);
+        return null;
+      }
+
+      activeUnlockSession = { token, expiresAt, scopes };
+      return activeUnlockSession;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistUnlockSession(sessionData) {
+    const token = String(sessionData?.token || '').trim();
+    const expiresAt = String(sessionData?.expiresAt || '').trim();
+    const scopes = normalizeUnlockScopes(sessionData?.scopes || []);
+
+    if (!token || !expiresAt || !scopes.length) {
+      clearStoredUnlockSession();
+      return;
+    }
+
+    activeUnlockSession = { token, expiresAt, scopes };
+
+    const storage = getUnlockStorage();
+    if (!storage) return;
+
+    storage.setItem(UNLOCK_STORAGE_KEY, JSON.stringify(activeUnlockSession));
+  }
+
+  function clearStoredUnlockSession() {
+    activeUnlockSession = null;
+
+    const storage = getUnlockStorage();
+    if (!storage) return;
+    storage.removeItem(UNLOCK_STORAGE_KEY);
+  }
+
+  function sessionCoversScopes(sessionData, requiredScopes = []) {
+    const normalizedScopes = normalizeUnlockScopes(requiredScopes);
+    if (!normalizedScopes.length) return true;
+
+    const token = String(sessionData?.token || '').trim();
+    const expiresAt = Date.parse(String(sessionData?.expiresAt || ''));
+    const sessionScopes = new Set(normalizeUnlockScopes(sessionData?.scopes || []));
+
+    if (!token || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      return false;
+    }
+
+    return normalizedScopes.every(scope => sessionScopes.has(scope));
+  }
+
+  function hasActiveUnlockScope(scope) {
+    return sessionCoversScopes(readStoredUnlockSession(), [scope]);
+  }
+
+  async function verifyUnlockSession(requiredScopes = []) {
+    const normalizedScopes = normalizeUnlockScopes(requiredScopes);
+    const sessionData = readStoredUnlockSession();
+
+    if (!sessionCoversScopes(sessionData, normalizedScopes)) {
+      clearStoredUnlockSession();
+      return false;
+    }
+
+    const resp = await fetch('/api/validate-historical-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'token',
+        token: sessionData.token,
+        scopes: normalizedScopes
+      })
+    });
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (!resp.ok || !data.ok) {
+      clearStoredUnlockSession();
+      return false;
+    }
+
+    persistUnlockSession({
+      token: sessionData.token,
+      expiresAt: data.expiresAt || sessionData.expiresAt,
+      scopes: normalizeUnlockScopes(data.scopes || sessionData.scopes)
+    });
+
+    return true;
+  }
+
   async function requestUnlockPassword(options = {}) {
     const title = options.title || 'Desbloquear edición';
     const text = options.text || 'Ingresa la contraseña para continuar.';
     const confirmButtonText = options.confirmButtonText || 'Desbloquear';
+    const requiredScopes = getRequestedUnlockScopes(options);
+
+    if (requiredScopes.length) {
+      try {
+        const hasReusableSession = await verifyUnlockSession(requiredScopes);
+        if (hasReusableSession) {
+          return true;
+        }
+      } catch (err) {
+        console.warn('No se pudo reutilizar la sesión de desbloqueo:', err?.message || err);
+        clearStoredUnlockSession();
+      }
+    }
 
     const result = await Swal.fire({
       title,
@@ -476,6 +340,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         autocapitalize: 'off',
         autocorrect: 'off'
       },
+      footer: requiredScopes.length
+        ? 'El desbloqueo se mantendrá activo temporalmente en esta pestaña.'
+        : '',
       showCancelButton: true,
       confirmButtonText,
       cancelButtonText: 'Cancelar',
@@ -486,12 +353,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-          const ok = await validateHistoricalPassword(password);
-          if (!ok) {
+          const sessionData = await validateHistoricalPassword(password, requiredScopes);
+          if (!sessionData.ok) {
             Swal.showValidationMessage('Contraseña incorrecta.');
             return false;
           }
-          return true;
+          return sessionData;
         } catch (err) {
           Swal.showValidationMessage(String(err.message || err));
           return false;
@@ -499,26 +366,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    return !!result.isConfirmed;
+    if (result.isConfirmed && result.value?.ok) {
+      persistUnlockSession(result.value);
+      return true;
+    }
+
+    return false;
   }
 
   async function ensureProtectedDestinationAccess(versionKey, actionLabel = 'continuar') {
-    const isProtectedDestination = (typeof isProtectedVersionKey === 'function')
-      ? isProtectedVersionKey(versionKey)
-      : (versionKey === 'traslado');
+    const isProtectedDestination = isProtectedVersionKey(versionKey);
 
     if (!isProtectedDestination) return true;
 
     return requestUnlockPassword({
       title: 'Acceso a lista protegida',
       text: 'Ingresa la contraseña para ' + actionLabel + ' en la lista ' + getVersionLabel(versionKey) + '.',
-      confirmButtonText: 'Continuar'
+      confirmButtonText: 'Continuar',
+      scopes: [UNLOCK_SCOPE_PROTECTED]
     });
   }
 
   function buildChecklistMeta(options = {}) {
     const storeKey = options.storeKey ?? storeSelect.value;
-    const storeName = options.storeName ?? storeSelect.options[storeSelect.selectedIndex].text;
+    const storeName = options.storeName ?? getCurrentStoreName();
     const versionKey = options.versionKey ?? versionSelect.value;
     const updatedAt = options.updatedAt || new Date().toISOString();
     const reqDone = typeof options.requisitionDone === 'boolean'
@@ -549,273 +420,130 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function getVersionLabel(versionKey) {
-    if (typeof getListLabel === 'function') {
-      return getListLabel(versionKey);
-    }
+    return getListLabel(versionKey);
+  }
 
-    const fallback = {
-      base: 'Principal',
-      alterna: 'Alterna',
-      traslado: 'Traslado'
-    };
-
-    return fallback[versionKey] || versionKey;
+  function getStoreVersionKeys(storeKey) {
+    return getStoreVersions(storeKey).filter(Boolean);
   }
 
   function getDestinationVersionKeys(storeKey, currentVersionKey) {
-    const available = (typeof getStoreVersions === 'function')
-      ? getStoreVersions(storeKey)
-      : Object.entries((typeof STORE_BINS !== 'undefined' && STORE_BINS[storeKey]) ? STORE_BINS[storeKey] : {})
-          .filter(([, docId]) => !!docId)
-          .map(([versionKey]) => versionKey);
-
-    return available.filter(versionKey => versionKey !== currentVersionKey);
+    return getStoreVersionKeys(storeKey)
+      .filter(versionKey => versionKey !== currentVersionKey);
   }
 
 
 
   function getAllDestinationVersionKeys(storeKey) {
-    const available = (typeof getStoreVersions === 'function')
-      ? getStoreVersions(storeKey)
-      : Object.entries((typeof STORE_BINS !== 'undefined' && STORE_BINS[storeKey]) ? STORE_BINS[storeKey] : {})
-          .filter(([, docId]) => !!docId)
-          .map(([versionKey]) => versionKey);
-
-    return available.filter(Boolean);
-  }
-
-  function getBulkSelectionCheckboxes() {
-    return [...body.querySelectorAll('.row-bulk-select-checkbox')];
-  }
-
-  function getSelectedTableRows() {
-    return getBulkSelectionCheckboxes()
-      .filter(cb => cb.checked)
-      .map(cb => cb.closest('tr'))
-      .filter(Boolean);
-  }
-
-  function clearBulkSelection() {
-    getBulkSelectionCheckboxes().forEach(cb => {
-      cb.checked = false;
-    });
-
-    if (chkSelectAllRows) {
-      chkSelectAllRows.checked = false;
-      chkSelectAllRows.indeterminate = false;
-    }
-  }
-
-
-  function clearHistoricalSelection() {
-    clearBulkSelection();
-    updateHistoricalSelectionUI();
-  }
-
-  function updateBulkSelectionUI() {
-    const checkboxes = getBulkSelectionCheckboxes();
-    const selectableCheckboxes = checkboxes.filter(cb => !cb.disabled);
-    const selectedCount = selectableCheckboxes.filter(cb => cb.checked).length;
-    const hasRows = checkboxes.length > 0;
-    const editingLocked = isEditingLocked();
-
-    if (chkSelectAllRows) {
-      chkSelectAllRows.disabled = !hasRows;
-      chkSelectAllRows.setAttribute('aria-disabled', String(chkSelectAllRows.disabled));
-      chkSelectAllRows.checked = !!selectableCheckboxes.length && selectedCount === selectableCheckboxes.length;
-      chkSelectAllRows.indeterminate = selectedCount > 0 && selectedCount < selectableCheckboxes.length;
-    }
-
-    if (bulkSelectionBar) {
-      const shouldShow = selectedCount > 0;
-      bulkSelectionBar.classList.toggle('d-none', !shouldShow);
-      bulkSelectionBar.setAttribute('aria-hidden', String(!shouldShow));
-      document.body.classList.toggle('has-mobile-selection', shouldShow && isCompactScreen());
-    }
-
-    if (bulkSelectionCount) {
-      bulkSelectionCount.textContent = selectedCount === 1 ? '1 seleccionada' : (selectedCount + ' seleccionadas');
-    }
-
-    if (btnClearSelection) {
-      btnClearSelection.disabled = selectedCount === 0;
-      btnClearSelection.setAttribute('aria-disabled', String(btnClearSelection.disabled));
-    }
-
-    if (btnReviewSelected) {
-      btnReviewSelected.disabled = editingLocked || selectedCount === 0;
-      btnReviewSelected.setAttribute('aria-disabled', String(btnReviewSelected.disabled));
-      setToolbarButtonContent(btnReviewSelected, 'fa-solid fa-clipboard-check', 'Revisar');
-    }
-
-    if (btnDispatchSelected) {
-      btnDispatchSelected.disabled = editingLocked || selectedCount === 0;
-      btnDispatchSelected.setAttribute('aria-disabled', String(btnDispatchSelected.disabled));
-      setToolbarButtonContent(btnDispatchSelected, 'fa-solid fa-truck-ramp-box', 'Despachar');
-    }
-
-    if (btnDeleteSelected) {
-      btnDeleteSelected.disabled = editingLocked || selectedCount === 0;
-      btnDeleteSelected.setAttribute('aria-disabled', String(btnDeleteSelected.disabled));
-      setToolbarButtonContent(btnDeleteSelected, 'fa-solid fa-trash-can-list', 'Eliminar');
-    }
-
-    updateHistoricalSelectionUI();
-  }
-
-
-  async function markSelectedRowsWithState(kind) {
-    if (isEditingLocked()) {
-      await showEditingLockedAlert(kind === 'reviewed' ? 'marcar múltiples filas como revisadas' : 'marcar múltiples filas como despachadas');
-      return;
-    }
-
-    const selectedRows = getSelectedTableRows();
-    if (!selectedRows.length) {
-      await Swal.fire(
-        'Sin selección',
-        'Selecciona al menos una fila para aplicar esta acción masiva.',
-        'info'
-      );
-      return;
-    }
-
-    const actionLabel = kind === 'reviewed' ? 'revisadas' : 'despachadas';
-
-    let changedCount = 0;
-
-    selectedRows.forEach(tr => {
-      const btn = kind === 'reviewed' ? getReviewButton(tr) : getDispatchButton(tr);
-      if (!btn || btn.classList.contains('on')) return;
-      setToggleState(btn, true);
-      changedCount += 1;
-    });
-
-    clearBulkSelection();
-    updateBulkSelectionUI();
-
-    await Swal.fire(
-      changedCount ? 'Actualizado' : 'Sin cambios',
-      changedCount
-        ? ('Se marcaron ' + changedCount + ' fila(s) como ' + actionLabel + '.')
-        : ('Las filas seleccionadas ya estaban ' + actionLabel + '.'),
-      changedCount ? 'success' : 'info'
-    );
-  }
-
-  async function deleteSelectedRows() {
-    if (isEditingLocked()) {
-      await showEditingLockedAlert('eliminar múltiples filas');
-      return;
-    }
-
-    const selectedRows = getSelectedTableRows();
-    if (!selectedRows.length) {
-      await Swal.fire(
-        'Sin selección',
-        'Selecciona al menos una fila para eliminarla de la tabla actual.',
-        'info'
-      );
-      return;
-    }
-
-    const result = await Swal.fire({
-      title: '¿Eliminar filas seleccionadas?',
-      html: '<div class="small text-muted">Se eliminarán <strong>' + selectedRows.length + '</strong> fila(s) de la tabla actual. Recuerda guardar para persistir el cambio.</div>',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Eliminar',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
-    selectedRows.forEach(tr => tr.remove());
-    renumber();
-    updateBulkSelectionUI();
-
-    await Swal.fire(
-      'Filas eliminadas',
-      'Se eliminaron ' + selectedRows.length + ' fila(s) de la tabla actual.',
-      'success'
-    );
+    return getStoreVersionKeys(storeKey);
   }
 
   function isHistoricalSelectionAvailable() {
     return isPastHistoricalDateSelected();
   }
 
-  if (chkSelectAllRows) {
-    chkSelectAllRows.addEventListener('change', () => {
-      const shouldCheck = !!chkSelectAllRows.checked;
-      getBulkSelectionCheckboxes().forEach(cb => {
-        if (!cb.disabled) cb.checked = shouldCheck;
-      });
-      updateBulkSelectionUI();
-    });
+  function getHistoricalSelectionCells() {
+    return [...body.querySelectorAll('.history-select-cell')];
   }
 
-  if (btnReviewSelected) {
-    btnReviewSelected.addEventListener('click', async () => {
-      await markSelectedRowsWithState('reviewed');
-    });
+  function getHistoricalSelectionCheckboxes() {
+    return [...body.querySelectorAll('.row-history-select-checkbox')];
   }
 
-  if (btnDispatchSelected) {
-    btnDispatchSelected.addEventListener('click', async () => {
-      await markSelectedRowsWithState('dispatched');
-    });
+  function getSelectedHistoricalRows() {
+    return getHistoricalSelectionCheckboxes()
+      .filter(cb => cb.checked)
+      .map(cb => cb.closest('tr'))
+      .filter(Boolean);
   }
 
-  if (btnDeleteSelected) {
-    btnDeleteSelected.addEventListener('click', async () => {
-      await deleteSelectedRows();
+  function clearHistoricalSelection(options = {}) {
+    const { keepMode = false } = options || {};
+
+    getHistoricalSelectionCheckboxes().forEach(cb => {
+      cb.checked = false;
     });
-  }
 
-  if (btnClearSelection) {
-    btnClearSelection.addEventListener('click', () => {
-      getBulkSelectionCheckboxes().forEach(cb => {
-        cb.checked = false;
-      });
-      updateBulkSelectionUI();
-      updateHistoricalSelectionUI();
-    });
-  }
+    if (chkSelectAllHistory) {
+      chkSelectAllHistory.checked = false;
+      chkSelectAllHistory.indeterminate = false;
+    }
 
-  function updateHistoricalSelectionUI() {
-    const canMerge = isHistoricalSelectionAvailable();
-
-    if (btnMergeSelectedToToday) {
-      const selectedCount = getSelectedTableRows().length;
-      const shouldShow = canMerge && selectedCount > 0;
-
-      btnMergeSelectedToToday.classList.toggle('d-none', !shouldShow);
-      btnMergeSelectedToToday.disabled = !canMerge || selectedCount === 0;
-      btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
-      btnMergeSelectedToToday.title = canMerge
-        ? 'Enviar productos seleccionados a la lista de hoy'
-        : '';
-
-      if (shouldShow) {
-        setToolbarButtonContent(btnMergeSelectedToToday, 'fa-solid fa-share-from-square', 'Enviar hoy');
-      }
+    if (!keepMode) {
+      historicalSelectionMode = false;
     }
   }
 
+  function updateHistorySelectAllState() {
+    if (!chkSelectAllHistory) return;
+
+    const canSelect = historicalSelectionMode && isHistoricalSelectionAvailable();
+    const checkboxes = getHistoricalSelectionCheckboxes();
+    const enabledCheckboxes = checkboxes.filter(cb => !cb.disabled);
+    const checkedCount = enabledCheckboxes.filter(cb => cb.checked).length;
+
+    chkSelectAllHistory.disabled = !canSelect || !enabledCheckboxes.length;
+    chkSelectAllHistory.setAttribute('aria-disabled', String(chkSelectAllHistory.disabled));
+    chkSelectAllHistory.checked = !!enabledCheckboxes.length && checkedCount === enabledCheckboxes.length;
+    chkSelectAllHistory.indeterminate = checkedCount > 0 && checkedCount < enabledCheckboxes.length;
+
+    if (btnMergeSelectedToToday) {
+      const shouldShow = canSelect;
+      btnMergeSelectedToToday.classList.toggle('d-none', !shouldShow);
+      btnMergeSelectedToToday.disabled = !shouldShow || checkedCount === 0;
+      btnMergeSelectedToToday.setAttribute('aria-disabled', String(btnMergeSelectedToToday.disabled));
+    }
+  }
+
+  function updateHistoricalSelectionUI() {
+    const canSelectFromThisView = isHistoricalSelectionAvailable();
+    const showSelection = canSelectFromThisView && historicalSelectionMode;
+
+    if (!canSelectFromThisView && historicalSelectionMode) {
+      clearHistoricalSelection();
+      historicalSelectionMode = false;
+    }
+
+    if (btnHistoricalSelectMode) {
+      btnHistoricalSelectMode.classList.toggle('d-none', !canSelectFromThisView);
+      btnHistoricalSelectMode.disabled = !canSelectFromThisView;
+      btnHistoricalSelectMode.setAttribute('aria-disabled', String(btnHistoricalSelectMode.disabled));
+      btnHistoricalSelectMode.classList.toggle('btn-outline-info', !showSelection);
+      btnHistoricalSelectMode.classList.toggle('btn-info', showSelection);
+      btnHistoricalSelectMode.classList.toggle('text-white', showSelection);
+      setToolbarButtonContent(
+        btnHistoricalSelectMode,
+        showSelection ? 'fa-solid fa-check-double' : 'fa-regular fa-square-check',
+        showSelection ? 'Selección activa' : 'Seleccionar productos'
+      );
+    }
+
+    if (thHistorySelect) {
+      thHistorySelect.classList.toggle('d-none', !showSelection);
+    }
+
+    getHistoricalSelectionCells().forEach(cell => {
+      cell.classList.toggle('d-none', !showSelection);
+      const checkbox = cell.querySelector('.row-history-select-checkbox');
+      if (checkbox) {
+        checkbox.disabled = !showSelection;
+        checkbox.setAttribute('aria-disabled', String(checkbox.disabled));
+        if (!showSelection) checkbox.checked = false;
+      }
+    });
+
+    updateHistorySelectAllState();
+  }
 
   function buildChecklistItemFromRow(tr) {
-    const reviewBtn = getReviewButton(tr);
-    const dispatchBtn = getDispatchButton(tr);
-
     return {
-      codigo_barras: tr.cells[COL_INDEX.barcode].innerText.trim(),
-      nombre: tr.cells[COL_INDEX.name].innerText.trim(),
-      codigo_inventario: tr.cells[COL_INDEX.inventoryCode].innerText.trim(),
-      bodega: tr.cells[COL_INDEX.warehouse].innerText.trim(),
+      codigo_barras: tr.cells[1].innerText.trim(),
+      nombre: tr.cells[2].innerText.trim(),
+      codigo_inventario: tr.cells[3].innerText.trim(),
+      bodega: tr.cells[4].innerText.trim(),
       cantidad: (tr.querySelector('.qty')?.value || '').trim(),
-      revisado: reviewBtn ? reviewBtn.classList.contains('on') : false,
-      despachado: dispatchBtn ? dispatchBtn.classList.contains('on') : false
+      revisado: tr.cells[6].querySelector('button').classList.contains('on'),
+      despachado: tr.cells[7].querySelector('button').classList.contains('on')
     };
   }
 
@@ -854,7 +582,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const selectedRows = getSelectedTableRows();
+      const selectedRows = getSelectedHistoricalRows();
       if (!selectedRows.length) {
         await Swal.fire(
           'Sin selección',
@@ -914,7 +642,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const toDoc = getBinId(storeKey, toKey);
-      const today = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().split('T')[0];
+      const today = getLocalDateKey();
 
       if (!toDoc || !today) {
         await Swal.fire(
@@ -925,7 +653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const tiendaName = storeSelect.options[storeSelect.selectedIndex].text;
+      const tiendaName = getCurrentStoreName();
       let destinationRecord = await loadChecklistFromFirestore(toDoc, today);
 
       if (!destinationRecord || !Array.isArray(destinationRecord.items)) {
@@ -961,7 +689,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (!addedItems.length) {
-            await Swal.fire(
+        updateHistorySelectAllState();
+        await Swal.fire(
           'Sin cambios',
           'Todos los productos seleccionados ya existen en la lista de hoy elegida. No se agregó nada.',
           'info'
@@ -982,8 +711,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       rememberHistoryDate(toDoc, today);
       await refreshHistoryPicker();
 
-      clearBulkSelection();
-      updateBulkSelectionUI();
+      clearHistoricalSelection({ keepMode: true });
+      updateHistoricalSelectionUI();
 
       await Swal.fire({
         title: 'Productos enviados',
@@ -1013,8 +742,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isProtected = isProtectedVersionSelected();
     const shouldShow = isPastHistorical || isProtected;
     const isUnlocked =
-      (isPastHistorical && historicalUnlockEnabled) ||
-      (isProtected && protectedVersionUnlockEnabled);
+      (isPastHistorical && historicalUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_HISTORICAL)) ||
+      (isProtected && protectedVersionUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_PROTECTED));
 
     if (btnHistToday) {
       btnHistToday.disabled = !isHistoricalDateSelected();
@@ -1028,19 +757,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!shouldShow) {
       btnToggleHistLock.classList.add('btn-outline-secondary');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloq.');
-      btnToggleHistLock.title = 'Desbloquear edición';
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
       return;
     }
 
     if (isUnlocked) {
       btnToggleHistLock.classList.add('btn-outline-success');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-lock', 'Bloquear');
-      btnToggleHistLock.title = 'Bloquear edición';
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-lock', 'Bloquear edición');
     } else {
       btnToggleHistLock.classList.add('btn-outline-warning');
-      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloq.');
-      btnToggleHistLock.title = 'Desbloquear edición';
+      setToolbarButtonContent(btnToggleHistLock, 'fa-solid fa-unlock-keyhole', 'Desbloquear edición');
     }
   }
 
@@ -1054,13 +780,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (requisitionDone) {
       btnToggleRequisition.classList.add('btn-success', 'text-white');
-      setToolbarButtonContent(btnToggleRequisition, 'fa-solid fa-flag', 'Req. hecha');
+      setToolbarButtonContent(btnToggleRequisition, 'fa-solid fa-flag', 'Requisición hecha');
       btnToggleRequisition.title = requisitionDoneAt
         ? ('Marcada como hecha: ' + formatSV(requisitionDoneAt))
         : 'Marcada como requisición hecha.';
     } else {
       btnToggleRequisition.classList.add('btn-outline-secondary');
-      setToolbarButtonContent(btnToggleRequisition, 'fa-regular fa-flag', 'Req. pend.');
+      setToolbarButtonContent(btnToggleRequisition, 'fa-regular fa-flag', 'Requisición pendiente');
       btnToggleRequisition.title = 'Marcar esta lista como requisición hecha.';
     }
   }
@@ -1068,15 +794,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   function resetHistoricalUnlock() {
     historicalUnlockEnabled = false;
     protectedVersionUnlockEnabled = false;
+    clearStoredUnlockSession();
     updateHistoricalLockUI();
     updateRequisitionUI();
   }
 
-  async function validateHistoricalPassword(password) {
+  async function validateHistoricalPassword(password, scopes = []) {
     const resp = await fetch('/api/validate-historical-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
+      body: JSON.stringify({
+        password,
+        scopes: normalizeUnlockScopes(scopes)
+      })
     });
 
     const data = await resp.json().catch(() => ({}));
@@ -1085,7 +815,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       throw new Error(data.error || 'No se pudo validar la contraseña.');
     }
 
-    return !!data.ok;
+    return {
+      ok: !!data.ok,
+      token: String(data.token || '').trim(),
+      expiresAt: String(data.expiresAt || '').trim(),
+      scopes: normalizeUnlockScopes(data.scopes || scopes)
+    };
   }
 
   function setHistoricalViewMode(_isHistorical) {
@@ -1103,36 +838,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnScan) btnScan.disabled = disableEditing;
     if (btnFilePick) btnFilePick.disabled = disableEditing;
     if (fileScan) fileScan.disabled = disableEditing;
-    if (disableEditing && mediaStream) stopScanner();
+    if (disableEditing && scannerService.isActive()) {
+      void stopScanner();
+    }
 
     if (btnSave) btnSave.disabled = disableEditing;
     if (btnClear) btnClear.disabled = disableEditing;
 
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const qty = tr.querySelector('.qty');
-      const btnRev = getReviewButton(tr);
-      const btnDes = getDispatchButton(tr);
-      const btnMove = getMoveButton(tr);
-      const btnDel = getDeleteButton(tr);
-      const bulkSelect = tr.querySelector('.row-bulk-select-checkbox');
+      const btnRev = tr.cells[6]?.querySelector('button');
+      const btnDes = tr.cells[7]?.querySelector('button');
+      const btnMove = tr.querySelector('.btn-move-list');
+      const btnDel = tr.querySelector('.btn-delete-row');
+      const rowSelect = tr.querySelector('.row-history-select-checkbox');
 
       if (qty) qty.disabled = disableEditing;
       if (btnRev) btnRev.disabled = disableEditing;
       if (btnDes) btnDes.disabled = disableEditing;
       if (btnMove) btnMove.disabled = disableEditing;
       if (btnDel) btnDel.disabled = disableEditing;
-      if (bulkSelect) {
-        bulkSelect.disabled = false;
-        bulkSelect.setAttribute('aria-disabled', 'false');
+      if (rowSelect) {
+        rowSelect.disabled = !(historicalSelectionMode && isPastHistoricalDateSelected());
+        rowSelect.setAttribute('aria-disabled', String(rowSelect.disabled));
       }
     });
 
     updateHistoricalLockUI();
     updateHistoricalSelectionUI();
-    updateBulkSelectionUI();
     updateRequisitionUI();
   }
-
 
   function isEditingLocked() {
     return isHistoricalEditingLocked() || isProtectedVersionEditingLocked();
@@ -1153,20 +888,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const t = e.target;
     if (t === searchInput || t.classList.contains('qty')) {
       centerOnElement(t);
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!moreActionsMenu?.hasAttribute('open')) return;
-    const target = e.target;
-    if (target instanceof Node && !moreActionsMenu.contains(target)) {
-      closeMoreActionsMenu();
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeMoreActionsMenu();
     }
   });
 
@@ -1195,25 +916,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   updateStoreUI();
 
+  await preloadCatalog();
 
-  function htmlAttrEscape(v) {
-    if (v === null || v === undefined) return '';
-    return String(v).replace(/"/g, '&quot;');
-  }
-
-  function escapeHtml(v) {
-    if (v === null || v === undefined) return '';
-    return String(v)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
 
   function renumber() {
     [...body.getElementsByTagName('tr')].forEach((row, idx) => {
-      row.cells[COL_INDEX.rowNumber].textContent = (body.rows.length - idx);
+      row.cells[0].textContent = (body.rows.length - idx);
     });
   }
 
@@ -1274,8 +982,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.setTimeout(() => {
       const qtyInput = tr.querySelector('.qty');
-      const dispatchBtn = getDispatchButton(tr);
-      const reviewBtn = getReviewButton(tr);
+      const dispatchBtn = tr.cells[7]?.querySelector('button');
+      const reviewBtn = tr.cells[6]?.querySelector('button');
       const focusTarget =
         (preferredTarget === 'dispatch' ? dispatchBtn : null) ||
         qtyInput ||
@@ -1296,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function ensureRowDispatched(tr) {
-    const btnDes = getDispatchButton(tr);
+    const btnDes = tr?.cells?.[7]?.querySelector('button');
     if (!btnDes) return false;
 
     const wasDispatched = btnDes.classList.contains('on');
@@ -1306,10 +1014,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     return !wasDispatched;
   }
 
-
   function isHistoricalEditingLocked() {
-    const today = (typeof getTodayString === 'function') ? getTodayString() : null;
-    return !!(currentViewDate && today && currentViewDate !== today && !historicalUnlockEnabled);
+    const today = getTodayString();
+    return !!(
+      currentViewDate &&
+      today &&
+      currentViewDate !== today &&
+      !(historicalUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_HISTORICAL))
+    );
   }
 
   function updateLastSavedText(updatedAt, emptyText = 'Aún no guardado.') {
@@ -1332,26 +1044,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       return { ok: false, reason: 'locked' };
     }
 
-    return withLoading('Guardando checklist...', async () => {
-      const docId = getDocIdForCurrentList();
-      const payload = collectPayload();
-      const targetDay = getTargetChecklistDate();
+    const docId = getDocIdForCurrentList();
+    const payload = collectPayload();
+    const targetDay = getTargetChecklistDate();
 
-      await saveChecklistToFirestore(docId, payload, targetDay);
-      rememberHistoryDate(docId, targetDay);
-      updateLastSavedText(payload.meta?.updatedAt || null);
-      await refreshHistoryPicker();
+    await saveChecklistToFirestore(docId, payload, targetDay);
+    rememberHistoryDate(docId, targetDay);
+    updateLastSavedText(payload.meta?.updatedAt || null);
+    await refreshHistoryPicker();
 
-      if (showSuccess) {
-        await Swal.fire(successTitle, successMessage, successIcon);
-      }
+    if (showSuccess) {
+      await Swal.fire(successTitle, successMessage, successIcon);
+    }
 
-      return { ok: true, docId, payload, targetDay };
-    });
+    return { ok: true, docId, payload, targetDay };
   }
 
   async function promptExistingRowAction(item, existingRow) {
-    const isAlreadyDispatched = getDispatchButton(existingRow)?.classList.contains('on');
+    const isAlreadyDispatched = existingRow?.cells?.[7]?.querySelector('button')?.classList.contains('on');
     const safeName = escapeHtml(item?.nombre || 'Este producto');
     let selectedAction = 'cancel';
 
@@ -1419,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (action === 'dispatch') {
-      const dispatchBtn = getDispatchButton(existingRow);
+      const dispatchBtn = existingRow?.cells?.[7]?.querySelector('button');
       const changed = ensureRowDispatched(existingRow);
       flashAndFocusRow(existingRow, 'dispatch');
 
@@ -1525,7 +1235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const tiendaName = storeSelect.options[storeSelect.selectedIndex].text;
+      const tiendaName = getCurrentStoreName();
       const item = buildChecklistItemFromRow(tr);
 
       const day = getTargetChecklistDate();
@@ -1544,7 +1254,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
       }
 
-      destRec.items.push(item);
+      const destinationItems = Array.isArray(destRec.items) ? destRec.items : [];
+
+      if (findMatchingItemInArray(destinationItems, item)) {
+        await Swal.fire(
+          'Producto duplicado',
+          'Ese producto ya existe en la lista destino. No se movió.',
+          'info'
+        );
+        return;
+      }
+
+      destinationItems.push(item);
+      destRec.items = destinationItems;
       destRec.meta = buildChecklistMeta({
         storeKey,
         storeName: tiendaName,
@@ -1584,13 +1306,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tr = document.createElement('tr');
     const qtyValue = htmlAttrEscape(item.cantidad ?? '');
     tr.innerHTML = `
-      <td class="text-center sticky-col-select row-bulk-select-cell">
-        <input
-          type="checkbox"
-          class="form-check-input row-bulk-select-checkbox"
-          aria-label="Seleccionar fila"
-        >
-      </td>
       <td></td>
       <td>${item.codigo_barras || ''}</td>
       <td>${item.nombre || ''}</td>
@@ -1600,47 +1315,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         <input type="text" class="form-control form-control-sm qty" value="${qtyValue}" placeholder="0">
       </td>
       <td class="text-center">
-        <div class="row-actions-grid" role="group" aria-label="Acciones de fila">
-          <button class="btn btn-sm btn-outline-primary btn-toggle btn-toggle-review ${item.revisado ? 'on' : 'off'}" title="Revisado" aria-label="Marcar revisado">
-            <i class="fa-solid fa-clipboard-check"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-success btn-toggle btn-toggle-dispatch ${item.despachado ? 'on' : 'off'}" title="Despachado" aria-label="Marcar despachado">
-            <i class="fa-solid fa-truck-ramp-box"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-warning btn-move-list" title="Mover a otra lista" aria-label="Mover a otra lista">
+        <button class="btn btn-sm btn-outline-primary btn-toggle ${item.revisado ? 'on' : 'off'}" title="Revisado">
+          <i class="fa-solid fa-clipboard-check"></i>
+        </button>
+      </td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-success btn-toggle ${item.despachado ? 'on' : 'off'}" title="Despachado">
+          <i class="fa-solid fa-truck-ramp-box"></i>
+        </button>
+      </td>
+      <td class="text-center">
+        <div class="btn-group btn-group-sm" role="group">
+          <button class="btn btn-outline-warning btn-move-list" title="Mover a otra lista" aria-label="Mover a otra lista">
             <i class="fa-solid fa-right-left"></i>
           </button>
-          <button class="btn btn-sm btn-outline-secondary btn-delete-row" title="Eliminar fila" aria-label="Eliminar fila">
+          <button class="btn btn-outline-secondary btn-delete-row" title="Eliminar">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>
       </td>
+      <td class="text-center history-select-cell d-none">
+        <input
+          type="checkbox"
+          class="form-check-input row-history-select-checkbox"
+          aria-label="Seleccionar producto histórico para enviar a hoy"
+        >
+      </td>
     `;
     body.insertBefore(tr, body.firstChild);
-    applyResponsiveRowLabels(tr);
     renumber();
 
-    const btnRev = getReviewButton(tr);
-    const btnDes = getDispatchButton(tr);
-    const btnMove = getMoveButton(tr);
-    const btnDel = getDeleteButton(tr);
-    const bulkSelect = tr.querySelector('.row-bulk-select-checkbox');
+    const btnRev = tr.cells[6].querySelector('button');
+    const btnDes = tr.cells[7].querySelector('button');
+    const btnMove = tr.cells[8].querySelector('.btn-move-list');
+    const btnDel = tr.cells[8].querySelector('.btn-delete-row');
+    const rowSelect = tr.querySelector('.row-history-select-checkbox');
 
-    if (btnRev) {
-      btnRev.addEventListener('click', () => toggleBtn(btnRev));
-    }
+    btnRev.addEventListener('click', () => toggleBtn(btnRev));
+    btnDes.addEventListener('click', () => toggleBtn(btnDes));
 
-    if (btnDes) {
-      btnDes.addEventListener('click', () => toggleBtn(btnDes));
-    }
-
-    if (bulkSelect) {
-      bulkSelect.addEventListener('change', () => {
-        updateBulkSelectionUI();
+    if (rowSelect) {
+      rowSelect.addEventListener('change', () => {
+        updateHistorySelectAllState();
       });
     }
 
     if (btnMove) {
+      btnMove.title = 'Mover a otra lista';
+      btnMove.setAttribute('aria-label', 'Mover a otra lista');
       btnMove.addEventListener('click', async () => {
         await moveRowToAnotherList(tr);
       });
@@ -1657,31 +1379,26 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (res.isConfirmed) {
             tr.remove();
             renumber();
-            updateBulkSelectionUI();
-            updateHistoricalSelectionUI();
+            updateHistorySelectAllState();
           }
         });
       });
     }
 
     updateHistoricalSelectionUI();
-    updateBulkSelectionUI();
 
+    // → Foco en Cantidad y ciclo Enter → barra de búsqueda
     const qtyInput = tr.querySelector('.qty');
     if (qtyInput) {
-      bindQtyPreview(qtyInput);
-      if (!isCompactScreen()) {
-        qtyInput.focus();
-      }
+      qtyInput.focus();
       qtyInput.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' && !isCompactScreen()) {
+        if (ev.key === 'Enter') {
           ev.preventDefault();
           if (searchInput) searchInput.focus();
         }
       });
     }
   }
-
 
   // --- Autocomplete search ---
   let currentFocus = -1;
@@ -1773,471 +1490,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Group by bodega
-  function groupByBodega() {
-    const groups = {};
-    [...body.getElementsByTagName('tr')].forEach(tr => {
-      const bod = tr.cells[COL_INDEX.warehouse].innerText.trim() || 'SIN_BODEGA';
-      if (!groups[bod]) groups[bod] = [];
-      groups[bod].push(tr);
-    });
-    return groups;
-  }
+const exportService = window.TRListaChecklistExports?.createService({
+  body,
+  getCurrentStoreName,
+  getLocalDateKey,
+  sanitizeFileNamePart,
+  downloadBlobFile,
+  parseQuantityToInteger,
+  formatSV,
+  getLastUpdateISO: () => lastUpdateISO,
+  getCurrentViewDate: () => currentViewDate
+});
 
-  function getWarehouseNames() {
-    return Object.keys(groupByBodega()).sort((a, b) => a.localeCompare(b, 'es'));
-  }
+if (!exportService) {
+  throw new Error('TRListaChecklistExports no está disponible.');
+}
 
-  function sanitizeFilePart(value) {
-    return String(value || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'archivo';
-  }
+async function exportPDFPorBodega() {
+  return exportService.exportPDFPorBodega();
+}
 
-  async function promptExportMode(formatLabel) {
+function exportPDFGeneral() {
+  return exportService.exportPDFGeneral();
+}
+
+async function exportExcelPorBodega() {
+  return exportService.exportExcelPorBodega();
+}
+
+function exportExcelGeneral() {
+  return exportService.exportExcelGeneral();
+}
+
+  btnExcel.addEventListener('click', async () => {
+    if (body.rows.length === 0) {
+      Swal.fire('Error', 'No hay productos en la lista para generar Excel.', 'error');
+      return;
+    }
     const result = await Swal.fire({
-      title: 'Exportar ' + formatLabel,
-      text: '¿Deseas exportar todo o elegir bodegas específicas?',
+      title: 'Tipo de Excel',
+      text: '¿Cómo deseas generar el Excel?',
       icon: 'question',
       showCancelButton: true,
       showDenyButton: true,
-      confirmButtonText: 'Elegir bodegas',
-      denyButtonText: 'Todo',
+      confirmButtonText: 'Por bodega',
+      denyButtonText: 'General',
       cancelButtonText: 'Cancelar'
     });
-
-    if (result.isDismissed) return null;
-    return result.isConfirmed ? 'warehouses' : 'general';
-  }
-
-  async function promptWarehouseSelection(formatLabel) {
-    const warehouseNames = getWarehouseNames();
-
-    if (!warehouseNames.length) {
-      await Swal.fire('Sin bodegas', 'No se encontraron bodegas disponibles para exportar.', 'info');
-      return null;
-    }
-
-    const optionsHtml = warehouseNames.map((name, index) => `
-      <label class="warehouse-export-option">
-        <input type="checkbox" class="form-check-input warehouse-export-checkbox" value="${htmlAttrEscape(name)}" ${index === 0 && warehouseNames.length === 1 ? 'checked' : ''}>
-        <span>${escapeHtml(name)}</span>
-      </label>
-    `).join('');
-
-    const result = await Swal.fire({
-      title: 'Bodegas para ' + formatLabel,
-      html: `
-        <div class="text-start">
-          <label class="warehouse-export-option warehouse-export-option-all">
-            <input type="checkbox" id="warehouseExportAll" class="form-check-input">
-            <span>Todas las bodegas</span>
-          </label>
-          <div class="warehouse-export-list">
-            ${optionsHtml}
-          </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Exportar',
-      cancelButtonText: 'Cancelar',
-      focusConfirm: false,
-      didOpen: () => {
-        const popup = Swal.getPopup();
-        if (!popup) return;
-
-        const master = popup.querySelector('#warehouseExportAll');
-        const checkboxes = [...popup.querySelectorAll('.warehouse-export-checkbox')];
-
-        const syncMaster = () => {
-          const checkedCount = checkboxes.filter(cb => cb.checked).length;
-          master.checked = checkedCount === checkboxes.length;
-          master.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
-        };
-
-        master?.addEventListener('change', () => {
-          const shouldCheck = !!master.checked;
-          checkboxes.forEach(cb => {
-            cb.checked = shouldCheck;
-          });
-          syncMaster();
-        });
-
-        checkboxes.forEach(cb => cb.addEventListener('change', syncMaster));
-        syncMaster();
-      },
-      preConfirm: () => {
-        const popup = Swal.getPopup();
-        const checkboxes = popup ? [...popup.querySelectorAll('.warehouse-export-checkbox:checked')] : [];
-        const selected = checkboxes.map(cb => String(cb.value || '').trim()).filter(Boolean);
-
-        if (!selected.length) {
-          Swal.showValidationMessage('Selecciona al menos una bodega.');
-          return false;
-        }
-
-        return selected;
-      }
-    });
-
-    return result.isConfirmed ? (result.value || []) : null;
-  }
-
-  function buildPdfRows(rowsTr) {
-    return rowsTr.map((tr, i) => {
-      const codBar = tr.cells[COL_INDEX.barcode].innerText.trim();
-      const nombre = tr.cells[COL_INDEX.name].innerText.trim();
-      const codInv = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
-      const bodega = tr.cells[COL_INDEX.warehouse].innerText.trim();
-      const cantidadTxt = tr.querySelector('.qty')?.value.trim() || '';
-      const revisado = getReviewButton(tr)?.classList.contains('on') ? 'Sí' : 'No';
-      return [i + 1, codBar, nombre, codInv, bodega, cantidadTxt, revisado];
-    });
-  }
-
-  function writePdfHeader(doc, tienda, fechaActual, subtitle) {
-    doc.setFontSize(12);
-    doc.text(`Tienda: ${tienda}`, 10, 10);
-    doc.text(`Fecha: ${fechaActual}`, 10, 18);
-    doc.text(`Última actualización: ${formatSV(lastUpdateISO)}`, 10, 26);
-
-    let nextY = 34;
-    if (currentViewDate) {
-      doc.text(`Vista consultada: ${currentViewDate}`, 10, 34);
-      nextY = 42;
-    }
-
-    if (subtitle) {
-      doc.text(subtitle, 10, nextY);
-      nextY += 8;
-    }
-
-    return nextY;
-  }
-
-  function saveBlobFile(blob, fileName) {
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  }
-
-  function exportPDFGeneral() {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    const rows = buildPdfRows([...body.getElementsByTagName('tr')]);
-    const startY = writePdfHeader(doc, tienda, fechaActual, 'Checklist general');
-
-    doc.autoTable({
-      startY,
-      head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
-      body: rows,
-      pageBreak: 'auto'
-    });
-
-    const fileName = `${sanitizeFilePart(tienda)}_${fechaActual}_Checklist_GENERAL.pdf`;
-    doc.save(fileName);
-    Swal.fire('Éxito', 'Se generó el PDF general.', 'success');
-  }
-
-  async function exportPDFPorBodega(selectedWarehouses) {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-    const groups = groupByBodega();
-    const selectedGroups = selectedWarehouses
-      .filter(name => groups[name]?.length)
-      .map(name => [name, groups[name]]);
-
-    if (!selectedGroups.length) {
-      await Swal.fire('Sin datos', 'No hay productos para las bodegas seleccionadas.', 'info');
-      return;
-    }
-
-    const { jsPDF } = window.jspdf;
-
-    if (selectedGroups.length === 1) {
-      const [bodega, rowsTr] = selectedGroups[0];
-      const doc = new jsPDF();
-      const startY = writePdfHeader(doc, tienda, fechaActual, `Bodega: ${bodega}`);
-      doc.autoTable({
-        startY,
-        head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
-        body: buildPdfRows(rowsTr),
-        pageBreak: 'auto'
-      });
-      doc.save(`${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.pdf`);
-      await Swal.fire('Éxito', 'Se generó el PDF de la bodega seleccionada.', 'success');
-      return;
-    }
-
-    const zip = new JSZip();
-    selectedGroups.forEach(([bodega, rowsTr]) => {
-      const doc = new jsPDF();
-      const startY = writePdfHeader(doc, tienda, fechaActual, `Bodega: ${bodega}`);
-      doc.autoTable({
-        startY,
-        head: [['#', 'Código de barras', 'Nombre', 'Código inventario', 'Bodega', 'Cantidad', 'Revisado']],
-        body: buildPdfRows(rowsTr),
-        pageBreak: 'auto'
-      });
-      zip.file(
-        `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.pdf`,
-        doc.output('arraybuffer')
-      );
-    });
-
-    const content = await zip.generateAsync({ type: 'blob' });
-    saveBlobFile(content, `${sanitizeFilePart(tienda)}_PDF_BODEGAS_${fechaActual}.zip`);
-    await Swal.fire('Éxito', 'Se generó un ZIP con los PDFs de las bodegas seleccionadas.', 'success');
-  }
-
-  function buildExcelRows(rowsTr) {
-    return rowsTr.map(tr => {
-      const codigo = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
-      const descripcion = tr.cells[COL_INDEX.name].innerText.trim();
-      const cantidadInput = tr.querySelector('.qty')?.value.trim() || '0';
-      const cantidad = (cantidadInput.match(/\d+/g)) ? parseInt(cantidadInput.match(/\d+/g).join('')) : 0;
-      const lote = '';
-      const fechaVence = new Date(1900, 0, 1);
-      return [codigo, descripcion, cantidad, lote, fechaVence];
-    });
-  }
-
-  function buildExcelWorkbook(rowsTr) {
-    const finalData = [['Codigo', 'Descripcion', 'Cantidad', 'Lote', 'FechaVence'], ...buildExcelRows(rowsTr)];
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(finalData);
-
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    for (let C = 0; C <= range.e.c; ++C) {
-      for (let R = 1; R <= range.e.r; ++R) {
-        const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-        if (!ws[cellRef]) continue;
-        if (C === 0 || C === 1 || C === 3) ws[cellRef].t = 's';
-        else if (C === 2) ws[cellRef].t = 'n';
-        else if (C === 4) {
-          ws[cellRef].t = 'd';
-          ws[cellRef].z = 'm/d/yyyy';
-        }
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Lista de Pedido');
-    return wb;
-  }
-
-  async function exportExcelPorBodega(selectedWarehouses) {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-    const groups = groupByBodega();
-    const selectedGroups = selectedWarehouses
-      .filter(name => groups[name]?.length)
-      .map(name => [name, groups[name]]);
-
-    if (!selectedGroups.length) {
-      await Swal.fire('Sin datos', 'No hay productos para las bodegas seleccionadas.', 'info');
-      return;
-    }
-
-    if (selectedGroups.length === 1) {
-      const [bodega, rowsTr] = selectedGroups[0];
-      const wb = buildExcelWorkbook(rowsTr);
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
-      saveBlobFile(blob, `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.xlsx`);
-      await Swal.fire('Éxito', 'Se generó el Excel de la bodega seleccionada.', 'success');
-      return;
-    }
-
-    const zip = new JSZip();
-    selectedGroups.forEach(([bodega, rowsTr]) => {
-      const wb = buildExcelWorkbook(rowsTr);
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      zip.file(
-        `${sanitizeFilePart(tienda)}_${sanitizeFilePart(bodega)}_${fechaActual}_Checklist.xlsx`,
-        wbout
-      );
-    });
-
-    const content = await zip.generateAsync({ type: 'blob' });
-    saveBlobFile(content, `${sanitizeFilePart(tienda)}_EXCEL_BODEGAS_${fechaActual}.zip`);
-    await Swal.fire('Éxito', 'Se generó un ZIP con los Excel de las bodegas seleccionadas.', 'success');
-  }
-
-  function exportExcelGeneral() {
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const tienda = storeSelect.options[storeSelect.selectedIndex].text.trim() || 'Tienda';
-    const wb = buildExcelWorkbook([...body.getElementsByTagName('tr')]);
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    saveBlobFile(blob, `${sanitizeFilePart(tienda)}_${fechaActual}_Checklist_GENERAL.xlsx`);
-    Swal.fire('Éxito', 'Se generó el Excel general.', 'success');
-  }
-
-  async function handleExportRequest(preferredFormat = '') {
-    if (body.rows.length === 0) {
-      await Swal.fire('Error', 'No hay productos en la lista para exportar.', 'error');
-      return;
-    }
-
-    let format = preferredFormat;
-
-    if (!format) {
-      const formatResult = await Swal.fire({
-        title: 'Exportar checklist',
-        input: 'radio',
-        inputOptions: {
-          pdf: 'PDF',
-          excel: 'Excel'
-        },
-        inputValue: 'pdf',
-        showCancelButton: true,
-        confirmButtonText: 'Continuar',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => value ? undefined : 'Selecciona un formato.'
-      });
-
-      if (!formatResult.isConfirmed) return;
-      format = formatResult.value;
-    }
-
-    const mode = await promptExportMode(format === 'pdf' ? 'PDF' : 'Excel');
-    if (!mode) return;
-
-    if (mode === 'general') {
-      if (format === 'pdf') {
-        await withLoading('Generando PDF...', async () => {
-          exportPDFGeneral();
-        });
-      } else {
-        await withLoading('Generando Excel...', async () => {
-          exportExcelGeneral();
-        });
-      }
-      return;
-    }
-
-    const warehouses = await promptWarehouseSelection(format === 'pdf' ? 'PDF' : 'Excel');
-    if (!warehouses) return;
-
-    if (format === 'pdf') {
-      await withLoading('Generando PDF por bodega...', async () => {
-        await exportPDFPorBodega(warehouses);
-      });
-    } else {
-      await withLoading('Generando Excel por bodega...', async () => {
-        await exportExcelPorBodega(warehouses);
-      });
-    }
-  }
-
-  if (btnSearchList) {
-    btnSearchList.addEventListener('click', async () => {
-      closeMoreActionsMenu();
-      await openInsertedRowsSearch();
-    });
-  }
-
-  if (btnSearchListInline) {
-    btnSearchListInline.addEventListener('click', async () => {
-      await openInsertedRowsSearch();
-    });
-  }
-
-  if (btnExport) {
-    btnExport.addEventListener('click', async () => {
-      closeMoreActionsMenu();
-      await handleExportRequest();
-    });
-  }
-
-  if (mobileFabToggle) {
-    mobileFabToggle.addEventListener('click', () => {
-      const expanded = mobileFabToggle.getAttribute('aria-expanded') === 'true';
-      setMobileFabOpen(!expanded);
-    });
-  }
-
-  if (mobileFabBackdrop) {
-    mobileFabBackdrop.addEventListener('click', closeMobileFab);
-  }
-
-  if (btnFabSearchList) {
-    btnFabSearchList.addEventListener('click', async () => {
-      await openInsertedRowsSearch();
-    });
-  }
-
-  if (btnFabSave) {
-    btnFabSave.addEventListener('click', async () => {
-      closeMobileFab();
-      await persistCurrentChecklist({
-        successTitle: 'Guardado',
-        successMessage: 'Checklist guardado correctamente.'
-      });
-    });
-  }
-
-  if (btnFabExport) {
-    btnFabExport.addEventListener('click', async () => {
-      closeMobileFab();
-      await handleExportRequest();
-    });
-  }
-
-  if (btnFabScrollTop) {
-    btnFabScrollTop.addEventListener('click', () => {
-      closeMobileFab();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  }
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeMobileFab();
+    if (result.isConfirmed) {
+      await exportExcelPorBodega();
+    } else if (result.isDenied) {
+      exportExcelGeneral();
     }
   });
-
-  window.addEventListener('resize', () => {
-    if (!isCompactScreen()) {
-      closeMobileFab();
-    }
-  });
-
-
-  if (btnPDF) {
-    btnPDF.addEventListener('click', async () => {
-      await handleExportRequest('pdf');
-    });
-  }
-
-  if (btnExcel) {
-    btnExcel.addEventListener('click', async () => {
-      await handleExportRequest('excel');
-    });
-  }
-
 
   // Sort by Bodega via header only
   function sortByBodega() {
     const rows = Array.from(body.querySelectorAll('tr'));
     rows.sort((a, b) => {
-      const A = (a.cells[COL_INDEX.warehouse]?.innerText || '').toLowerCase();
-      const B = (b.cells[COL_INDEX.warehouse]?.innerText || '').toLowerCase();
+      const A = (a.cells[4]?.innerText || '').toLowerCase();
+      const B = (b.cells[4]?.innerText || '').toLowerCase();
       return (sortAsc ? A.localeCompare(B) : B.localeCompare(A));
     });
     sortAsc = !sortAsc;
     body.innerHTML = '';
     rows.forEach(r => body.appendChild(r));
     renumber();
-    updateBulkSelectionUI();
   }
   thBodega.addEventListener('click', sortByBodega);
 
@@ -2260,24 +1578,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       confirmButtonText: 'Limpiar'
     }).then(async res => {
       if (res.isConfirmed) {
-        await withLoading('Limpiando checklist...', async () => {
-          body.innerHTML = '';
-          renumber();
-          updateBulkSelectionUI();
+        body.innerHTML = '';
+        renumber();
 
-          const docId = getDocIdForCurrentList();
-          const payload = collectPayload();
+        const docId = getDocIdForCurrentList();
+        const payload = collectPayload();
 
-          await saveChecklistToFirestore(docId, payload, targetDay);
-          rememberHistoryDate(docId, targetDay);
-          lastUpdateISO = payload.meta.updatedAt;
-          lastSaved.innerHTML =
-            '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
-            'Última actualización: ' +
-            formatSV(lastUpdateISO);
+        await saveChecklistToFirestore(docId, payload, targetDay);
+        rememberHistoryDate(docId, targetDay);
+        lastUpdateISO = payload.meta.updatedAt;
+        lastSaved.innerHTML =
+          '<i class="fa-solid fa-clock-rotate-left me-1"></i>' +
+          'Última actualización: ' +
+          formatSV(lastUpdateISO);
 
-          await refreshHistoryPicker();
-        });
+        await refreshHistoryPicker();
 
         Swal.fire('Listo', 'Checklist guardado vacío correctamente.', 'success');
       }
@@ -2285,7 +1600,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   btnSave.addEventListener('click', async () => {
-    closeMoreActionsMenu();
     try {
       await persistCurrentChecklist();
     } catch (e) {
@@ -2295,7 +1609,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnToggleRequisition) {
     btnToggleRequisition.addEventListener('click', async () => {
-      closeMoreActionsMenu();
       if (isEditingLocked()) {
         await showEditingLockedAlert('marcar la requisición');
         return;
@@ -2327,393 +1640,95 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Histórico =====
 
-  function formatDateISO(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
+const historyService = window.TRListaChecklistHistory?.createService({
+  elements: {
+    histDateInput,
+    histCalendarPanel,
+    btnHistCalendar,
+    body,
+    lastSaved
+  },
+  getDocIdForCurrentList,
+  getHistoryDates,
+  getTodayString,
+  loadChecklistFromFirestore,
+  addRowFromData,
+  renumber,
+  applyChecklistMeta,
+  formatSV,
+  resetHistoricalUnlock,
+  clearHistoricalSelection,
+  loadStoreStateForToday,
+  setHistoricalViewMode,
+  getCurrentViewDate: () => currentViewDate,
+  setCurrentViewDate: (value) => { currentViewDate = value; },
+  getHistDatesWithData: () => histDatesWithData,
+  setHistDatesWithData: (value) => { histDatesWithData = value; },
+  getHistPicker: () => histPicker,
+  setHistPicker: (value) => { histPicker = value; },
+  setLastUpdateISO: (value) => { lastUpdateISO = value; }
+});
 
-  function parseDateISO(iso) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return null;
-    const [year, month, day] = String(iso).split('-').map(Number);
-    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
+if (!historyService) {
+  throw new Error('TRListaChecklistHistory no está disponible.');
+}
 
-  function startOfMonth(date) {
-    return new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0);
-  }
+function rememberHistoryDate(docId, isoDate) {
+  return historyService.rememberHistoryDate(docId, isoDate);
+}
 
-  function sameDay(a, b) {
-    return !!(a && b && formatDateISO(a) === formatDateISO(b));
-  }
+async function refreshHistoryPicker() {
+  return historyService.refreshHistoryPicker();
+}
 
-  function getCalendarMonthLabel(date) {
-    try {
-      return new Intl.DateTimeFormat('es-SV', {
-        month: 'long',
-        year: 'numeric'
-      }).format(date);
-    } catch (_) {
-      const months = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-      ];
-      return `${months[date.getMonth()]} ${date.getFullYear()}`;
-    }
-  }
+async function loadHistoryForDate(dateStr) {
+  return historyService.loadHistoryForDate(dateStr);
+}
 
-  function getHistoryCacheKey(docId) {
-    return `trlista:history-dates:${docId || 'default'}`;
-  }
-
-  function readHistoryDatesCache(docId) {
-    if (!docId || typeof localStorage === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem(getHistoryCacheKey(docId));
-      const parsed = JSON.parse(raw || '[]');
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v)));
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function writeHistoryDatesCache(docId, values) {
-    if (!docId || typeof localStorage === 'undefined') return;
-    try {
-      localStorage.setItem(
-        getHistoryCacheKey(docId),
-        JSON.stringify(Array.from(new Set((values || []).filter(Boolean))).sort())
-      );
-    } catch (_) {}
-  }
-
-  function rememberHistoryDate(docId, isoDate) {
-    if (!docId || !isoDate) return;
-    const cached = new Set(readHistoryDatesCache(docId));
-    cached.add(isoDate);
-    writeHistoryDatesCache(docId, Array.from(cached));
-    histDatesWithData = cached;
-    if (histPicker && typeof histPicker.redraw === 'function') {
-      histPicker.redraw();
-    }
-  }
-
-  function createHistoryPicker() {
-    if (!histDateInput || !histCalendarPanel) return null;
-
-    const wrapper = histDateInput.closest('.history-search-shell') || histDateInput.closest('.hist-date-wrapper') || histDateInput.parentElement;
-    const shell = histDateInput.closest('.control-shell-history') || histDateInput.closest('.control-shell') || wrapper;
-    const weekdayLabels = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
-
-    const state = {
-      selectedDate: currentViewDate ? parseDateISO(currentViewDate) : null,
-      visibleMonth: startOfMonth(currentViewDate ? parseDateISO(currentViewDate) || new Date() : new Date()),
-      isOpen: false
-    };
-
-    function syncInput() {
-      histDateInput.value = state.selectedDate ? formatDateISO(state.selectedDate) : '';
-      histDateInput.setAttribute('aria-expanded', String(state.isOpen));
-      if (shell) {
-        shell.classList.toggle('is-open', state.isOpen);
-      }
-      if (btnHistCalendar) {
-        btnHistCalendar.innerHTML = state.isOpen
-          ? '<i class="fa-solid fa-chevron-up"></i>'
-          : '<i class="fa-solid fa-chevron-down"></i>';
-        btnHistCalendar.setAttribute('aria-expanded', String(state.isOpen));
-      }
-    }
-
-    function close() {
-      state.isOpen = false;
-      histCalendarPanel.classList.add('d-none');
-      histCalendarPanel.setAttribute('aria-hidden', 'true');
-      syncInput();
-    }
-
-    function open() {
-      state.isOpen = true;
-      histCalendarPanel.classList.remove('d-none');
-      histCalendarPanel.setAttribute('aria-hidden', 'false');
-      render();
-      syncInput();
-    }
-
-    function toggle() {
-      state.isOpen ? close() : open();
-    }
-
-    function setSelectedDate(isoDate, triggerChange = false) {
-      const parsed = isoDate ? parseDateISO(isoDate) : null;
-      state.selectedDate = parsed;
-      if (parsed) {
-        state.visibleMonth = startOfMonth(parsed);
-      }
-      syncInput();
-      render();
-
-      if (parsed && triggerChange) {
-        loadHistoryForDate(formatDateISO(parsed));
-      }
-    }
-
-    function clear() {
-      state.selectedDate = null;
-      state.visibleMonth = startOfMonth(new Date());
-      close();
-      syncInput();
-      render();
-    }
-
-    function destroy() {
-      close();
-      histCalendarPanel.innerHTML = '';
-    }
-
-    function changeMonth(offset) {
-      state.visibleMonth = new Date(
-        state.visibleMonth.getFullYear(),
-        state.visibleMonth.getMonth() + offset,
-        1,
-        12, 0, 0, 0
-      );
-      render();
-    }
-
-    function render() {
-      if (!histCalendarPanel) return;
-
-      const today = parseDateISO(getTodayString()) || new Date();
-      const firstDay = startOfMonth(state.visibleMonth);
-      const gridStart = new Date(firstDay.getFullYear(), firstDay.getMonth(), 1 - firstDay.getDay(), 12, 0, 0, 0);
-
-      let html = `
-        <div class="history-calendar-header">
-          <button type="button" class="history-calendar-nav" data-cal-nav="-1" aria-label="Mes anterior">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <div class="history-calendar-title">${getCalendarMonthLabel(firstDay)}</div>
-          <button type="button" class="history-calendar-nav" data-cal-nav="1" aria-label="Mes siguiente">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-        </div>
-        <div class="history-calendar-weekdays">
-          ${weekdayLabels.map(label => `<div class="history-calendar-weekday">${label}</div>`).join('')}
-        </div>
-        <div class="history-calendar-grid">
-      `;
-
-      for (let i = 0; i < 42; i++) {
-        const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i, 12, 0, 0, 0);
-        const iso = formatDateISO(date);
-        const classes = ['history-calendar-day'];
-
-        if (date.getMonth() !== firstDay.getMonth()) classes.push('is-outside');
-        if (sameDay(date, today)) classes.push('is-today');
-        if (state.selectedDate && sameDay(date, state.selectedDate)) classes.push('is-selected');
-        if (histDatesWithData && histDatesWithData.has(iso)) classes.push('has-history');
-
-        html += `
-          <button type="button"
-            class="${classes.join(' ')}"
-            data-cal-date="${iso}"
-            aria-label="Seleccionar ${iso}">
-            ${date.getDate()}
-          </button>
-        `;
-      }
-
-      html += '</div>';
-
-      if (!histDatesWithData || histDatesWithData.size === 0) {
-        html += '<div class="history-calendar-empty">Aún no hay fechas marcadas para esta lista.</div>';
-      }
-
-      histCalendarPanel.innerHTML = html;
-
-      histCalendarPanel.querySelectorAll('[data-cal-nav]').forEach(btn => {
-        btn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const offset = Number(btn.getAttribute('data-cal-nav') || 0);
-          changeMonth(offset);
-        });
-      });
-
-      histCalendarPanel.querySelectorAll('[data-cal-date]').forEach(btn => {
-        btn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const iso = btn.getAttribute('data-cal-date');
-          setSelectedDate(iso, true);
-          close();
-        });
-      });
-    }
-
-    histDateInput.addEventListener('click', (event) => {
-      event.stopPropagation();
-      toggle();
-    });
-
-    histDateInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        toggle();
-      } else if (event.key === 'Escape') {
-        close();
-      }
-    });
-
-    if (shell) {
-      shell.addEventListener('click', (event) => {
-        if (event.target === histDateInput || event.target.closest('#btnHistToday')) {
-          return;
-        }
-
-        event.preventDefault();
-        toggle();
-        histDateInput.focus({ preventScroll: true });
-      });
-    }
-
-    if (btnHistCalendar) {
-      btnHistCalendar.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggle();
-      });
-    }
-
-    document.addEventListener('click', (event) => {
-      if (!wrapper || !wrapper.contains(event.target)) {
-        close();
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') close();
-    });
-
-    syncInput();
-    render();
-
-    return {
-      clear,
-      close,
-      destroy,
-      open,
-      redraw: render,
-      setDate: setSelectedDate
-    };
-  }
-
-  async function refreshHistoryPicker() {
-    if (!histDateInput || typeof getHistoryDates !== 'function') return;
-
-    const docId = getDocIdForCurrentList();
-    const cachedDates = readHistoryDatesCache(docId);
-    histDatesWithData = new Set(cachedDates);
-
-    if (!histPicker) {
-      histPicker = createHistoryPicker();
-    } else if (typeof histPicker.redraw === 'function') {
-      histPicker.redraw();
-    }
-
-    try {
-      const fechas = await getHistoryDates(docId);
-      const fechasUnicas = Array.from(new Set((fechas || []).filter(Boolean)));
-      histDatesWithData = new Set(fechasUnicas);
-      writeHistoryDatesCache(docId, fechasUnicas);
-    } catch (e) {
-      console.error('Error al obtener fechas de historial:', e);
-    }
-
-    if (histPicker && typeof histPicker.redraw === 'function') {
-      histPicker.redraw();
-    }
-  }
-
-  async function loadHistoryForDate(dateStr) {
-    if (!dateStr) return;
-
-    return withLoading('Cargando historial...', async () => {
-      try {
-        const today = (typeof getTodayString === 'function') ? getTodayString() : null;
-
-        if (today && dateStr === today) {
-          currentViewDate = null;
-          resetHistoricalUnlock();
-          clearHistoricalSelection();
-
-          if (histPicker) {
-            histPicker.clear();
-          } else if (histDateInput) {
-            histDateInput.value = '';
-          }
-
-          await loadStoreStateForToday();
-          setHistoricalViewMode(false);
-          return;
-        }
-
-        currentViewDate = dateStr;
-        resetHistoricalUnlock();
-        clearHistoricalSelection();
-
-        body.innerHTML = '';
-        renumber();
-        updateBulkSelectionUI();
-
-        const docId = getDocIdForCurrentList();
-        const record = await loadChecklistFromFirestore(docId, dateStr);
-        applyChecklistMeta(record?.meta || {});
-
-        if (record && Array.isArray(record.items) && record.items.length) {
-          record.items.forEach(addRowFromData);
-          renumber();
-          lastUpdateISO = record.meta?.updatedAt || null;
-          lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
-        } else {
-          lastUpdateISO = record?.meta?.updatedAt || null;
-          lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + 'Sin guardado para esa fecha.';
-          Swal.fire('Sin datos', 'No hay checklist guardado para esa fecha.', 'info');
-        }
-
-        const isHistorical = (today ? (dateStr !== today) : true);
-        setHistoricalViewMode(isHistorical);
-      } catch (e) {
-        console.error('Error al cargar histórico:', e);
-        Swal.fire('Error', 'No se pudo cargar el histórico para esa fecha.', 'error');
-      }
-    });
-  }
+function clearHistoryPickerSelection() {
+  return historyService.clearHistoryPickerSelection();
+}
 
   if (btnHistToday) {
     btnHistToday.addEventListener('click', async () => {
-      await withLoading('Volviendo a hoy...', async () => {
-        if (histPicker) {
-          histPicker.clear();
-        } else if (histDateInput) {
-          histDateInput.value = '';
-        }
+      clearHistoryPickerSelection();
 
-        currentViewDate = null;
-        resetHistoricalUnlock();
-        clearHistoricalSelection();
-        await loadStoreStateForToday(); // vuelve a hoy
-        setHistoricalViewMode(false);
-      });
-
+      currentViewDate = null;
+      resetHistoricalUnlock();
+      clearHistoricalSelection();
+      await loadStoreStateForToday(); // vuelve a hoy
+      setHistoricalViewMode(false);
       if (searchInput) searchInput.focus();
+    });
+  }
+
+  if (chkSelectAllHistory) {
+    chkSelectAllHistory.addEventListener('change', () => {
+      const shouldCheck = !!chkSelectAllHistory.checked;
+      getHistoricalSelectionCheckboxes().forEach(cb => {
+        if (!cb.disabled) cb.checked = shouldCheck;
+      });
+      updateHistorySelectAllState();
+    });
+  }
+
+  if (btnHistoricalSelectMode) {
+    btnHistoricalSelectMode.addEventListener('click', async () => {
+      if (!isHistoricalSelectionAvailable()) {
+        await Swal.fire(
+          'No aplica',
+          'La selección múltiple solo está disponible cuando estás viendo una fecha anterior.',
+          'info'
+        );
+        return;
+      }
+
+      historicalSelectionMode = !historicalSelectionMode;
+      if (!historicalSelectionMode) {
+        clearHistoricalSelection({ keepMode: true });
+      }
+
+      updateHistoricalSelectionUI();
     });
   }
 
@@ -2725,7 +1740,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnToggleHistLock) {
     btnToggleHistLock.addEventListener('click', async () => {
-      closeMoreActionsMenu();
       const canUnlockHistorical = isPastHistoricalDateSelected();
       const canUnlockProtected = isProtectedVersionSelected();
       const canUnlockAny = canUnlockHistorical || canUnlockProtected;
@@ -2740,12 +1754,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const hasActiveUnlock =
-        (canUnlockHistorical && historicalUnlockEnabled) ||
-        (canUnlockProtected && protectedVersionUnlockEnabled);
+        (canUnlockHistorical && historicalUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_HISTORICAL)) ||
+        (canUnlockProtected && protectedVersionUnlockEnabled && hasActiveUnlockScope(UNLOCK_SCOPE_PROTECTED));
 
       if (hasActiveUnlock) {
         historicalUnlockEnabled = false;
         protectedVersionUnlockEnabled = false;
+        clearStoredUnlockSession();
         setHistoricalViewMode(isHistoricalDateSelected());
 
         await Swal.fire(
@@ -2763,7 +1778,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const unlocked = await requestUnlockPassword({
         title: 'Desbloquear edición',
         text: 'Ingresa la contraseña para habilitar edición en ' + contexts.join(' y ') + '.',
-        confirmButtonText: 'Desbloquear'
+        confirmButtonText: 'Desbloquear',
+        scopes: [
+          ...(canUnlockHistorical ? [UNLOCK_SCOPE_HISTORICAL] : []),
+          ...(canUnlockProtected ? [UNLOCK_SCOPE_PROTECTED] : [])
+        ]
       });
 
       if (unlocked) {
@@ -2773,7 +1792,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await Swal.fire(
           'Desbloqueado',
-          'Ya puedes editar esta vista hasta que vuelvas a bloquearla.',
+          'Ya puedes editar esta vista temporalmente en esta pestaña hasta que vuelvas a bloquearla o expire la sesión.',
           'success'
         );
       }
@@ -2781,232 +1800,80 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ====== Barcode Scanner ======
-  function setScanButtonState(isActive) {
-    if (!btnScan) return;
-
-    btnScan.classList.remove('btn-outline-primary', 'btn-outline-danger');
-
-    if (isActive) {
-      btnScan.classList.add('btn-outline-danger');
-      btnScan.title = 'Detener cámara';
-      btnScan.setAttribute('aria-label', 'Detener cámara');
-      btnScan.innerHTML = '<i class="fa-solid fa-stop me-1"></i><span>Detener</span>';
-    } else {
-      btnScan.classList.add('btn-outline-primary');
-      btnScan.title = 'Escanear código de barras';
-      btnScan.setAttribute('aria-label', 'Escanear código de barras');
-      btnScan.innerHTML = '<i class="fa-solid fa-barcode"></i>';
-    }
-  }
-
-  function ensureBarcodeDetector() {
-    if (detector !== null) return detector;
-    if ('BarcodeDetector' in window) {
-      try {
-        detector = new window.BarcodeDetector({ formats: ['ean_13', 'code_128', 'code_39', 'ean_8', 'upc_a', 'upc_e'] });
-      } catch (_e) {
-        detector = false;
-      }
-    } else {
-      detector = false;
-    }
-    return detector || null;
-  }
-
-  async function startScanner() {
-    if (mediaStream) return;
-
-    ensureBarcodeDetector();
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      Swal.fire('No compatible', 'Tu navegador no permite usar la cámara.', 'info');
-      return;
-    }
-
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-      scanVideo.srcObject = mediaStream;
-      await scanVideo.play();
-      scanWrap.classList.add('active');
-      setScanButtonState(true);
-
-      if (detector) {
-        if (scanInterval) clearInterval(scanInterval);
-        scanInterval = setInterval(async () => {
-          try {
-            const barcodes = await detector.detect(scanVideo);
-            if (barcodes && barcodes.length) {
-              const raw = String(barcodes[0].rawValue || '').trim();
-              if (raw) await onBarcodeFound(raw);
-            }
-          } catch (_e) { }
-        }, 250);
-      }
-    } catch (err) {
-      console.error(err);
-      await stopScanner();
-      Swal.fire('Cámara no disponible', 'No se pudo acceder a la cámara.', 'error');
-    }
-  }
-
-  async function stopScanner() {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
-
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      mediaStream = null;
-    }
-
-    if (scanVideo) {
-      try { scanVideo.pause(); } catch (_e) { }
-      scanVideo.srcObject = null;
-    }
-
-    scanWrap.classList.remove('active');
-    setScanButtonState(false);
-  }
-
-  async function onBarcodeFound(code) {
-    await stopScanner();
+const scannerService = window.TRListaChecklistScanner?.createService({
+  elements: {
+    btnScan,
+    scanWrap,
+    scanVideo,
+    btnFilePick,
+    fileScan
+  },
+  onCodeDetected: async (code) => {
     searchInput.value = code;
-    const e = new KeyboardEvent('keydown', { key: 'Enter' });
-    searchInput.dispatchEvent(e);
+    const event = new KeyboardEvent('keydown', { key: 'Enter' });
+    searchInput.dispatchEvent(event);
   }
+});
 
-  async function tryDetectBarcodeFromImage(file) {
-    if (!file || !(file.type || '').startsWith('image/')) return '';
-    const activeDetector = ensureBarcodeDetector();
-    if (!activeDetector) return '';
+if (!scannerService) {
+  throw new Error('TRListaChecklistScanner no está disponible.');
+}
 
-    try {
-      const bitmap = await createImageBitmap(file);
-      try {
-        const barcodes = await activeDetector.detect(bitmap);
-        const raw = String(barcodes?.[0]?.rawValue || '').trim();
-        return raw || '';
-      } finally {
-        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
-      }
-    } catch (_e) {
-      return '';
-    }
-  }
+function startScanner() {
+  return scannerService.startScanner();
+}
 
-  if (btnFilePick) {
-    btnFilePick.addEventListener('click', async () => {
-      if (mediaStream) await stopScanner();
-      if (fileScan) fileScan.click();
-    });
-  }
+function stopScanner() {
+  return scannerService.stopScanner();
+}
 
-  if (fileScan) {
-    fileScan.addEventListener('change', async () => {
-      const f = fileScan.files?.[0];
-      if (!f) return;
-
-      let code = await tryDetectBarcodeFromImage(f);
-
-      if (!code) {
-        const m = String(f.name || '').match(/\d{8,}/);
-        code = m ? m[0] : '';
-      }
-
-      fileScan.value = '';
-
-      if (code) {
-        searchInput.value = code;
-        const e = new KeyboardEvent('keydown', { key: 'Enter' });
-        searchInput.dispatchEvent(e);
-      } else {
-        Swal.fire('Atención', 'No se pudo leer el código desde el archivo seleccionado.', 'info');
-      }
-    });
-  }
-
-  if (btnScan) {
-    btnScan.addEventListener('click', async () => {
-      if (mediaStream) {
-        await stopScanner();
-      } else {
-        await startScanner();
-      }
-    });
-  }
-
-  setScanButtonState(false);
+scannerService.mount();
 
   // ===== Carga inicial (hoy) =====
-  async function loadStoreStateForToday(options = {}) {
-    const { withLoader = false } = options || {};
+  async function loadStoreStateForToday() {
+    clearHistoricalSelection();
+    body.innerHTML = '';
 
-    const run = async () => {
-      clearHistoricalSelection();
-      clearBulkSelection();
-      body.innerHTML = '';
+    const docId = getDocIdForCurrentList();
+    const record = await loadChecklistFromFirestore(docId); // hoy
+    applyChecklistMeta(record?.meta || {});
 
-      const docId = getDocIdForCurrentList();
-      const record = await loadChecklistFromFirestore(docId); // hoy
-      applyChecklistMeta(record?.meta || {});
-
-      if (record && Array.isArray(record.items)) {
-        record.items.forEach(addRowFromData);
-        renumber();
-        lastUpdateISO = record.meta?.updatedAt || null;
-      } else {
-        lastUpdateISO = null;
-      }
-
-      lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
-      updateBulkSelectionUI();
-      updateRequisitionUI();
-    };
-
-    if (withLoader) {
-      return withLoading('Cargando checklist actual...', run);
+    if (record && Array.isArray(record.items)) {
+      record.items.forEach(addRowFromData);
+      renumber();
+      lastUpdateISO = record.meta?.updatedAt || null;
+    } else {
+      lastUpdateISO = null;
     }
 
-    return run();
+    lastSaved.innerHTML = '<i class="fa-solid fa-clock-rotate-left me-1"></i>' + (lastUpdateISO ? ('Última actualización: ' + formatSV(lastUpdateISO)) : 'Aún no guardado.');
+    updateRequisitionUI();
   }
 
-  await withLoading('Cargando checklist...', async () => {
-    await preloadCatalog();
-    await loadStoreStateForToday();
-    setHistoricalViewMode(false);
-    await refreshHistoryPicker();
-  });
+  await loadStoreStateForToday();
+  setHistoricalViewMode(false);
+  await refreshHistoryPicker();
 
   // → Enfocar la barra de búsqueda al iniciar
   searchInput.focus();
 
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
-    closeMoreActionsMenu();
-    closeMobileFab();
-    await withLoading('Cambiando tienda...', async () => {
-      updateStoreUI();
-      currentViewDate = null;
-      resetHistoricalUnlock();
-      if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-      if (histDateInput) histDateInput.value = '';
+    updateStoreUI();
+    currentViewDate = null;
+    resetHistoricalUnlock();
+    clearHistoryPickerSelection();
 
-      await loadStoreStateForToday();
-      setHistoricalViewMode(false);
-      await refreshHistoryPicker();
-      lastCommittedVersionValue = versionSelect.value;
-    });
+    await loadStoreStateForToday();
+    setHistoricalViewMode(false);
+    await refreshHistoryPicker();
+    lastCommittedVersionValue = versionSelect.value;
   });
 
   versionSelect.addEventListener('change', async () => {
-    closeMoreActionsMenu();
-    closeMobileFab();
     const requestedVersion = versionSelect.value;
     const previousVersion = lastCommittedVersionValue || 'base';
-    const isProtectedRequest = (typeof isProtectedVersionKey === 'function')
-      ? isProtectedVersionKey(requestedVersion)
-      : (requestedVersion === 'traslado');
+    const isProtectedRequest = isProtectedVersionKey(requestedVersion);
 
     if (isProtectedRequest && requestedVersion !== previousVersion) {
       const hasProtectedAccess = await ensureProtectedDestinationAccess(
@@ -3020,18 +1887,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    await withLoading('Cargando lista...', async () => {
-      currentViewDate = null;
-      historicalUnlockEnabled = false;
-      protectedVersionUnlockEnabled = !!isProtectedRequest;
+    currentViewDate = null;
+    historicalUnlockEnabled = false;
+    protectedVersionUnlockEnabled = !!isProtectedRequest;
 
-      if (histPicker) { try { histPicker.clear(); } catch (_) {} }
-      if (histDateInput) histDateInput.value = '';
+    clearHistoryPickerSelection();
 
-      await loadStoreStateForToday();
-      setHistoricalViewMode(false);
-      await refreshHistoryPicker();
-      lastCommittedVersionValue = versionSelect.value;
-    });
+    await loadStoreStateForToday();
+    setHistoricalViewMode(false);
+    await refreshHistoryPicker();
+    lastCommittedVersionValue = versionSelect.value;
   });
 });
