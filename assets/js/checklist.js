@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   const btnSave = $('btnSave');
+  const btnSearchList = $('btnSearchList');
+  const btnSearchListInline = $('btnSearchListInline');
   const btnExport = $('btnExport');
   const btnToggleRequisition = $('btnToggleRequisition');
   const btnExcel = $('btnExcel');
@@ -243,9 +245,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       cell.setAttribute('data-label', ROW_CELL_LABELS[idx] || '');
       if (idx === COL_INDEX.bulkSelect) {
         cell.classList.add('cell-select');
-      }
-      if (idx === COL_INDEX.barcode) {
-        cell.classList.add('cell-barcode');
       }
       if (idx === COL_INDEX.name) {
         cell.classList.add('cell-name');
@@ -2137,6 +2136,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         await exportExcelPorBodega(warehouses);
       });
     }
+  }
+
+  if (btnSearchList) {
+    btnSearchList.addEventListener('click', async () => {
+      closeMoreActionsMenu();
+      await openInsertedRowsSearch();
+    });
+  }
+
+  if (btnSearchListInline) {
+    btnSearchListInline.addEventListener('click', async () => {
+      await openInsertedRowsSearch();
+    });
   }
 
   if (btnExport) {

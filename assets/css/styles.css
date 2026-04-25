@@ -2610,214 +2610,268 @@ main.container-fluid {
 }
 
 
-/* === UI v8: correcciones de alineación + cards móviles compactas === */
-@media (max-width: 767.98px) {
-  .toolbar-menu {
-    position: static;
+
+/* === UI v8: coherencia de acciones y tabla móvil/escritorio === */
+.checklist-search-shell {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 22;
+}
+
+.checklist-primary-toolbar {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.checklist-primary-toolbar > .btn,
+.checklist-primary-toolbar > .toolbar-menu,
+.toolbar-menu-toggle {
+  flex: 0 0 auto;
+}
+
+.checklist-primary-toolbar > .btn,
+.toolbar-menu-toggle {
+  width: auto;
+  min-height: 36px;
+  padding: 0.48rem 0.78rem;
+  border-radius: 0.72rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 0.45rem;
+}
+
+.toolbar-btn-search-list {
+  border-color: #d3dce7;
+}
+
+.search-list-inline-btn {
+  min-width: 2.6rem;
+}
+
+.row-actions-grid {
+  display: inline-flex !important;
+  flex-wrap: nowrap;
+  gap: 0.26rem;
+  width: auto;
+  margin-inline: auto;
+}
+
+.row-actions-grid .btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 0.6rem;
+}
+
+#chkTable th:last-child,
+#chkTable td:last-child {
+  min-width: 148px;
+}
+
+.table-checklist-wrapper {
+  max-height: min(72vh, 900px);
+}
+
+.bulk-selection-bar {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 18;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.bulk-selection-actions {
+  flex-wrap: nowrap;
+}
+
+.workspace-status-badge {
+  min-height: 1.92rem;
+  padding: 0.3rem 0.62rem;
+  font-size: 0.72rem;
+}
+
+@media (min-width: 992px) {
+  .checklist-card-header {
+    padding-top: 0.9rem;
+    padding-bottom: 0.8rem;
   }
 
-  .toolbar-menu-panel {
-    position: fixed;
-    right: max(0.75rem, env(safe-area-inset-right));
-    left: auto !important;
-    top: auto;
-    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 4.6rem);
-    width: min(280px, calc(100vw - 1.5rem));
-    z-index: 1086;
+  .checklist-heading-block .card-title {
+    font-size: 1rem;
   }
 
-  .bulk-selection-bar {
-    left: max(0.75rem, env(safe-area-inset-left));
-    right: max(0.75rem, env(safe-area-inset-right));
-    width: auto;
-    transform: none;
-    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 4.9rem);
-    padding: 0.62rem 0.7rem;
-    border-radius: 1rem;
-    grid-template-columns: auto 1fr;
-    row-gap: 0.45rem;
-    column-gap: 0.55rem;
-    align-items: start;
-  }
-
-  .bulk-selection-summary {
-    grid-column: 1 / -1;
-  }
-
-  .bulk-selection-count-pill {
-    width: 100%;
-    justify-content: center;
-    padding: 0.38rem 0.6rem;
-    font-size: 0.8rem;
-  }
-
-  .bulk-selection-actions {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.4rem;
-    width: 100%;
-    overflow: visible;
-  }
-
-  .bulk-selection-actions > .btn {
+  .checklist-primary-toolbar > .btn,
+  .toolbar-menu-toggle {
     min-height: 34px;
-    padding-inline: 0.45rem;
+    padding: 0.38rem 0.7rem;
     font-size: 0.78rem;
+    border-radius: 0.68rem;
   }
 
-  .bulk-selection-close {
-    position: absolute;
-    top: 0.45rem;
-    right: 0.45rem;
-    width: 30px;
-    height: 30px;
+  .search-bar-embedded {
+    border-radius: 0.85rem;
   }
 
-  body.has-mobile-selection .mobile-fab-shell {
-    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 8.2rem);
+  .search-bar-embedded .form-control,
+  .search-bar-embedded .btn,
+  .search-bar-embedded .input-group-text {
+    min-height: 40px;
   }
 
-  .mobile-fab-shell {
-    right: max(0.85rem, env(safe-area-inset-right));
+  .table-checklist-wrapper {
+    max-height: 74vh;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .checklist-search-shell {
+    top: 0.55rem;
   }
 
-  .mobile-fab-menu {
-    right: 0;
-    left: auto;
-    bottom: 68px;
-    min-width: min(86vw, 248px);
+  .checklist-primary-toolbar {
+    justify-content: flex-start;
   }
 
-  .table-checklist-shell {
-    margin-bottom: 8.8rem;
+  .checklist-primary-toolbar > .btn,
+  .toolbar-menu-toggle {
+    min-height: 38px;
+    padding: 0.48rem 0.72rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .checklist-primary-toolbar {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
   }
 
-  #chkTable tbody {
-    gap: 0.58rem;
+  .checklist-primary-toolbar > .btn,
+  .checklist-primary-toolbar > .toolbar-menu,
+  .toolbar-menu-toggle {
+    width: 100%;
   }
 
-  #chkTable tbody tr {
-    padding: 0.72rem 0.76rem 0.68rem;
-    border-radius: 0.92rem;
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055);
+  .checklist-primary-toolbar > .btn span,
+  .toolbar-menu-toggle span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  #chkTable tbody tr > td::before {
-    margin-bottom: 0.12rem;
-    font-size: 0.66rem;
-    letter-spacing: 0.02em;
+  .toolbar-btn-search-list {
+    display: none !important;
   }
 
-  #chkTable tbody tr > td:nth-child(2) {
+  .checklist-search-shell {
+    top: 0;
+    margin-inline: -0.2rem;
+    padding: 0.68rem;
+    border-radius: 0.9rem;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .search-bar-embedded .input-group-text span {
     display: none;
   }
 
-  #chkTable tbody tr > td.cell-select {
-    top: 0.62rem;
-    right: 0.68rem;
+  .search-bar-embedded .form-control,
+  .search-bar-embedded .btn,
+  .search-bar-embedded .input-group-text {
+    min-height: 42px;
   }
 
-  #chkTable tbody tr > td.cell-select .form-check-input {
-    width: 1.08rem;
-    height: 1.08rem;
+  .table-checklist-wrapper {
+    max-height: calc(100vh - 360px);
+    min-height: 42vh;
   }
 
-  #chkTable tbody tr > td.cell-name {
-    padding-right: 1.85rem;
-    margin-bottom: 0.4rem;
-    font-size: 0.95rem;
-    line-height: 1.25;
+  #chkTable {
+    min-width: 760px;
   }
 
-  #chkTable tbody tr > td.cell-barcode {
-    display: inline-flex !important;
-    width: auto !important;
-    margin-bottom: 0.4rem;
-    padding: 0.22rem 0.5rem;
-    border: 1px solid #dbe6f3;
-    border-radius: 999px;
-    background: #f8fbff !important;
-    color: #274c77;
-    font-size: 0.74rem;
-    font-weight: 700;
+  #chkTable th:last-child,
+  #chkTable td:last-child {
+    min-width: 132px;
   }
 
-  #chkTable tbody tr > td.cell-barcode::before {
-    content: "Barras";
-    display: inline;
-    margin: 0 0.3rem 0 0;
-    font-size: 0.64rem;
-    color: #64748b;
+  .row-actions-grid .btn {
+    width: 28px;
+    height: 28px;
   }
 
-  #chkTable tbody tr > td.cell-inventory,
-  #chkTable tbody tr > td.cell-warehouse {
-    display: inline-block !important;
-    width: calc(50% - 0.22rem) !important;
-    vertical-align: top;
-    margin-bottom: 0.42rem;
+  .bulk-selection-bar {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.4rem);
+    margin-top: 0;
+    border-radius: 1rem;
+    padding: 0.7rem 0.75rem;
   }
 
-  #chkTable tbody tr > td.cell-inventory {
-    margin-right: 0.44rem;
+  .bulk-selection-bar.d-none {
+    display: none !important;
   }
 
-  #chkTable tbody tr > td.cell-quantity {
-    margin-bottom: 0.52rem;
+  body.has-mobile-selection {
+    padding-bottom: 8.6rem;
   }
 
-  #chkTable tbody tr > td.cell-quantity .qty {
-    min-height: 40px;
-    padding-block: 0.38rem;
-    font-size: 0.9rem;
-  }
-
-  #chkTable tbody tr > td.cell-actions .row-actions-grid {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.35rem;
+  .bulk-selection-summary {
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 0.04rem;
+    justify-content: space-between;
   }
 
-  #chkTable tbody tr > td.cell-actions .row-actions-grid .btn {
-    min-width: 38px;
-    width: 38px;
-    height: 38px;
-    flex: 0 0 auto;
-    border-radius: 0.75rem;
+  .bulk-selection-count-pill {
+    font-size: 0.78rem;
+    padding: 0.38rem 0.62rem;
   }
 
-  #chkTable tbody tr > td.cell-actions::before {
-    margin-bottom: 0.26rem;
+  .bulk-selection-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .bulk-selection-actions > .btn {
+    min-height: 36px;
+    padding-inline: 0.35rem;
+    font-size: 0.74rem;
+  }
+
+  .mobile-fab-shell {
+    display: block;
+  }
+
+  .mobile-fab-menu {
+    min-width: min(84vw, 224px);
+  }
+
+  .mobile-fab-menu-btn {
+    min-height: 40px;
+    font-size: 0.92rem;
   }
 }
 
 @media (max-width: 575.98px) {
+  .checklist-primary-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .checklist-search-shell {
+    padding: 0.58rem;
+  }
+
+  .search-list-inline-btn {
+    display: inline-flex !important;
+  }
+
   .bulk-selection-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .bulk-selection-actions > .btn:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-
-  .toolbar-menu-panel {
-    width: min(260px, calc(100vw - 1.25rem));
-  }
-
-  #chkTable tbody tr > td.cell-inventory,
-  #chkTable tbody tr > td.cell-warehouse {
-    width: 100% !important;
-    margin-right: 0;
-  }
-
-  #chkTable tbody tr > td.cell-barcode {
-    max-width: calc(100% - 2rem);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .bulk-selection-actions > .btn span {
+    font-size: 0.72rem;
   }
 }
