@@ -1,0 +1,11 @@
+{
+  "name": "tr-cotizaciones",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "App para crear cotizaciones con catálogo desde Google Sheets y PDF.",
+  "scripts": {
+    "check": "node --check assets/js/app.js && node --check api/catalogo.js"
+  },
+  "dependencies": {}
+}
