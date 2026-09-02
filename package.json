@@ -1,9 +1,11 @@
 {
-  "name": "boletas-rr-vercel",
+  "name": "tr-cotizaciones",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
-  "description": "Aplicación estática para generar boletas de pago desde Excel y consolidarlas en PDF.",
+  "description": "App para crear cotizaciones con catálogo desde Google Sheets y PDF.",
   "scripts": {
-    "start": "npx serve ."
-  }
+    "check": "node --check assets/js/app.js && node --check api/catalogo.js"
+  },
+  "dependencies": {}
 }
