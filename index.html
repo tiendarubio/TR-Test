@@ -1,380 +1,129 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>TR Cotizaciones</title>
-  <link rel="icon" type="image/png" href="assets/img/trlogo.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boletas RR</title>
+  <link rel="icon" type="image/png" href="assets/img/trlogo_bn.png" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-  <link href="assets/css/styles.css" rel="stylesheet">
-  <script>
-    (function forceInitialTop() {
-      const goTop = () => {
-        if (window.location.hash) return;
-        try {
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        } catch (_) {}
-      };
-      try {
-        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-        goTop();
-        document.addEventListener('DOMContentLoaded', goTop, { once: true });
-        window.addEventListener('pageshow', goTop);
-        window.addEventListener('load', () => setTimeout(goTop, 0), { once: true });
-      } catch (_) {}
-    })();
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="assets/css/styles.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm sticky-top">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-        <img src="assets/img/trlogo.png" alt="Logo TR" class="logo-navbar">
-        <span class="fw-semibold">TR Cotizaciones</span>
-      </a>
-      <div class="d-flex align-items-center gap-2 ms-auto">
-        <button type="button" id="btnOpenHistory" class="btn btn-outline-light btn-sm nav-action-btn">
-          <i class="fa-solid fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">Histórico</span>
-        </button>
-        <button type="button" id="btnNewQuote" class="btn btn-primary btn-sm nav-action-btn">
-          <i class="fa-solid fa-plus me-1"></i><span class="d-none d-sm-inline">Nueva</span>
-        </button>
-      </div>
-    </div>
-  </nav>
-
-  <main class="container-fluid py-3 py-lg-4">
-    <div class="row g-3 g-lg-4">
-      <div class="col-12 col-xl-8">
-        <section class="card shadow-sm mb-3 quote-header-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Nueva cotización</div>
-              <h5 class="mb-0">Cliente y condiciones</h5>
-            </div>
-            <span id="quoteStatusBadge" class="badge rounded-pill text-bg-light border">Borrador</span>
-          </div>
-          <div class="card-body border-top">
-            <div class="row g-3">
-              <div class="col-12 col-md-4">
-                <label for="quoteNumber" class="form-label fw-semibold">N° cotización</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-hashtag"></i></span>
-                  <input id="quoteNumber" class="form-control control-input" type="text" autocomplete="off">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="quoteDate" class="form-label fw-semibold">Fecha</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-calendar-day"></i></span>
-                  <input id="quoteDate" class="form-control control-input" type="date">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="validityDays" class="form-label fw-semibold">Vigencia</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-hourglass-half"></i></span>
-                  <input id="validityDays" class="form-control control-input" type="number" min="0" step="1" placeholder="8">
-                </div>
-              </div>
-
-              <div class="col-12 col-md-7">
-                <label for="clientName" class="form-label fw-semibold">Cliente / institución</label>
-                <div class="control-shell control-shell-field required-field">
-                  <span class="control-icon"><i class="fa-solid fa-building-user"></i></span>
-                  <input id="clientName" class="form-control control-input" type="text" autocomplete="organization" placeholder="Cliente o institución">
-                </div>
-              </div>
-              <div class="col-12 col-md-5">
-                <label for="clientTaxName" class="form-label fw-semibold">Razón social</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-file-signature"></i></span>
-                  <input id="clientTaxName" class="form-control control-input" type="text">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientContact" class="form-label fw-semibold">Contacto</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-user"></i></span>
-                  <input id="clientContact" class="form-control control-input" type="text" autocomplete="name">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientPhone" class="form-label fw-semibold">Teléfono</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-phone"></i></span>
-                  <input id="clientPhone" class="form-control control-input" type="text" autocomplete="tel">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientEmail" class="form-label fw-semibold">Correo</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-envelope"></i></span>
-                  <input id="clientEmail" class="form-control control-input" type="email" autocomplete="email">
-                </div>
-              </div>
-              <div class="col-12">
-                <label for="clientAddress" class="form-label fw-semibold">Dirección / referencia</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-location-dot"></i></span>
-                  <input id="clientAddress" class="form-control control-input" type="text">
-                </div>
-              </div>
-
-              <div class="col-12 col-md-4">
-                <label for="paymentMethod" class="form-label fw-semibold">Forma de pago</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-money-check-dollar"></i></span>
-                  <select id="paymentMethod" class="form-select control-input">
-                    <option value="Contado">Contado</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Transferencia">Transferencia</option>
-                    <option value="Crédito">Crédito</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="creditDays" class="form-label fw-semibold">Días crédito</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-clock"></i></span>
-                  <input id="creditDays" class="form-control control-input" type="number" min="0" step="1">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="discountAmount" class="form-label fw-semibold">Descuento</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-tags"></i></span>
-                  <input id="discountAmount" class="form-control control-input" type="number" min="0" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-              <div class="col-12">
-                <label for="quoteNotes" class="form-label fw-semibold">Condiciones adicionales</label>
-                <textarea id="quoteNotes" class="form-control" rows="2"></textarea>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm mb-3 product-search-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Productos</div>
-              <h5 class="mb-0">Catálogo / manual</h5>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-              <button type="button" id="btnReloadCatalog" class="btn btn-outline-secondary btn-sm">
-                <i class="fa-solid fa-rotate me-1"></i>Actualizar
-              </button>
-              <button type="button" id="btnOpenManualProduct" class="btn btn-dark btn-sm">
-                <i class="fa-solid fa-pen-to-square me-1"></i>Manual
-              </button>
-            </div>
-          </div>
-          <div class="card-body border-top">
-            <div class="checklist-search-shell">
-              <div class="input-group input-group-sm search-bar-embedded">
-                <button type="button" id="btnSearchModeToggle" class="btn btn-outline-primary search-lead-chip" data-search-mode="catalog" title="Cambiar modo de búsqueda">
-                  <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>
-                  <span id="searchLeadLabel">Catálogo</span>
-                </button>
-                <span class="input-group-text search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
-                <input id="searchInput" class="form-control" type="text" placeholder="Buscar producto" autocomplete="off">
-                <button type="button" id="btnClearSearch" class="btn btn-outline-secondary" title="Limpiar búsqueda">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
-              </div>
-              <ul id="suggestions" class="list-group suggestions"></ul>
-              <div class="d-flex flex-column flex-sm-row justify-content-between gap-1 mt-2 search-meta-row">
-                <span id="searchModeHint" class="search-mode-hint">Catálogo</span>
-                <span id="quoteSearchCount" class="quote-search-count">0 productos</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm quote-items-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Detalle</div>
-              <h5 class="mb-0">Productos cotizados</h5>
-            </div>
-            <button type="button" id="btnClearItems" class="btn btn-outline-danger btn-sm">
-              <i class="fa-solid fa-trash-can me-1"></i>Limpiar productos
-            </button>
-          </div>
-          <div class="card-body border-top p-0">
-            <div class="table-responsive quote-table-wrap d-none d-md-block">
-              <table class="table table-hover align-middle mb-0 quote-table">
-                <thead>
-                  <tr>
-                    <th style="width: 44px;">#</th>
-                    <th>Producto</th>
-                    <th style="width: 120px;" class="text-center">Cantidad</th>
-                    <th style="width: 150px;" class="text-end">Precio unit.</th>
-                    <th style="width: 130px;" class="text-end">Subtotal</th>
-                    <th style="width: 82px;" class="text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="quoteItemsBody">
-                  <tr><td colspan="6" class="text-center text-muted py-4">Sin productos.</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div id="quoteMobileCards" class="quote-mobile-cards d-md-none"></div>
-          </div>
-        </section>
-      </div>
-
-      <div class="col-12 col-xl-4">
-        <aside class="sticky-summary">
-          <section class="card shadow-sm mb-3 summary-card">
-            <div class="card-header bg-white border-0">
-              <div class="section-kicker">Resumen</div>
-              <h5 class="mb-0">Total</h5>
-            </div>
-            <div class="card-body border-top">
-              <div class="summary-line">
-                <span>Productos</span>
-                <strong id="summaryItemsCount">0</strong>
-              </div>
-              <div class="summary-line">
-                <span>Subtotal</span>
-                <strong id="summarySubtotal">$0.00</strong>
-              </div>
-              <div class="summary-line">
-                <span>Descuento</span>
-                <strong id="summaryDiscount">$0.00</strong>
-              </div>
-              <div class="summary-total">
-                <span>Total</span>
-                <strong id="summaryTotal">$0.00</strong>
-              </div>
-              <div class="form-check form-switch mt-3">
-                <input class="form-check-input" type="checkbox" id="includeIva" checked>
-                <label class="form-check-label" for="includeIva">Precios incluyen IVA</label>
-              </div>
-              <div class="d-grid gap-2 mt-3">
-                <button type="button" id="btnSaveQuote" class="btn btn-outline-primary">
-                  <i class="fa-solid fa-floppy-disk me-1"></i>Guardar borrador
-                </button>
-                <button type="button" id="btnGeneratePdf" class="btn btn-primary">
-                  <i class="fa-solid fa-file-pdf me-1"></i>Generar PDF
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section class="card shadow-sm company-card">
-            <div class="card-header bg-white border-0 d-flex align-items-center justify-content-between gap-2">
-              <div>
-                <div class="section-kicker">Empresa</div>
-                <h6 class="mb-0">Documento</h6>
-              </div>
-              <button type="button" id="btnResetCompany" class="btn btn-outline-secondary btn-sm">Restaurar</button>
-            </div>
-            <div class="card-body border-top">
-              <div class="row g-2">
-                <div class="col-12">
-                  <label for="companyName" class="form-label fw-semibold">Empresa</label>
-                  <input id="companyName" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="companyLegal" class="form-label fw-semibold">Razón legal</label>
-                  <input id="companyLegal" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-6">
-                  <label for="companyCity" class="form-label fw-semibold">Ciudad</label>
-                  <input id="companyCity" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-6">
-                  <label for="sellerPhone" class="form-label fw-semibold">Celular</label>
-                  <input id="sellerPhone" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="sellerName" class="form-label fw-semibold">Firma / vendedor</label>
-                  <input id="sellerName" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="checkPayee" class="form-label fw-semibold">Cheque a nombre de</label>
-                  <input id="checkPayee" class="form-control form-control-sm" type="text">
-                </div>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
-    </div>
-  </main>
-
-  <div class="modal fade" id="manualProductModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i>Producto manual</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-12">
-              <label for="manualName" class="form-label fw-semibold">Descripción</label>
-              <input id="manualName" class="form-control" type="text" placeholder="Nombre del producto">
-            </div>
-            <div class="col-6">
-              <label for="manualQty" class="form-label fw-semibold">Cantidad</label>
-              <input id="manualQty" class="form-control" type="number" min="0.01" step="0.01" value="1">
-            </div>
-            <div class="col-6">
-              <label for="manualPrice" class="form-label fw-semibold">Precio unitario</label>
-              <input id="manualPrice" class="form-control" type="number" min="0" step="0.01" placeholder="0.00">
-            </div>
-            <div class="col-6">
-              <label for="manualCode" class="form-label fw-semibold">Código interno</label>
-              <input id="manualCode" class="form-control" type="text">
-            </div>
-            <div class="col-6">
-              <label for="manualBarcode" class="form-label fw-semibold">Código barras</label>
-              <input id="manualBarcode" class="form-control" type="text">
-            </div>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="container-fluid app-container">
+        <div class="brand-wrap">
+          <img src="assets/img/trlogo_bn.png" alt="Logo empresa" class="brand-logo" />
+          <div class="brand-copy">
+            <div class="brand-eyebrow">Boletas de pago</div>
+            <h1 class="brand-title">REYES ROCHEZ, S.A. DE C.V.</h1>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" id="btnAddManualProduct" class="btn btn-dark">
-            <i class="fa-solid fa-plus me-1"></i>Agregar
+      </div>
+    </header>
+
+    <main class="container-fluid app-container py-4 py-lg-5">
+      <section class="toolbar-card">
+        <div class="toolbar-grid">
+          <label class="field-card upload-field" for="excelFile">
+            <span class="field-label">Archivo Excel</span>
+            <input id="excelFile" type="file" accept=".xlsx,.xlsm,.xls" />
+            <span class="field-main">Seleccionar archivo</span>
+            <span class="field-meta" id="fileLabel">Ningún archivo seleccionado</span>
+          </label>
+
+          <div class="field-card">
+            <label for="sheetSelect" class="field-label">Hoja</label>
+            <select id="sheetSelect" class="form-select flat-select" disabled>
+              <option value="">Primero carga un archivo</option>
+            </select>
+          </div>
+
+          <button id="btnGenerate" class="btn flat-button" disabled>
+            Descargar PDF
           </button>
         </div>
-      </div>
-    </div>
+      </section>
+
+      <section class="status-grid mt-4">
+        <article class="info-card">
+          <div class="info-label">Empresa</div>
+          <div class="info-value" id="metaCompany">-</div>
+        </article>
+        <article class="info-card">
+          <div class="info-label">Concepto</div>
+          <div class="info-value" id="metaTitle">-</div>
+        </article>
+        <article class="info-card">
+          <div class="info-label">Período</div>
+          <div class="info-value" id="metaPeriod">-</div>
+        </article>
+        <article class="info-card">
+          <div class="info-label">Empleados</div>
+          <div class="info-value" id="metaCount">-</div>
+        </article>
+      </section>
+
+      <section class="details-grid mt-4">
+        <article class="panel-card">
+          <div class="panel-head">
+            <h2>Resumen</h2>
+            <span class="panel-chip" id="sheetChip">Sin hoja</span>
+          </div>
+          <div class="panel-body">
+            <div class="summary-list">
+              <div class="summary-item">
+                <span class="summary-key">Áreas detectadas</span>
+                <span class="summary-value" id="metaAreas">-</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-key">Fila de encabezados</span>
+                <span class="summary-value" id="metaHeaderRow">-</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-key">Fecha del PDF</span>
+                <span class="summary-value" id="metaGeneratedOn">-</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel-card">
+          <div class="panel-head">
+            <h2>Columnas incluidas</h2>
+          </div>
+          <div class="panel-body">
+            <div class="columns-grid">
+              <span class="column-chip">NOMBRE DEL EMPLEADO</span>
+              <span class="column-chip">DIAS TRABAJADOS</span>
+              <span class="column-chip">SALARIO DEVENGADO</span>
+              <span class="column-chip">OTROS INGRESOS</span>
+              <span class="column-chip">VACACIONES</span>
+              <span class="column-chip">TOTAL INGRESOS</span>
+              <span class="column-chip">ISSS</span>
+              <span class="column-chip">AFP</span>
+              <span class="column-chip">RENTA</span>
+              <span class="column-chip">ANTICIPO SALARIAL</span>
+              <span class="column-chip">PRESTAMOS INTERNOS</span>
+              <span class="column-chip">TOTAL</span>
+              <span class="column-chip">LIQUIDO A RECIBIR</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="alert-shell">
+        <div id="appAlert" class="alert alert-secondary mb-0 flat-alert" role="status">
+          Carga un Excel y elige una hoja.
+        </div>
+      </section>
+    </main>
   </div>
 
-  <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="fa-solid fa-clock-rotate-left me-2"></i>Histórico</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div id="historyList" class="history-list"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" id="btnClearHistory" class="btn btn-outline-danger me-auto">Limpiar histórico</button>
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>
