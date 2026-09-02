@@ -88,11 +88,19 @@
   let historyModal = null;
 
   function safeJsonParse(value, fallback) {
+    if (value == null || value === '') return fallback;
     try {
-      return JSON.parse(value);
+      const parsed = JSON.parse(value);
+      return parsed ?? fallback;
     } catch (_) {
       return fallback;
     }
+  }
+
+  function readHistory() {
+    const parsed = safeJsonParse(localStorage.getItem(STORAGE_KEYS.history), []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry) => entry && typeof entry === 'object');
   }
 
   function normalizeText(value) {
@@ -742,7 +750,7 @@
   }
 
   function saveToHistory(data = snapshotQuote()) {
-    const history = safeJsonParse(localStorage.getItem(STORAGE_KEYS.history), []);
+    const history = readHistory();
     const next = [data, ...history.filter((item) => item.id !== data.id)].slice(0, 80);
     localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(next));
     return next;
@@ -807,7 +815,7 @@
 
   function renderHistory() {
     if (!els.historyList) return;
-    const history = safeJsonParse(localStorage.getItem(STORAGE_KEYS.history), []);
+    const history = readHistory();
     if (!history.length) {
       els.historyList.innerHTML = '<div class="empty-state">Sin cotizaciones guardadas.</div>';
       return;

@@ -2,16 +2,7 @@
 
 App para cotizaciones con catálogo desde Google Sheets y PDF con formato Reyes Rochez / Tienda Rubio.
 
-## Despliegue en Vercel
-
-El proyecto es una aplicación estática con una Vercel Function en `api/catalogo.js`.
-No se debe declarar `nodejs22.x` como runtime dentro de `functions` en `vercel.json`;
-Vercel selecciona automáticamente el runtime oficial de Node para funciones JavaScript.
-La versión de Node usada por el proyecto se fija desde `package.json` en `22.x`.
-
-## Variables de entorno requeridas
-
-Configurar en Vercel > Project Settings > Environment Variables, al menos para Production:
+## Variables de entorno
 
 ```bash
 GOOGLE_SHEETS_API_KEY=...
@@ -19,10 +10,16 @@ GOOGLE_SHEETS_ID=...
 GOOGLE_SHEETS_RANGE=bd!A2:H5000
 ```
 
-`GOOGLE_SHEETS_RANGE` es opcional; si no existe se usa `bd!A2:H5000`.
-
-## Revisión local
+## Revisión
 
 ```bash
 npm run check
 ```
+
+## Corrección de histórico (2026-09-02)
+
+Se endureció la lectura de `tr_cotizaciones_history_v1` para soportar valores `null`,
+JSON inválido o datos antiguos con una estructura distinta. El historial siempre se
+normaliza a un arreglo antes de usar `.length`, `.map`, `.filter` o `.find`.
+También se añadió versionado al `app.js` en `index.html` para evitar que el navegador
+reutilice una copia anterior en caché después del despliegue.
