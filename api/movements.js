@@ -12,7 +12,7 @@ function validate(body){
   if(!provider) throw new Error('Proveedor requerido.');
   if(!Number.isFinite(value)||value<0) throw new Error('Valor inválido.');
   if(!Number.isFinite(discount)||discount<0) throw new Error('Descuento inválido.');
-  return {date,sourceMonth:Number(date.slice(5,7)),category,provider,document:cleanText(body.document,120),value,discount,detail:cleanText(body.detail,1000)};
+  return {date,sourceMonth:Number(date.slice(5,7)),sourceYear:Number(date.slice(0,4)),category,provider,document:cleanText(body.document,120),value,discount,detail:cleanText(body.detail,1000)};
 }
 function publicMovement(id,d){return {id,...d,createdAt:d.createdAt?.toDate?.()?.toISOString?.()||d.createdAt||null,updatedAt:d.updatedAt?.toDate?.()?.toISOString?.()||d.updatedAt||null}}
 

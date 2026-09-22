@@ -21,7 +21,8 @@
   const monthKey = (year, month) => `${year}-${String(month).padStart(2,'0')}`;
   const getMonthFromIso = iso => Number(String(iso).slice(5,7));
   const getDayFromIso = iso => Number(String(iso).slice(8,10));
-  const monthLabel = m => `${MONTHS[m-1]} 2026`;
+  const periodParts = period => { const [year,month]=String(period||'').split('-').map(Number); return {year,month}; };
+  const monthLabel = period => { const {year,month}=periodParts(period); return year&&month?`${MONTHS[month-1]} ${year}`:String(period||'—'); };
   const categoryLabel = name => categoryByName.get(name)?.label || name;
   const groupLabel = group => group === 'gasto_fijo' ? 'Gasto fijo' : group === 'imprevisto' ? 'Imprevisto' : 'General';
 
@@ -33,14 +34,29 @@
     return window.TRData?.getMovements?.(DATA.movements) || DATA.movements;
   }
 
-  function availableMonths() {
-    const set = new Set(Object.keys(DATA.summaryByMonth).map(Number));
-    localMovements().forEach(m => set.add(getMonthFromIso(m.date)));
-    return [...set].filter(m => m >= 1 && m <= 12).sort((a,b) => a-b);
+  function movementPeriodKey(m) {
+    if (m.sourcePeriodYear && m.sourcePeriodMonth) return monthKey(Number(m.sourcePeriodYear),Number(m.sourcePeriodMonth));
+    if (m.sourceYear && m.sourceMonth) return monthKey(Number(m.sourceYear),Number(m.sourceMonth));
+    if (m.sourceMonth && !m.sourceYear && !m.sourcePeriodYear && !m.id) return monthKey(2026,Number(m.sourceMonth));
+    if (m.date && /^\d{4}-\d{2}/.test(m.date)) return String(m.date).slice(0,7);
+    if (m.sourceMonth) return monthKey(2026,Number(m.sourceMonth));
+    return null;
+  }
+
+  function availablePeriods() {
+    const set = new Set(allMovements().map(m=>movementPeriodKey(m)).filter(Boolean));
+    if(!set.size) set.add(new Date().toISOString().slice(0,7));
+    return [...set].sort();
   }
 
   function fillMonthSelect(select, selected) {
-    select.innerHTML = availableMonths().map(m => `<option value="${m}" ${m===selected?'selected':''}>${monthLabel(m)}</option>`).join('');
+    const periods=availablePeriods(); const chosen=periods.includes(selected)?selected:periods.at(-1);
+    select.innerHTML = periods.map(p => `<option value="${p}" ${p===chosen?'selected':''}>${monthLabel(p)}</option>`).join('');
+  }
+
+
+  function refreshPeriodSelectors() {
+    ['dashboardMonth','reportMonth','compareMonthA','compareMonthB'].forEach(id=>{const el=$(id);if(el)fillMonthSelect(el,el.value);});
   }
 
   function fillCategorySelect(select, includeAll=false) {
@@ -56,29 +72,26 @@
     if (view === 'movements') renderMovements();
     if (view === 'compare') renderCompare();
     if (view === 'reports') renderReports();
+    if (view === 'import') { window.TRImporter?.render?.(); window.TRImporter?.loadHistory?.(); }
     if (view === 'settings') renderSettings();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function currentMonthMovements(month) {
-    return allMovements().filter(m => Number(m.sourceMonth || getMonthFromIso(m.date)) === Number(month));
+  function currentMonthMovements(period) {
+    return allMovements().filter(m => movementPeriodKey(m) === String(period));
   }
 
-  function latestDateInMonth(month) {
-    const dates = currentMonthMovements(month).map(m => m.date).filter(Boolean).filter(d => getMonthFromIso(d) === Number(month)).sort();
+  function latestDateInMonth(period) {
+    const dates = currentMonthMovements(period).map(m => m.date).filter(Boolean).filter(d => String(d).slice(0,7)===String(period)).sort();
     return dates.at(-1) || null;
   }
 
-  function monthSummaryFromWorkbook(month) {
-    return DATA.summaryByMonth?.[String(month)] || DATA.summaryByMonth?.[month] || {};
+  function workbookTotal(period) {
+    return currentMonthMovements(period).reduce((sum,m)=>sum+Number(m.value||0),0);
   }
 
-  function workbookTotal(month) {
-    return currentMonthMovements(month).reduce((sum,m)=>sum+Number(m.value||0),0);
-  }
-
-  function groupTotalFromSummary(month, group) {
-    return currentMonthMovements(month).filter(m=>categoryByName.get(m.category)?.group===group).reduce((sum,m)=>sum+Number(m.value||0),0);
+  function groupTotalFromSummary(period, group) {
+    return currentMonthMovements(period).filter(m=>categoryByName.get(m.category)?.group===group).reduce((sum,m)=>sum+Number(m.value||0),0);
   }
 
   function kpiCard(label, value, icon, foot='') {
@@ -86,7 +99,7 @@
   }
 
   function renderDashboard() {
-    const month = Number($('dashboardMonth').value || availableMonths().at(-1) || 1);
+    const month = $('dashboardMonth').value || availablePeriods().at(-1);
     const movements = currentMonthMovements(month);
     const total = workbookTotal(month);
     const fixed = groupTotalFromSummary(month, 'gasto_fijo');
@@ -134,17 +147,15 @@
     });
   }
 
+  function daysInPeriod(period){ const {year,month}=periodParts(period); return new Date(year,month,0).getDate(); }
+  function previousPeriod(period){ const {year,month}=periodParts(period); const d=new Date(year,month-2,1); return monthKey(d.getFullYear(),d.getMonth()+1); }
   function sameCutoffRanges(monthA, monthB) {
     const latestA = latestDateInMonth(monthA);
     const latestB = latestDateInMonth(monthB);
-    const dayA = latestA ? getDayFromIso(latestA) : 31;
-    const dayB = latestB ? getDayFromIso(latestB) : 31;
+    const dayA = latestA ? getDayFromIso(latestA) : daysInPeriod(monthA);
+    const dayB = latestB ? getDayFromIso(latestB) : daysInPeriod(monthB);
     const day = Math.min(dayA, dayB);
-    return {
-      day,
-      aStart:`2026-${String(monthA).padStart(2,'0')}-01`, aEnd:`2026-${String(monthA).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
-      bStart:`2026-${String(monthB).padStart(2,'0')}-01`, bEnd:`2026-${String(monthB).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-    };
+    return {day,aStart:`${monthA}-01`,aEnd:`${monthA}-${String(day).padStart(2,'0')}`,bStart:`${monthB}-01`,bEnd:`${monthB}-${String(day).padStart(2,'0')}`};
   }
 
   function periodMovements(start, end) {
@@ -154,8 +165,8 @@
   function sumAmount(rows) { return rows.reduce((s,m)=>s+Number(m.value||0),0); }
 
   function renderDashboardInsights(month) {
-    const previous = month > 1 ? month - 1 : null;
-    if (!previous) { $('dashboardInsights').innerHTML = '<div class="empty-state">No existe un mes anterior disponible.</div>'; return; }
+    const previous = previousPeriod(month);
+    if (!availablePeriods().includes(previous)) { $('dashboardInsights').innerHTML = '<div class="empty-state">No existe un mes anterior disponible.</div>'; return; }
     const ranges = sameCutoffRanges(month, previous);
     const a = periodMovements(ranges.aStart, ranges.aEnd);
     const b = periodMovements(ranges.bStart, ranges.bEnd);
@@ -219,9 +230,9 @@
   function openCategory(name) {
     switchView('movements');
     $('movCategory').value = name;
-    const month = Number($('dashboardMonth').value);
-    $('movStart').value = `2026-${String(month).padStart(2,'0')}-01`;
-    const cutoff = latestDateInMonth(month) || `2026-${String(month).padStart(2,'0')}-31`;
+    const month = $('dashboardMonth').value;
+    $('movStart').value = `${month}-01`;
+    const cutoff = latestDateInMonth(month) || `${month}-${String(daysInPeriod(month)).padStart(2,'0')}`;
     $('movEnd').value = cutoff;
     movementPage = 1;
     renderMovements();
@@ -254,7 +265,7 @@
   function comparisonContext() {
     let aRows=[], bRows=[], labelA='', labelB='', groupBy='', metric='';
     if (compareMode === 'quick') {
-      const monthA=Number($('compareMonthA').value), monthB=Number($('compareMonthB').value);
+      const monthA=$('compareMonthA').value, monthB=$('compareMonthB').value;
       groupBy=$('compareGroupBy').value; metric=$('compareMetric').value;
       if ($('compareSameCutoff').checked) {
         const r=sameCutoffRanges(monthA,monthB);
@@ -368,17 +379,17 @@
   }
 
   function downloadSummary() {
-    const month=Number($('reportMonth').value); const rows=dashboardCategoryRows(month);
-    downloadCsv(`resumen_flujo_${String(month).padStart(2,'0')}_2026.csv`, [['Categoría','Grupo','Total','Registros'],...rows.map(r=>[r.label,groupLabel(r.group),r.total,r.count])]);
+    const month=$('reportMonth').value; const rows=dashboardCategoryRows(month);
+    downloadCsv(`resumen_flujo_${month.replace('-','_')}.csv`, [['Categoría','Grupo','Total','Registros'],...rows.map(r=>[r.label,groupLabel(r.group),r.total,r.count])]);
   }
 
   function downloadMovements() {
     const rows=allMovements().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-    downloadCsv('movimientos_flujo_2026.csv',[['Fecha','Categoría','Proveedor','Documento','Valor','Descuento','Detalle'],...rows.map(m=>[m.date,categoryLabel(m.category),m.provider,m.document,m.value,m.discount||0,m.detail])]);
+    downloadCsv('movimientos_flujo.csv',[['Fecha','Categoría','Proveedor','Documento','Valor','Descuento','Detalle'],...rows.map(m=>[m.date,categoryLabel(m.category),m.provider,m.document,m.value,m.discount||0,m.detail])]);
   }
 
   function downloadSummaryXlsx() {
-    const month=Number($('reportMonth').value); const rows=dashboardCategoryRows(month);
+    const month=$('reportMonth').value; const rows=dashboardCategoryRows(month);
     if(!window.XLSX){showToast('No se pudo cargar el generador de Excel.');return;}
     const wb=XLSX.utils.book_new();
     const summaryData=[['Categoría','Grupo','Total','Registros'],...rows.map(r=>[r.label,groupLabel(r.group),r.total,r.count])];
@@ -386,20 +397,20 @@
     const detail=currentMonthMovements(month).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     const wd=XLSX.utils.aoa_to_sheet([['Fecha','Categoría','Proveedor','Documento','Valor','Descuento','Detalle'],...detail.map(m=>[m.date,categoryLabel(m.category),m.provider,m.document,m.value,m.discount||0,m.detail])]);
     wd['!cols']=[{wch:12},{wch:26},{wch:38},{wch:18},{wch:14},{wch:14},{wch:45}]; XLSX.utils.book_append_sheet(wb,wd,'Movimientos');
-    XLSX.writeFile(wb,`flujo_efectivo_${String(month).padStart(2,'0')}_2026.xlsx`);
+    XLSX.writeFile(wb,`flujo_efectivo_${month.replace('-','_')}.xlsx`);
   }
 
   function downloadSummaryPdf() {
-    const month=Number($('reportMonth').value); const rows=dashboardCategoryRows(month);
+    const month=$('reportMonth').value; const rows=dashboardCategoryRows(month);
     if(!window.jspdf?.jsPDF){showToast('No se pudo cargar el generador de PDF.');return;}
     const doc=new window.jspdf.jsPDF(); const total=rows.reduce((s,r)=>s+r.total,0);
     doc.setFontSize(16);doc.text('Resumen de Flujo de Efectivo',14,18);doc.setFontSize(10);doc.text(monthLabel(month),14,25);doc.text(`Total: ${money.format(total)}`,14,31);
     doc.autoTable({startY:38,head:[['Categoría','Grupo','Total','Registros']],body:rows.map(r=>[r.label,groupLabel(r.group),money.format(r.total),String(r.count)]),styles:{fontSize:8},headStyles:{fillColor:[33,37,41]}});
-    doc.save(`resumen_flujo_${String(month).padStart(2,'0')}_2026.pdf`);
+    doc.save(`resumen_flujo_${month.replace('-','_')}.pdf`);
   }
 
   function openMovementModal() {
-    const today='2026-09-22'; $('newDate').value=today; $('newCategory').value=''; $('newProvider').value=''; $('newDocument').value=''; $('newValue').value=''; $('newDiscount').value='0'; $('newDetail').value=''; $('discountField').classList.add('d-none');
+    const today=new Date().toLocaleDateString('en-CA'); $('newDate').value=today; $('newCategory').value=''; $('newProvider').value=''; $('newDocument').value=''; $('newValue').value=''; $('newDiscount').value='0'; $('newDetail').value=''; $('discountField').classList.add('d-none');
     bootstrap.Modal.getOrCreateInstance($('movementModal')).show();
   }
 
@@ -407,12 +418,12 @@
     event.preventDefault();
     if(window.TRAuth && !window.TRAuth.canWrite()){ showToast('Tu rol es solo de consulta.'); return; }
     const category=$('newCategory').value;
-    const rec={sourceMonth:getMonthFromIso($('newDate').value),date:$('newDate').value,category,provider:$('newProvider').value.trim(),document:$('newDocument').value.trim(),value:Number($('newValue').value||0),discount:Number($('newDiscount').value||0),detail:$('newDetail').value.trim()};
+    const rec={sourceMonth:getMonthFromIso($('newDate').value),sourceYear:Number($('newDate').value.slice(0,4)),date:$('newDate').value,category,provider:$('newProvider').value.trim(),document:$('newDocument').value.trim(),value:Number($('newValue').value||0),discount:Number($('newDiscount').value||0),detail:$('newDetail').value.trim()};
     try{
       await window.TRData.createMovement(rec);
       bootstrap.Modal.getInstance($('movementModal'))?.hide();
       showToast(window.TRData.state.mode==='firebase'?'Movimiento guardado en Firestore.':'Movimiento guardado en modo demostración.');
-      renderDashboard(); renderMovements(); renderCompare();
+      refreshPeriodSelectors(); renderDashboard(); renderMovements(); renderCompare();
     }catch(error){ showToast(error.message||'No se pudo guardar el movimiento.'); }
   }
 
@@ -426,15 +437,16 @@
     if(notice){notice.className=`alert ${prod?'alert-success-subtle':'alert-warning-subtle'} border alert-dismissible fade show mb-4`;notice.querySelector('div > div').innerHTML=prod?'<strong>Producción:</strong> conectado a Firebase/Firestore. Los movimientos se guardan con usuario y trazabilidad.':'<strong>Modo demostración:</strong> Firebase no está configurado; los movimientos nuevos se guardan solo en este navegador.';}
     if($('btnLogout')) $('btnLogout').classList.toggle('d-none',window.TRAuth.state.mode!=='firebase');
     if(!window.TRAuth.canWrite()) qsa('[data-new-movement]').forEach(btn=>{btn.disabled=true;btn.title='Tu rol es solo de consulta';});
-    const last=availableMonths().at(-1) || 1;
-    fillMonthSelect($('dashboardMonth'),last); fillMonthSelect($('reportMonth'),last); fillMonthSelect($('compareMonthA'),last); fillMonthSelect($('compareMonthB'),Math.max(1,last-1));
+    qsa('[data-admin-only]').forEach(el=>el.classList.toggle('d-none',!window.TRAuth.canImport()));
+    const periods=availablePeriods(); const last=periods.at(-1); const prev=periods.includes(previousPeriod(last))?previousPeriod(last):(periods.at(-2)||last);
+    fillMonthSelect($('dashboardMonth'),last); fillMonthSelect($('reportMonth'),last); fillMonthSelect($('compareMonthA'),last); fillMonthSelect($('compareMonthB'),prev);
     fillCategorySelect($('movCategory'),true); fillCategorySelect($('newCategory'),false);
 
-    const latest=latestDateInMonth(last) || `2026-${String(last).padStart(2,'0')}-01`;
-    $('movStart').value=`2026-${String(last).padStart(2,'0')}-01`; $('movEnd').value=latest;
-    $('customAStart').value=`2026-${String(last).padStart(2,'0')}-01`; $('customAEnd').value=latest;
-    const prev=Math.max(1,last-1); const prevLatest=latestDateInMonth(prev)||`2026-${String(prev).padStart(2,'0')}-28`;
-    $('customBStart').value=`2026-${String(prev).padStart(2,'0')}-01`; $('customBEnd').value=prevLatest;
+    const latest=latestDateInMonth(last) || `${last}-${String(daysInPeriod(last)).padStart(2,'0')}`;
+    $('movStart').value=`${last}-01`; $('movEnd').value=latest;
+    $('customAStart').value=`${last}-01`; $('customAEnd').value=latest;
+    const prevLatest=latestDateInMonth(prev)||`${prev}-${String(daysInPeriod(prev)).padStart(2,'0')}`;
+    $('customBStart').value=`${prev}-01`; $('customBEnd').value=prevLatest;
 
     qsa('[data-view]').forEach(btn=>btn.addEventListener('click',()=>switchView(btn.dataset.view)));
     qsa('[data-view-link]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();switchView(a.dataset.viewLink)}));
@@ -459,6 +471,8 @@
       const ccat=e.target.closest('[data-compare-open]'); if(ccat){ switchView('movements'); $('movCategory').value=ccat.dataset.compareOpen; movementPage=1; renderMovements(); }
     });
 
+    await window.TRImporter?.init?.();
+    document.addEventListener('tr:data-updated',()=>{refreshPeriodSelectors();renderDashboard();renderMovements();renderCompare();renderReports();renderSettings();});
     renderDashboard(); renderMovements(); renderCompare(); renderReports(); renderSettings();
   }
 

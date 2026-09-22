@@ -45,10 +45,11 @@
   function token(){return state.user?.getIdToken()||Promise.resolve('')}
   function canWrite(){return state.mode==='demo'||['admin','contabilidad'].includes(state.role)}
   function canDelete(){return state.mode==='demo'||state.role==='admin'}
+  function canImport(){return state.mode==='demo'||state.role==='admin'}
 
   document.addEventListener('DOMContentLoaded',()=>{
     const u=ui(); u.form?.addEventListener('submit',e=>{e.preventDefault();signIn(u.email.value.trim(),u.password.value).catch(()=>{});});
     u.logout?.addEventListener('click',signOut);
   });
-  global.TRAuth={state,ready:()=>readyPromise,init,token,canWrite,canDelete,signOut};
+  global.TRAuth={state,ready:()=>readyPromise,init,token,canWrite,canDelete,canImport,signOut};
 })(window);

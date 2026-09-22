@@ -23,8 +23,13 @@ service cloud.firestore {
 
     match /activity_log/{id} {
       allow read: if roleIs(['admin','contabilidad']);
-      allow create: if signedIn() && request.resource.data.actorUid == request.auth.uid;
-      allow update, delete: if false;
+      // La bitácora se escribe únicamente desde APIs de servidor (Admin SDK).
+      allow create, update, delete: if false;
+    }
+
+    match /import_batches/{id} {
+      allow read: if roleIs(['admin']);
+      allow create, update, delete: if false;
     }
 
     match /users/{uid} {

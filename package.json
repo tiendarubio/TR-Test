@@ -2,7 +2,7 @@
   "name": "tr-flujo-efectivo",
   "private": true,
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Aplicación de flujo de efectivo en Vercel + Firebase.",
   "scripts": {
     "migrate:2026": "node scripts/import-historical.mjs"

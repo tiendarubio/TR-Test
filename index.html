@@ -50,6 +50,7 @@
         <button class="nav-link text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
         <button class="nav-link text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
         <button class="nav-link text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
+        <button id="navImport" class="nav-link text-start" data-view="import" data-admin-only><i class="fa-solid fa-file-import me-2"></i>Importar histórico</button>
         <button class="nav-link text-start" data-view="settings"><i class="fa-solid fa-gear me-2"></i>Configuración</button>
       </nav>
       <div class="sidebar-footer p-3 small text-secondary border-top">
@@ -236,6 +237,51 @@
         </div>
       </section>
 
+      <section id="view-import" class="app-view d-none">
+        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+          <div><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Importar histórico</h1><p class="text-secondary mb-0">Convierte los Excel existentes en movimientos del sistema sin importar a ciegas.</p></div>
+          <span class="badge text-bg-dark"><i class="fa-solid fa-shield-halved me-1"></i>Solo Administrador</span>
+        </div>
+
+        <div id="importAdminNote" class="alert alert-danger d-none">Tu rol actual no permite realizar importaciones.</div>
+        <div id="importModeNote" class="alert alert-secondary"></div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body p-4">
+            <div id="importDropzone" class="import-dropzone text-center p-4 p-lg-5">
+              <div class="import-drop-icon mx-auto mb-3"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+              <h2 class="h5">Selecciona Excel o un ZIP completo</h2>
+              <p class="text-secondary small mb-3">Acepta los libros históricos actuales (.xlsx/.xls), varios archivos a la vez o un ZIP con varios meses.</p>
+              <input id="importFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls,.zip" multiple style="max-width:680px">
+              <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+                <button id="importAnalyzeBtn" class="btn btn-dark"><i class="fa-solid fa-magnifying-glass-chart me-2"></i>Analizar archivos</button>
+                <button id="importCommitBtn" class="btn btn-success" disabled><i class="fa-solid fa-database me-2"></i>Importar registros nuevos</button>
+              </div>
+              <div id="importStatus" class="small text-secondary mt-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="importKpis" class="row g-3 mb-4"></div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Archivos reconocidos</h2><p class="small text-secondary mb-0">El sistema detecta automáticamente las hojas actuales y también admite un formato genérico con columna Categoría.</p></div>
+          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Archivo</th><th>Periodo detectado</th><th class="text-end">Movimientos</th><th>Estado</th></tr></thead><tbody id="importFileTable"></tbody></table></div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between gap-2"><div><h2 class="h5 mb-1">Vista previa y revisión</h2><p id="importPreviewSummary" class="small text-secondary mb-0">Analiza uno o varios archivos antes de importar.</p></div><span class="small text-secondary">Los duplicados no se vuelven a cargar.</span></div>
+          <div class="table-responsive import-issues-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Archivo</th><th>Origen</th><th>Fecha</th><th>Proveedor</th><th class="text-end">Valor</th><th>Observación</th></tr></thead><tbody id="importIssueTable"></tbody></table></div>
+        </div>
+
+        <div class="alert alert-info border-0 shadow-sm"><i class="fa-solid fa-circle-info me-2"></i><strong>Regla de seguridad:</strong> los registros con errores no se importan. Las advertencias, como una fecha fuera del mes nominal del archivo, se conservan para que puedas decidir sin que la aplicación altere tu información.</div>
+
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Historial de importaciones</h2><p class="small text-secondary mb-0">Cada lote queda identificado. Un Administrador puede revertir un lote sin afectar movimientos creados manualmente.</p></div>
+          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>Archivo(s)</th><th class="text-end">Importados</th><th>Estado</th><th>Usuario</th><th></th></tr></thead><tbody id="importHistoryTable"></tbody></table></div>
+        </div>
+      </section>
+
       <section id="view-settings" class="app-view d-none">
         <div class="page-heading mb-4"><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Configuración</h1><p class="text-secondary mb-0">Clasificaciones, seguridad y estado de la fuente de datos.</p></div>
         <div class="row g-4 mb-4">
@@ -279,6 +325,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
@@ -287,6 +334,7 @@
   <script src="data/historico-2026.js"></script>
   <script src="assets/js/auth.js"></script>
   <script src="assets/js/data-service.js"></script>
+  <script src="assets/js/importer.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>
