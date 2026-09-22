@@ -1,380 +1,292 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>TR Cotizaciones</title>
-  <link rel="icon" type="image/png" href="assets/img/trlogo.png">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TR · Flujo de Efectivo</title>
+  <meta name="description" content="Prototipo funcional para control y comparación de flujo de efectivo.">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
   <link href="assets/css/styles.css" rel="stylesheet">
-  <script>
-    (function forceInitialTop() {
-      const goTop = () => {
-        if (window.location.hash) return;
-        try {
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        } catch (_) {}
-      };
-      try {
-        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-        goTop();
-        document.addEventListener('DOMContentLoaded', goTop, { once: true });
-        window.addEventListener('pageshow', goTop);
-        window.addEventListener('load', () => setTimeout(goTop, 0), { once: true });
-      } catch (_) {}
-    })();
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm sticky-top">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-        <img src="assets/img/trlogo.png" alt="Logo TR" class="logo-navbar">
-        <span class="fw-semibold">TR Cotizaciones</span>
+  <div id="authGate" class="auth-gate d-none">
+    <div class="auth-card card border-0 shadow-lg">
+      <div class="card-body p-4 p-md-5">
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <img src="assets/img/trlogo.png" alt="TR" class="auth-logo">
+          <div><div class="eyebrow">Acceso seguro</div><h1 class="h4 mb-0">Flujo de Efectivo</h1></div>
+        </div>
+        <p class="text-secondary small">Ingresa con tu usuario autorizado. Los permisos se asignan por rol.</p>
+        <div id="loginError" class="alert alert-danger py-2 small d-none"></div>
+        <form id="loginForm">
+          <div class="mb-3"><label class="form-label">Correo</label><input id="loginEmail" type="email" class="form-control" autocomplete="username" required></div>
+          <div class="mb-3"><label class="form-label">Contraseña</label><input id="loginPassword" type="password" class="form-control" autocomplete="current-password" required></div>
+          <button class="btn btn-dark w-100" type="submit"><i class="fa-solid fa-right-to-bracket me-2"></i>Ingresar</button>
+          <div id="loginStatus" class="small text-secondary text-center mt-3"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <nav class="navbar navbar-dark bg-dark shadow-sm sticky-top">
+    <div class="container-fluid px-lg-4">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#" data-view-link="dashboard">
+        <img src="assets/img/trlogo.png" alt="TR" class="logo-navbar">
+        <span class="fw-semibold">Flujo de Efectivo</span>
       </a>
-      <div class="d-flex align-items-center gap-2 ms-auto">
-        <button type="button" id="btnOpenHistory" class="btn btn-outline-light btn-sm nav-action-btn">
-          <i class="fa-solid fa-clock-rotate-left me-1"></i><span class="d-none d-sm-inline">Histórico</span>
-        </button>
-        <button type="button" id="btnNewQuote" class="btn btn-primary btn-sm nav-action-btn">
-          <i class="fa-solid fa-plus me-1"></i><span class="d-none d-sm-inline">Nueva</span>
-        </button>
+      <div class="d-flex align-items-center gap-2 small">
+        <span id="authUserLabel" class="text-white-50 d-none d-lg-inline"></span>
+        <span id="authRoleLabel" class="badge rounded-pill text-bg-light">Cargando...</span>
+        <button id="btnLogout" class="btn btn-outline-light btn-sm d-none">Salir</button>
       </div>
     </div>
   </nav>
 
-  <main class="container-fluid py-3 py-lg-4">
-    <div class="row g-3 g-lg-4">
-      <div class="col-12 col-xl-8">
-        <section class="card shadow-sm mb-3 quote-header-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Nueva cotización</div>
-              <h5 class="mb-0">Cliente y condiciones</h5>
-            </div>
-            <span id="quoteStatusBadge" class="badge rounded-pill text-bg-light border">Borrador</span>
-          </div>
-          <div class="card-body border-top">
-            <div class="row g-3">
-              <div class="col-12 col-md-4">
-                <label for="quoteNumber" class="form-label fw-semibold">N° cotización</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-hashtag"></i></span>
-                  <input id="quoteNumber" class="form-control control-input" type="text" autocomplete="off">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="quoteDate" class="form-label fw-semibold">Fecha</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-calendar-day"></i></span>
-                  <input id="quoteDate" class="form-control control-input" type="date">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="validityDays" class="form-label fw-semibold">Vigencia</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-hourglass-half"></i></span>
-                  <input id="validityDays" class="form-control control-input" type="number" min="0" step="1" placeholder="8">
-                </div>
-              </div>
+  <div class="app-shell">
+    <aside class="sidebar border-end bg-white">
+      <nav class="nav nav-pills flex-column gap-1 p-3" aria-label="Navegación principal">
+        <button class="nav-link active text-start" data-view="dashboard"><i class="fa-solid fa-chart-pie me-2"></i>Inicio</button>
+        <button class="nav-link text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
+        <button class="nav-link text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
+        <button class="nav-link text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
+        <button class="nav-link text-start" data-view="settings"><i class="fa-solid fa-gear me-2"></i>Configuración</button>
+      </nav>
+      <div class="sidebar-footer p-3 small text-secondary border-top">
+        <div class="fw-semibold text-dark mb-1">Diseño</div>
+        Captura simple, análisis potente y trazabilidad completa.
+      </div>
+    </aside>
 
-              <div class="col-12 col-md-7">
-                <label for="clientName" class="form-label fw-semibold">Cliente / institución</label>
-                <div class="control-shell control-shell-field required-field">
-                  <span class="control-icon"><i class="fa-solid fa-building-user"></i></span>
-                  <input id="clientName" class="form-control control-input" type="text" autocomplete="organization" placeholder="Cliente o institución">
-                </div>
-              </div>
-              <div class="col-12 col-md-5">
-                <label for="clientTaxName" class="form-label fw-semibold">Razón social</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-file-signature"></i></span>
-                  <input id="clientTaxName" class="form-control control-input" type="text">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientContact" class="form-label fw-semibold">Contacto</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-user"></i></span>
-                  <input id="clientContact" class="form-control control-input" type="text" autocomplete="name">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientPhone" class="form-label fw-semibold">Teléfono</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-phone"></i></span>
-                  <input id="clientPhone" class="form-control control-input" type="text" autocomplete="tel">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="clientEmail" class="form-label fw-semibold">Correo</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-envelope"></i></span>
-                  <input id="clientEmail" class="form-control control-input" type="email" autocomplete="email">
-                </div>
-              </div>
-              <div class="col-12">
-                <label for="clientAddress" class="form-label fw-semibold">Dirección / referencia</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-location-dot"></i></span>
-                  <input id="clientAddress" class="form-control control-input" type="text">
-                </div>
-              </div>
-
-              <div class="col-12 col-md-4">
-                <label for="paymentMethod" class="form-label fw-semibold">Forma de pago</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-money-check-dollar"></i></span>
-                  <select id="paymentMethod" class="form-select control-input">
-                    <option value="Contado">Contado</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Transferencia">Transferencia</option>
-                    <option value="Crédito">Crédito</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="creditDays" class="form-label fw-semibold">Días crédito</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-clock"></i></span>
-                  <input id="creditDays" class="form-control control-input" type="number" min="0" step="1">
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <label for="discountAmount" class="form-label fw-semibold">Descuento</label>
-                <div class="control-shell control-shell-field">
-                  <span class="control-icon"><i class="fa-solid fa-tags"></i></span>
-                  <input id="discountAmount" class="form-control control-input" type="number" min="0" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-              <div class="col-12">
-                <label for="quoteNotes" class="form-label fw-semibold">Condiciones adicionales</label>
-                <textarea id="quoteNotes" class="form-control" rows="2"></textarea>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm mb-3 product-search-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Productos</div>
-              <h5 class="mb-0">Catálogo / manual</h5>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-              <button type="button" id="btnReloadCatalog" class="btn btn-outline-secondary btn-sm">
-                <i class="fa-solid fa-rotate me-1"></i>Actualizar
-              </button>
-              <button type="button" id="btnOpenManualProduct" class="btn btn-dark btn-sm">
-                <i class="fa-solid fa-pen-to-square me-1"></i>Manual
-              </button>
-            </div>
-          </div>
-          <div class="card-body border-top">
-            <div class="checklist-search-shell">
-              <div class="input-group input-group-sm search-bar-embedded">
-                <button type="button" id="btnSearchModeToggle" class="btn btn-outline-primary search-lead-chip" data-search-mode="catalog" title="Cambiar modo de búsqueda">
-                  <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>
-                  <span id="searchLeadLabel">Catálogo</span>
-                </button>
-                <span class="input-group-text search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
-                <input id="searchInput" class="form-control" type="text" placeholder="Buscar producto" autocomplete="off">
-                <button type="button" id="btnClearSearch" class="btn btn-outline-secondary" title="Limpiar búsqueda">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
-              </div>
-              <ul id="suggestions" class="list-group suggestions"></ul>
-              <div class="d-flex flex-column flex-sm-row justify-content-between gap-1 mt-2 search-meta-row">
-                <span id="searchModeHint" class="search-mode-hint">Catálogo</span>
-                <span id="quoteSearchCount" class="quote-search-count">0 productos</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm quote-items-card">
-          <div class="card-header bg-white border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-            <div>
-              <div class="section-kicker">Detalle</div>
-              <h5 class="mb-0">Productos cotizados</h5>
-            </div>
-            <button type="button" id="btnClearItems" class="btn btn-outline-danger btn-sm">
-              <i class="fa-solid fa-trash-can me-1"></i>Limpiar productos
-            </button>
-          </div>
-          <div class="card-body border-top p-0">
-            <div class="table-responsive quote-table-wrap d-none d-md-block">
-              <table class="table table-hover align-middle mb-0 quote-table">
-                <thead>
-                  <tr>
-                    <th style="width: 44px;">#</th>
-                    <th>Producto</th>
-                    <th style="width: 120px;" class="text-center">Cantidad</th>
-                    <th style="width: 150px;" class="text-end">Precio unit.</th>
-                    <th style="width: 130px;" class="text-end">Subtotal</th>
-                    <th style="width: 82px;" class="text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="quoteItemsBody">
-                  <tr><td colspan="6" class="text-center text-muted py-4">Sin productos.</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div id="quoteMobileCards" class="quote-mobile-cards d-md-none"></div>
-          </div>
-        </section>
+    <main class="content-area p-3 p-lg-4">
+      <div id="prototypeNotice" class="alert alert-warning-subtle border alert-dismissible fade show mb-4" role="alert">
+        <div class="d-flex gap-2 align-items-start">
+          <i class="fa-solid fa-flask mt-1"></i>
+          <div><strong>Prototipo:</strong> usa el histórico real extraído de los Excel 2026. Los movimientos nuevos de esta maqueta se guardan únicamente en este navegador; Firebase se conecta en la versión productiva.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
       </div>
 
-      <div class="col-12 col-xl-4">
-        <aside class="sticky-summary">
-          <section class="card shadow-sm mb-3 summary-card">
-            <div class="card-header bg-white border-0">
-              <div class="section-kicker">Resumen</div>
-              <h5 class="mb-0">Total</h5>
+      <section id="view-dashboard" class="app-view">
+        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+          <div>
+            <div class="eyebrow">Resumen</div>
+            <h1 class="h3 mb-1">Flujo de efectivo</h1>
+            <p class="text-secondary mb-0">Lo esencial del periodo, sin tener que navegar entre hojas.</p>
+          </div>
+          <div class="period-picker card border-0 shadow-sm">
+            <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
+              <label for="dashboardMonth" class="small text-secondary mb-0">Periodo</label>
+              <select id="dashboardMonth" class="form-select form-select-sm border-0 fw-semibold"></select>
             </div>
-            <div class="card-body border-top">
-              <div class="summary-line">
-                <span>Productos</span>
-                <strong id="summaryItemsCount">0</strong>
+          </div>
+        </div>
+
+        <div id="dataCutoffBanner" class="cutoff-banner mb-3"></div>
+
+        <div class="row g-3 mb-4" id="dashboardKpis"></div>
+
+        <div class="row g-4">
+          <div class="col-xl-7">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-start gap-3">
+                <div><h2 class="h5 mb-1">Distribución por categoría</h2><p class="small text-secondary mb-0">Totales del periodo seleccionado.</p></div>
+                <button class="btn btn-outline-secondary btn-sm" data-go-compare><i class="fa-solid fa-code-compare me-1"></i>Comparar</button>
               </div>
-              <div class="summary-line">
-                <span>Subtotal</span>
-                <strong id="summarySubtotal">$0.00</strong>
+              <div class="card-body px-4 pb-4">
+                <div class="chart-wrap"><canvas id="dashboardChart"></canvas></div>
               </div>
-              <div class="summary-line">
-                <span>Descuento</span>
-                <strong id="summaryDiscount">$0.00</strong>
+            </div>
+          </div>
+          <div class="col-xl-5">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-0 pt-4 px-4">
+                <h2 class="h5 mb-1">Lecturas rápidas</h2>
+                <p class="small text-secondary mb-0">Comparación contra el mismo corte del mes anterior.</p>
               </div>
-              <div class="summary-total">
-                <span>Total</span>
-                <strong id="summaryTotal">$0.00</strong>
+              <div class="card-body px-4" id="dashboardInsights"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div><h2 class="h5 mb-1">Resumen por categoría</h2><p class="small text-secondary mb-0">Haz clic en una categoría para ver sus movimientos.</p></div>
+            <button class="btn btn-primary btn-sm" data-new-movement><i class="fa-solid fa-plus me-1"></i>Nuevo movimiento</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead><tr><th>Categoría</th><th>Grupo</th><th class="text-end">Total</th><th class="text-end">Registros</th><th></th></tr></thead>
+              <tbody id="dashboardCategoryTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-movements" class="app-view d-none">
+        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+          <div><div class="eyebrow">Operación</div><h1 class="h3 mb-1">Movimientos</h1><p class="text-secondary mb-0">Buscar, registrar y revisar operaciones desde un solo lugar.</p></div>
+          <button class="btn btn-primary" data-new-movement><i class="fa-solid fa-plus me-2"></i>Nuevo movimiento</button>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body p-3 p-lg-4">
+            <div class="row g-3 align-items-end">
+              <div class="col-sm-6 col-lg-3"><label class="form-label small">Desde</label><input id="movStart" type="date" class="form-control"></div>
+              <div class="col-sm-6 col-lg-3"><label class="form-label small">Hasta</label><input id="movEnd" type="date" class="form-control"></div>
+              <div class="col-sm-6 col-lg-3"><label class="form-label small">Categoría</label><select id="movCategory" class="form-select"><option value="">Todas</option></select></div>
+              <div class="col-sm-6 col-lg-3"><label class="form-label small">Proveedor / documento</label><input id="movSearch" type="search" class="form-control" placeholder="Buscar..."></div>
+            </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+              <div id="movementFilterSummary" class="small text-secondary"></div>
+              <button id="resetMovementFilters" class="btn btn-outline-secondary btn-sm">Limpiar filtros</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+          <div class="table-responsive movement-table-wrap">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="sticky-top"><tr><th>Fecha</th><th>Categoría</th><th>Proveedor</th><th>Documento</th><th class="text-end">Valor</th><th>Detalle</th></tr></thead>
+              <tbody id="movementsTable"></tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+            <div id="movementPaginationText" class="small text-secondary"></div>
+            <div class="btn-group btn-group-sm"><button id="movPrev" class="btn btn-outline-secondary">Anterior</button><button id="movNext" class="btn btn-outline-secondary">Siguiente</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-compare" class="app-view d-none">
+        <div class="page-heading mb-4">
+          <div class="eyebrow">Análisis</div><h1 class="h3 mb-1">Comparar</h1><p class="text-secondary mb-0">Comparaciones útiles sin construir reportes manualmente.</p>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4 compare-control-card">
+          <div class="card-body p-3 p-lg-4">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+              <div class="btn-group" role="group" aria-label="Tipo de comparación">
+                <button id="compareQuickBtn" class="btn btn-dark btn-sm">Rápida</button>
+                <button id="compareCustomBtn" class="btn btn-outline-dark btn-sm">Personalizada</button>
+              </div>
+              <div class="small text-secondary"><i class="fa-solid fa-circle-info me-1"></i>La comparación por mismo corte evita enfrentar un mes incompleto contra uno completo.</div>
+            </div>
+
+            <div id="quickCompareControls">
+              <div class="row g-3 align-items-end">
+                <div class="col-md-3"><label class="form-label small">Periodo actual</label><select id="compareMonthA" class="form-select"></select></div>
+                <div class="col-md-3"><label class="form-label small">Periodo base</label><select id="compareMonthB" class="form-select"></select></div>
+                <div class="col-md-3"><label class="form-label small">Agrupar por</label><select id="compareGroupBy" class="form-select"><option value="category">Categoría</option><option value="provider">Proveedor</option><option value="group">Grupo</option></select></div>
+                <div class="col-md-3"><label class="form-label small">Métrica</label><select id="compareMetric" class="form-select"><option value="amount">Valor</option><option value="count">Número de movimientos</option><option value="average">Promedio por movimiento</option><option value="discount">Descuentos</option></select></div>
               </div>
               <div class="form-check form-switch mt-3">
-                <input class="form-check-input" type="checkbox" id="includeIva" checked>
-                <label class="form-check-label" for="includeIva">Precios incluyen IVA</label>
-              </div>
-              <div class="d-grid gap-2 mt-3">
-                <button type="button" id="btnSaveQuote" class="btn btn-outline-primary">
-                  <i class="fa-solid fa-floppy-disk me-1"></i>Guardar borrador
-                </button>
-                <button type="button" id="btnGeneratePdf" class="btn btn-primary">
-                  <i class="fa-solid fa-file-pdf me-1"></i>Generar PDF
-                </button>
+                <input class="form-check-input" type="checkbox" role="switch" id="compareSameCutoff" checked>
+                <label class="form-check-label" for="compareSameCutoff">Comparar hasta el mismo día de corte</label>
+                <div id="cutoffHelp" class="form-text"></div>
               </div>
             </div>
-          </section>
 
-          <section class="card shadow-sm company-card">
-            <div class="card-header bg-white border-0 d-flex align-items-center justify-content-between gap-2">
-              <div>
-                <div class="section-kicker">Empresa</div>
-                <h6 class="mb-0">Documento</h6>
+            <div id="customCompareControls" class="d-none">
+              <div class="row g-3">
+                <div class="col-12 col-lg-6"><div class="range-box"><div class="fw-semibold mb-2">Periodo A</div><div class="row g-2"><div class="col"><input id="customAStart" type="date" class="form-control"></div><div class="col"><input id="customAEnd" type="date" class="form-control"></div></div></div></div>
+                <div class="col-12 col-lg-6"><div class="range-box"><div class="fw-semibold mb-2">Periodo B</div><div class="row g-2"><div class="col"><input id="customBStart" type="date" class="form-control"></div><div class="col"><input id="customBEnd" type="date" class="form-control"></div></div></div></div>
               </div>
-              <button type="button" id="btnResetCompany" class="btn btn-outline-secondary btn-sm">Restaurar</button>
-            </div>
-            <div class="card-body border-top">
-              <div class="row g-2">
-                <div class="col-12">
-                  <label for="companyName" class="form-label fw-semibold">Empresa</label>
-                  <input id="companyName" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="companyLegal" class="form-label fw-semibold">Razón legal</label>
-                  <input id="companyLegal" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-6">
-                  <label for="companyCity" class="form-label fw-semibold">Ciudad</label>
-                  <input id="companyCity" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-6">
-                  <label for="sellerPhone" class="form-label fw-semibold">Celular</label>
-                  <input id="sellerPhone" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="sellerName" class="form-label fw-semibold">Firma / vendedor</label>
-                  <input id="sellerName" class="form-control form-control-sm" type="text">
-                </div>
-                <div class="col-12">
-                  <label for="checkPayee" class="form-label fw-semibold">Cheque a nombre de</label>
-                  <input id="checkPayee" class="form-control form-control-sm" type="text">
-                </div>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
-    </div>
-  </main>
-
-  <div class="modal fade" id="manualProductModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i>Producto manual</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-12">
-              <label for="manualName" class="form-label fw-semibold">Descripción</label>
-              <input id="manualName" class="form-control" type="text" placeholder="Nombre del producto">
-            </div>
-            <div class="col-6">
-              <label for="manualQty" class="form-label fw-semibold">Cantidad</label>
-              <input id="manualQty" class="form-control" type="number" min="0.01" step="0.01" value="1">
-            </div>
-            <div class="col-6">
-              <label for="manualPrice" class="form-label fw-semibold">Precio unitario</label>
-              <input id="manualPrice" class="form-control" type="number" min="0" step="0.01" placeholder="0.00">
-            </div>
-            <div class="col-6">
-              <label for="manualCode" class="form-label fw-semibold">Código interno</label>
-              <input id="manualCode" class="form-control" type="text">
-            </div>
-            <div class="col-6">
-              <label for="manualBarcode" class="form-label fw-semibold">Código barras</label>
-              <input id="manualBarcode" class="form-control" type="text">
+              <div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label small">Agrupar por</label><select id="customGroupBy" class="form-select"><option value="category">Categoría</option><option value="provider">Proveedor</option><option value="group">Grupo</option></select></div><div class="col-md-6"><label class="form-label small">Métrica</label><select id="customMetric" class="form-select"><option value="amount">Valor</option><option value="count">Número de movimientos</option><option value="average">Promedio por movimiento</option><option value="discount">Descuentos</option></select></div></div>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" id="btnAddManualProduct" class="btn btn-dark">
-            <i class="fa-solid fa-plus me-1"></i>Agregar
-          </button>
+
+        <div class="row g-3 mb-4" id="compareKpis"></div>
+
+        <div class="row g-4">
+          <div class="col-xl-8">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Comparación visual</h2><p id="compareChartSubtitle" class="small text-secondary mb-0"></p></div>
+              <div class="card-body px-4 pb-4"><div class="chart-wrap compare-chart"><canvas id="compareChart"></canvas></div></div>
+            </div>
+          </div>
+          <div class="col-xl-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Variaciones relevantes</h2><p class="small text-secondary mb-0">Ordenadas por impacto absoluto.</p></div>
+              <div class="card-body px-4" id="compareInsights"></div>
+            </div>
+          </div>
         </div>
+
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Detalle comparativo</h2><p class="small text-secondary mb-0">El porcentaje se marca como “Nuevo” cuando el periodo base era cero.</p></div>
+          <div class="table-responsive">
+            <table class="table align-middle mb-0"><thead><tr><th id="compareEntityHeader">Categoría</th><th id="periodBHeader" class="text-end">Periodo base</th><th id="periodAHeader" class="text-end">Periodo actual</th><th class="text-end">Diferencia</th><th class="text-end">Variación</th><th></th></tr></thead><tbody id="compareTable"></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-reports" class="app-view d-none">
+        <div class="page-heading mb-4"><div class="eyebrow">Salida</div><h1 class="h3 mb-1">Reportes</h1><p class="text-secondary mb-0">Excel deja de ser la base de trabajo y pasa a ser un formato de salida.</p></div>
+        <div class="row g-4">
+          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-table"></i></div><h2 class="h5">Resumen mensual</h2><p class="text-secondary small">Totales por categoría y grupos del mes seleccionado.</p><select id="reportMonth" class="form-select mb-3"></select><button id="downloadSummaryCsv" class="btn btn-outline-success w-100"><i class="fa-solid fa-file-csv me-2"></i>Descargar CSV</button></div></div></div>
+          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-list"></i></div><h2 class="h5">Detalle de movimientos</h2><p class="text-secondary small">Exportación de todos los movimientos históricos válidos cargados.</p><button id="downloadMovementsCsv" class="btn btn-outline-success w-100 mt-4"><i class="fa-solid fa-file-csv me-2"></i>Descargar CSV</button></div></div></div>
+          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-file-excel"></i></div><h2 class="h5">Excel y PDF</h2><p class="text-secondary small">Genera reportes formales desde la fuente de datos actual, sin editar hojas manualmente.</p><div class="d-grid gap-2 mt-3"><button id="downloadSummaryXlsx" class="btn btn-outline-success"><i class="fa-solid fa-file-excel me-2"></i>Resumen Excel</button><button id="downloadSummaryPdf" class="btn btn-outline-danger"><i class="fa-solid fa-file-pdf me-2"></i>Resumen PDF</button></div></div></div></div>
+        </div>
+
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Pendientes de depuración del histórico</h2><p class="small text-secondary mb-0">Registros que la nueva aplicación no permitiría guardar sin una fecha válida.</p></div>
+          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Libro</th><th>Hoja</th><th>Fila</th><th>Fecha original</th><th>Proveedor</th><th class="text-end">Valor</th></tr></thead><tbody id="importIssuesTable"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="view-settings" class="app-view d-none">
+        <div class="page-heading mb-4"><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Configuración</h1><p class="text-secondary mb-0">Clasificaciones, seguridad y estado de la fuente de datos.</p></div>
+        <div class="row g-4 mb-4">
+          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Fuente de datos</div><div id="settingsDataMode" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Demo usa el navegador. Producción usa Firebase Authentication y Firestore.</p></div></div></div>
+          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Rol actual</div><div id="settingsRole" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Administrador: control total. Contabilidad: captura/edición. Consulta: solo lectura.</p></div></div></div>
+          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Auditoría</div><div class="h5 mt-1 mb-2">Bitácora inmutable</div><p class="small text-secondary mb-0">Cada alta o edición en producción registra usuario, hora y valores afectados.</p></div></div></div>
+        </div>
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Clasificación de categorías</h2><p class="small text-secondary mb-0">Base utilizada por los resúmenes y comparaciones.</p></div>
+          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Categoría</th><th>Grupo</th><th>Descuento</th></tr></thead><tbody id="settingsCategories"></tbody></table></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="modal fade" id="movementModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <form id="movementForm">
+          <div class="modal-header"><div><h2 class="modal-title fs-5">Nuevo movimiento</h2><div class="small text-secondary">Solo muestra los campos necesarios.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body p-4">
+            <div class="row g-3">
+              <div class="col-md-4"><label class="form-label">Fecha</label><input id="newDate" type="date" class="form-control" required></div>
+              <div class="col-md-8"><label class="form-label">Categoría</label><select id="newCategory" class="form-select" required></select></div>
+              <div class="col-md-7"><label class="form-label">Proveedor</label><input id="newProvider" class="form-control" autocomplete="off" required></div>
+              <div class="col-md-5"><label class="form-label">Documento</label><input id="newDocument" class="form-control"></div>
+              <div class="col-md-6"><label class="form-label">Valor</label><div class="input-group"><span class="input-group-text">$</span><input id="newValue" type="number" min="0" step="0.01" class="form-control" required></div></div>
+              <div id="discountField" class="col-md-6 d-none"><label class="form-label">Descuento</label><div class="input-group"><span class="input-group-text">$</span><input id="newDiscount" type="number" min="0" step="0.01" class="form-control" value="0"></div></div>
+              <div class="col-12"><label class="form-label">Detalle</label><textarea id="newDetail" class="form-control" rows="2"></textarea></div>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-2"></i>Guardar movimiento</button></div>
+        </form>
       </div>
     </div>
   </div>
 
-  <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="fa-solid fa-clock-rotate-left me-2"></i>Histórico</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div id="historyList" class="history-list"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" id="btnClearHistory" class="btn btn-outline-danger me-auto">Limpiar histórico</button>
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"><div id="appToast" class="toast" role="status"><div class="toast-body d-flex gap-2 align-items-center"><i class="fa-solid fa-circle-check text-success"></i><span id="toastText"></span></div></div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="assets/js/app.js?v=20260902-2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="data/historico-2026.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/data-service.js"></script>
+  <script src="assets/js/app.js"></script>
 </body>
 </html>

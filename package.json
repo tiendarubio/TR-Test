@@ -1,14 +1,13 @@
 {
-  "name": "tr-cotizaciones",
+  "name": "tr-flujo-efectivo",
   "private": true,
   "type": "module",
-  "version": "1.0.1",
-  "description": "App para crear cotizaciones con catálogo desde Google Sheets y PDF.",
+  "version": "0.2.0",
+  "description": "Aplicación de flujo de efectivo en Vercel + Firebase.",
   "scripts": {
-    "check": "node --check assets/js/app.js && node --check api/catalogo.js"
+    "migrate:2026": "node scripts/import-historical.mjs"
   },
-  "dependencies": {},
-  "engines": {
-    "node": "22.x"
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
   }
 }
