@@ -307,7 +307,7 @@
             <div class="row g-3">
               <div class="col-md-4"><label class="form-label">Fecha</label><input id="newDate" type="date" class="form-control" required></div>
               <div class="col-md-8"><label class="form-label">Categoría</label><select id="newCategory" class="form-select" required></select></div>
-              <div class="col-md-7"><label class="form-label">Proveedor</label><input id="newProvider" class="form-control" autocomplete="off" required></div>
+              <div class="col-md-7 position-relative provider-field"><label for="newProvider" class="form-label">Proveedor</label><input id="newProvider" class="form-control" autocomplete="off" placeholder="Escriba para buscar proveedor..." aria-describedby="newProviderSuggestions" required><ul id="newProviderSuggestions" class="list-group provider-suggestions"></ul></div>
               <div class="col-md-5"><label class="form-label">Documento</label><input id="newDocument" class="form-control"></div>
               <div class="col-md-6"><label class="form-label">Valor</label><div class="input-group"><span class="input-group-text">$</span><input id="newValue" type="number" min="0" step="0.01" class="form-control" required></div></div>
               <div id="discountField" class="col-md-6 d-none"><label class="form-label">Descuento</label><div class="input-group"><span class="input-group-text">$</span><input id="newDiscount" type="number" min="0" step="0.01" class="form-control" value="0"></div></div>

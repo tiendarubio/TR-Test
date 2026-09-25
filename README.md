@@ -108,3 +108,7 @@ También existen movimientos con fecha válida pero fuera del mes nominal del li
 ## Próximas extensiones previstas
 
 El modelo deja espacio para presupuesto por categoría, comparaciones interanuales, cierre de periodos, edición/eliminación completa desde UI y una vista dedicada de auditoría.
+
+
+## Buscador de proveedores
+La modal **Nuevo movimiento** consulta la misma estructura de proveedores utilizada por TR-Recepcion mediante `/api/proveedores`. En Vercel deben existir `GOOGLE_SHEETS_API_KEY` y `GOOGLE_SHEETS_ID`; opcionalmente `GOOGLE_SHEETS_PROV_RANGE` (por defecto `proveedores!C2:C1000`). Si la consulta remota no está disponible, el buscador usa temporalmente los proveedores ya presentes en los movimientos cargados.

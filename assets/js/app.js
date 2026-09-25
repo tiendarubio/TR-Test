@@ -9,6 +9,8 @@
   let compareChart = null;
   let movementPage = 1;
   let compareMode = 'quick';
+  let providersCache = null;
+  let providerFocus = -1;
 
   const $ = id => document.getElementById(id);
   const qsa = sel => [...document.querySelectorAll(sel)];
@@ -62,6 +64,72 @@
   function fillCategorySelect(select, includeAll=false) {
     const first = includeAll ? '<option value="">Todas</option>' : '<option value="" disabled selected>Selecciona...</option>';
     select.innerHTML = first + DATA.categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.label)}</option>`).join('');
+  }
+
+  function fallbackProviders() {
+    return [...new Set(allMovements().map(m => String(m.provider || '').trim()).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }
+
+  async function preloadProviders() {
+    if (providersCache) return providersCache;
+    try {
+      const response = await fetch('/api/proveedores');
+      if (!response.ok) throw new Error(`Error proveedores: ${response.statusText}`);
+      const data = await response.json();
+      providersCache = Array.isArray(data.providers) ? data.providers.map(p => String(p).trim()).filter(Boolean) : [];
+    } catch (error) {
+      console.error('Error al cargar proveedores:', error);
+      providersCache = fallbackProviders();
+    }
+    return providersCache;
+  }
+
+  function clearProviderSuggestions() {
+    const list = $('newProviderSuggestions');
+    if (list) list.innerHTML = '';
+    providerFocus = -1;
+  }
+
+  function setActiveProviderSuggestion(items) {
+    if (!items.length) return;
+    items.forEach(item => item.classList.remove('active'));
+    if (providerFocus >= items.length) providerFocus = 0;
+    if (providerFocus < 0) providerFocus = items.length - 1;
+    const active = items[providerFocus];
+    active.classList.add('active');
+    active.scrollIntoView({ block: 'nearest' });
+  }
+
+  async function renderProviderSuggestions() {
+    const input = $('newProvider');
+    const listEl = $('newProviderSuggestions');
+    const query = normalize(input?.value);
+    clearProviderSuggestions();
+    if (!input || !listEl || !query) return;
+
+    const providers = await preloadProviders();
+    if (normalize(input.value) !== query) return;
+    const matches = providers.filter(name => normalize(name).includes(query)).slice(0, 50);
+    matches.forEach(name => {
+      const item = document.createElement('li');
+      item.className = 'list-group-item';
+      item.textContent = name;
+      item.addEventListener('mousedown', event => event.preventDefault());
+      item.addEventListener('click', () => {
+        input.value = name;
+        clearProviderSuggestions();
+        input.focus();
+      });
+      listEl.appendChild(item);
+    });
+
+    if (!matches.length) {
+      const item = document.createElement('li');
+      item.className = 'list-group-item list-group-item-light provider-no-results';
+      item.textContent = 'Sin resultados. Puede escribir el nombre completo del proveedor.';
+      listEl.appendChild(item);
+    }
   }
 
   function switchView(view) {
@@ -411,6 +479,8 @@
 
   function openMovementModal() {
     const today=new Date().toLocaleDateString('en-CA'); $('newDate').value=today; $('newCategory').value=''; $('newProvider').value=''; $('newDocument').value=''; $('newValue').value=''; $('newDiscount').value='0'; $('newDetail').value=''; $('discountField').classList.add('d-none');
+    clearProviderSuggestions();
+    preloadProviders().catch(() => {});
     bootstrap.Modal.getOrCreateInstance($('movementModal')).show();
   }
 
@@ -462,6 +532,30 @@
     $('compareQuickBtn').addEventListener('click',()=>setCompareMode('quick')); $('compareCustomBtn').addEventListener('click',()=>setCompareMode('custom'));
 
     $('newCategory').addEventListener('change',()=>{$('discountField').classList.toggle('d-none',!categoryByName.get($('newCategory').value)?.supportsDiscount)});
+    $('newProvider').addEventListener('input', renderProviderSuggestions);
+    $('newProvider').addEventListener('focus', () => { if ($('newProvider').value.trim()) renderProviderSuggestions(); });
+    $('newProvider').addEventListener('keydown', event => {
+      const items = [...$('newProviderSuggestions').querySelectorAll('.list-group-item:not(.provider-no-results)')];
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        providerFocus += 1;
+        setActiveProviderSuggestion(items);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        providerFocus -= 1;
+        setActiveProviderSuggestion(items);
+      } else if (event.key === 'Enter' && providerFocus > -1 && items[providerFocus]) {
+        event.preventDefault();
+        items[providerFocus].click();
+      } else if (event.key === 'Escape') {
+        clearProviderSuggestions();
+      }
+    });
+    document.addEventListener('click', event => {
+      const field = event.target.closest('.provider-field');
+      if (!field) clearProviderSuggestions();
+    });
+    $('movementModal').addEventListener('hidden.bs.modal', clearProviderSuggestions);
     $('movementForm').addEventListener('submit',saveDemoMovement);
     $('downloadSummaryCsv').addEventListener('click',downloadSummary); $('downloadMovementsCsv').addEventListener('click',downloadMovements);
     $('downloadSummaryXlsx').addEventListener('click',downloadSummaryXlsx); $('downloadSummaryPdf').addEventListener('click',downloadSummaryPdf);
