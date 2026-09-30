@@ -878,64 +878,90 @@
     return doc.splitTextToSize(String(text || ''), maxWidth);
   }
 
-  function ensurePdfSpace(doc, y, needed = 30) {
+  function drawPdfPageHeader(doc, data, compact = false) {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const company = data.company || DEFAULT_COMPANY;
+    const left = 38;
+    const right = pageWidth - 38;
+    const logoX = 43;
+    const logoY = compact ? 11 : 14;
+    const logoSize = compact ? 17 : 22;
+
+    doc.setTextColor(0, 0, 0);
+    if (state.logoDataUrl) {
+      doc.addImage(state.logoDataUrl, 'PNG', logoX, logoY, logoSize, logoSize, undefined, 'FAST');
+    }
+
+    const textX = state.logoDataUrl ? logoX + logoSize + 8 : left;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(compact ? 12 : 14);
+    doc.text(company.companyName || DEFAULT_COMPANY.companyName, textX, logoY + 8);
+    doc.setFontSize(compact ? 8.5 : 9.5);
+    doc.text(company.companyLegal || DEFAULT_COMPANY.companyLegal, textX, logoY + 16);
+
+    const lineY = compact ? 34 : 43;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.35);
+    doc.line(left, lineY, right, lineY);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11.5);
+    doc.text('COTIZACIÓN', pageWidth / 2, lineY + 10, { align: 'center' });
+
+    if (!compact) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.text(`${company.companyCity || 'San Martín'}, ${formatLongDate(data.quoteDate)}`, left, 63);
+
+      const boxW = 52;
+      const boxH = 19;
+      const boxX = right - boxW;
+      const boxY = 54;
+      doc.rect(boxX, boxY, boxW, boxH);
+      doc.line(boxX, boxY + 9, boxX + boxW, boxY + 9);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('N° COTIZACIÓN', boxX + boxW / 2, boxY + 6, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(String(data.quoteNumber || data.id || ''), boxX + boxW / 2, boxY + 15, { align: 'center' });
+    }
+  }
+
+  function ensurePdfSpace(doc, data, y, needed = 30) {
     const height = doc.internal.pageSize.getHeight();
     if (y + needed <= height - 18) return y;
     doc.addPage();
-    return 22;
+    drawPdfPageHeader(doc, data, true);
+    return 51;
   }
 
   function drawPdfHeader(doc, data) {
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const company = data.company || DEFAULT_COMPANY;
-    const centerX = pageWidth / 2;
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-
-    const title = company.companyName || DEFAULT_COMPANY.companyName;
-    const logoW = state.logoDataUrl ? 14 : 0;
-    const logoGap = state.logoDataUrl ? 5 : 0;
-    const titleWidth = doc.getTextWidth(title);
-    const groupX = centerX - ((logoW + logoGap + titleWidth) / 2);
-
-    if (state.logoDataUrl) {
-      doc.addImage(state.logoDataUrl, 'PNG', groupX, 17, logoW, logoW, undefined, 'FAST');
-    }
-
-    if (state.logoDataUrl) {
-      doc.text(title, groupX + logoW + logoGap, 26);
-    } else {
-      doc.text(title, centerX, 26, { align: 'center' });
-    }
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(company.companyLegal || DEFAULT_COMPANY.companyLegal, pageWidth - 18, 49, { align: 'right' });
-    doc.text(`${company.companyCity || 'San Martín'}, ${formatLongDate(data.quoteDate)}`, pageWidth - 18, 57, { align: 'right' });
+    drawPdfPageHeader(doc, data, false);
   }
 
   function drawPdfLetterIntro(doc, data) {
-    const left = 18;
-    let y = 74;
+    const left = 38;
+    const contentWidth = 140;
+    let y = 88;
     const clientLine = data.clientName || data.clientTaxName || 'Cliente';
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10.5);
+    doc.setFontSize(9.5);
     doc.text('Señor (es).', left, y);
-    y += 8;
+    y += 7;
     doc.setFont('helvetica', 'bold');
-    doc.text(String(clientLine).toUpperCase(), left, y, { maxWidth: 124 });
-    y += 8;
+    doc.text(String(clientLine).toUpperCase(), left, y, { maxWidth: contentWidth });
+    y += 7;
     doc.setFont('helvetica', 'normal');
     doc.text('Presente.', left, y);
-    y += 15;
+    y += 13;
     doc.text('Estimados (as):', left, y);
-    y += 8;
+    y += 7;
     const intro = 'Reciban un cordial saludo, deseándoles éxitos en sus actividades diarias. Al mismo tiempo nos complace presentarles cotización de productos solicitados. Detalle a continuación.';
-    const lines = splitText(doc, intro, 174);
+    const lines = splitText(doc, intro, contentWidth);
     doc.text(lines, left, y);
-    y += lines.length * 6 + 8;
+    y += lines.length * 5.3 + 7;
     return y;
   }
 
@@ -946,110 +972,133 @@
       formatPlainCurrency(item.precioUnitario),
       formatPlainCurrency(fix2(item.cantidad * item.precioUnitario))
     ]);
-    const subtotal = (data.items || []).reduce((sum, item) => sum + fix2(item.cantidad * item.precioUnitario), 0);
-    const discount = Math.min(fix2(data.discountAmount || 0), subtotal);
-    const total = Math.max(0, subtotal - discount);
-    const foot = discount > 0
-      ? [
-          ['', '', 'SUBTOTAL', formatPlainCurrency(subtotal)],
-          ['', '', 'DESCUENTO', `-${formatPlainCurrency(discount)}`],
-          ['', '', 'TOTAL', formatPlainCurrency(total)]
-        ]
-      : [['', '', '', formatPlainCurrency(total)]];
 
     doc.autoTable({
       startY,
-      margin: { left: 38, right: 38 },
-      head: [['DESCRIPCION DEL PRODUCTO', 'CANTIDAD', 'PRECIO\nUNITARIO', 'SUB TOTAL']],
+      margin: { left: 38, right: 38, top: 52, bottom: 20 },
+      head: [['DESCRIPCIÓN DEL PRODUCTO', 'CANTIDAD', 'PRECIO\nUNITARIO', 'SUB TOTAL']],
       body: rows,
-      foot,
       theme: 'grid',
       styles: {
         font: 'helvetica',
-        fontSize: 8.8,
-        cellPadding: 2.2,
+        fontSize: 8.4,
+        cellPadding: { top: 2.5, right: 2.2, bottom: 2.5, left: 2.2 },
         textColor: [0, 0, 0],
         lineColor: [0, 0, 0],
-        lineWidth: 0.25,
-        valign: 'middle'
+        lineWidth: 0.22,
+        valign: 'middle',
+        overflow: 'linebreak'
       },
       headStyles: {
-        fillColor: [111, 169, 219],
+        fillColor: [245, 245, 245],
         textColor: [0, 0, 0],
         fontStyle: 'bold',
         halign: 'center',
-        minCellHeight: 9
+        minCellHeight: 10
       },
       bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [239, 242, 245] },
-      footStyles: {
-        fillColor: [111, 169, 219],
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-        halign: 'right'
-      },
+      alternateRowStyles: { fillColor: [255, 255, 255] },
       columnStyles: {
-        0: { cellWidth: 80, halign: 'left' },
-        1: { cellWidth: 26, halign: 'center' },
-        2: { cellWidth: 28, halign: 'right' },
-        3: { cellWidth: 30, halign: 'right' }
+        0: { cellWidth: 72, halign: 'left' },
+        1: { cellWidth: 22, halign: 'center' },
+        2: { cellWidth: 23, halign: 'right' },
+        3: { cellWidth: 23, halign: 'right' }
+      },
+      didDrawPage: (hookData) => {
+        if (hookData.pageNumber > 1) drawPdfPageHeader(doc, data, true);
       }
     });
 
-    return doc.lastAutoTable.finalY + 15;
+    return doc.lastAutoTable.finalY + 8;
+  }
+
+  function drawPdfTotals(doc, data, startY) {
+    const subtotal = (data.items || []).reduce((sum, item) => sum + fix2(item.cantidad * item.precioUnitario), 0);
+    const discount = Math.min(fix2(data.discountAmount || 0), subtotal);
+    const total = Math.max(0, subtotal - discount);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const right = pageWidth - 38;
+    const labelW = 38;
+    const valueW = 32;
+    const rowH = 9;
+    const rows = discount > 0
+      ? [['SUBTOTAL', formatPlainCurrency(subtotal)], ['DESCUENTO', `-${formatPlainCurrency(discount)}`], ['TOTAL', formatPlainCurrency(total)]]
+      : [['TOTAL', formatPlainCurrency(total)]];
+
+    let y = ensurePdfSpace(doc, data, startY, rows.length * rowH + 8);
+    const x = right - labelW - valueW;
+    rows.forEach(([label, value], idx) => {
+      const isTotal = label === 'TOTAL';
+      if (isTotal) {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(x, y, labelW + valueW, rowH, 'F');
+      }
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.22);
+      doc.rect(x, y, labelW, rowH);
+      doc.rect(x + labelW, y, valueW, rowH);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.7);
+      doc.text(label, x + 3, y + 5.8);
+      doc.text(value, right - 3, y + 5.8, { align: 'right' });
+      y += rowH;
+    });
+    return y + 10;
   }
 
   function drawPdfFooterText(doc, data, startY) {
-    const left = 18;
-    const right = 190;
+    const left = 38;
+    const right = 178;
     const company = data.company || DEFAULT_COMPANY;
-    let y = ensurePdfSpace(doc, startY, 86);
+    let y = ensurePdfSpace(doc, data, startY, 72);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(9.2);
     if (data.includeIva !== false) {
       doc.text('Precios incluyen IVA', left, y);
-      y += 8;
+      y += 7;
     }
 
     doc.text(`Forma de pago: ${data.paymentMethod || 'Contado'}`, left, y);
-    y += 8;
+    y += 7;
 
     const creditDays = fix2(data.creditDays);
     if (creditDays > 0) {
       doc.text(`Crédito: ${creditDays.toLocaleString('en-US', { maximumFractionDigits: 0 })} días`, left, y);
-      y += 8;
+      y += 7;
     }
 
     if (fix2(data.validityDays) > 0) {
       doc.text(`Validez de la oferta: ${fix2(data.validityDays).toLocaleString('en-US', { maximumFractionDigits: 0 })} días`, left, y);
-      y += 8;
+      y += 7;
     }
 
     if (String(data.paymentMethod || '').toLowerCase() === 'cheque') {
       const chequeText = `Si el pago es con cheque emitirlo a nombre de ${company.checkPayee || DEFAULT_COMPANY.checkPayee}.`;
       const lines = splitText(doc, chequeText, right - left);
       doc.text(lines, left, y);
-      y += lines.length * 6 + 4;
+      y += lines.length * 5.2 + 4;
     }
 
     if (data.quoteNotes) {
-      y = ensurePdfSpace(doc, y, 22);
+      y = ensurePdfSpace(doc, data, y, 20);
       const lines = splitText(doc, data.quoteNotes, right - left);
       doc.text(lines, left, y);
-      y += lines.length * 6 + 6;
+      y += lines.length * 5.2 + 6;
     }
 
-    y = ensurePdfSpace(doc, y, 52);
+    y = ensurePdfSpace(doc, data, y, 48);
     const closing = 'Esperando que nuestra oferta satisfaga sus requerimientos y poder servirles como ustedes lo merecen, quedamos a sus apreciables órdenes.';
     const closingLines = splitText(doc, closing, right - left);
     doc.text(closingLines, left, y);
-    y += closingLines.length * 6 + 24;
+    y += closingLines.length * 5.2 + 17;
 
-    y = ensurePdfSpace(doc, y, 32);
+    y = ensurePdfSpace(doc, data, y, 28);
     doc.text('Atentamente,', left, y);
-    doc.text(company.sellerName || DEFAULT_COMPANY.sellerName, 75, y + 8);
-    if (company.sellerPhone) doc.text(`CEL. ${company.sellerPhone}`, 80, y + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(company.sellerName || DEFAULT_COMPANY.sellerName, left, y + 8);
+    doc.setFont('helvetica', 'normal');
+    if (company.sellerPhone) doc.text(`CEL. ${company.sellerPhone}`, left, y + 15);
   }
 
   async function generatePdf(inputData = null, options = {}) {
@@ -1076,7 +1125,8 @@
       drawPdfHeader(doc, data);
       const tableY = drawPdfLetterIntro(doc, data);
       const afterTableY = drawPdfTable(doc, data, tableY + 4);
-      drawPdfFooterText(doc, data, afterTableY);
+      const afterTotalsY = drawPdfTotals(doc, data, afterTableY);
+      drawPdfFooterText(doc, data, afterTotalsY);
 
       if (options.saveHistory !== false) {
         const snapshot = snapshotQuote();
