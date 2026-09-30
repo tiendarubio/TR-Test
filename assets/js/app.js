@@ -858,7 +858,7 @@
   async function loadLogoDataUrl() {
     if (state.logoDataUrl) return state.logoDataUrl;
     try {
-      const resp = await fetch('assets/img/trlogo_b.png');
+      const resp = await fetch('/assets/img/trlogo_b.png');
       if (!resp.ok) throw new Error('Logo no disponible');
       const blob = await resp.blob();
       state.logoDataUrl = await new Promise((resolve, reject) => {
