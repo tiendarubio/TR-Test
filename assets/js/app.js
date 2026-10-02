@@ -11,6 +11,8 @@
   let compareMode = 'quick';
   let providersCache = null;
   let providerFocus = -1;
+  let activeMovementId = null;
+  let pendingDeleteMovementId = null;
 
   const $ = id => document.getElementById(id);
   const qsa = sel => [...document.querySelectorAll(sel)];
@@ -260,6 +262,19 @@
   function formatDeltaPct(pct) { return pct == null ? 'Nuevo' : `${pct>0?'+':''}${number2.format(pct)}%`; }
   function formatVariance(base,diff) { return base === 0 ? (diff === 0 ? 'Sin cambio' : 'Sin base comparable') : `${diff/base*100>0?'+':''}${number2.format(diff/base*100)}% vs. periodo base`; }
 
+  function isMutableMovement(m) {
+    if (!m?.id) return false;
+    if (window.TRData?.state?.mode === 'firebase') return true;
+    return window.TRData?.getNewMovements?.().some(row => row.id === m.id) || false;
+  }
+
+  function movementActions(m) {
+    if (!isMutableMovement(m)) return '<span class="small text-secondary">Histórico</span>';
+    const edit = window.TRAuth?.canWrite?.() ? `<button class="btn btn-sm btn-outline-primary" data-edit-movement="${escapeHtml(m.id)}" title="Editar movimiento"><i class="fa-solid fa-pen"></i></button>` : '';
+    const del = window.TRAuth?.canDelete?.() ? `<button class="btn btn-sm btn-outline-danger" data-delete-movement="${escapeHtml(m.id)}" title="Eliminar movimiento"><i class="fa-solid fa-trash"></i></button>` : '';
+    return edit || del ? `<div class="d-flex justify-content-end gap-1">${edit}${del}</div>` : '<span class="small text-secondary">Solo lectura</span>';
+  }
+
   function renderMovements() {
     const all = filteredMovements();
     const totalPages = Math.max(1, Math.ceil(all.length/PAGE_SIZE));
@@ -273,7 +288,8 @@
       <td>${escapeHtml(m.document || '—')}</td>
       <td class="text-end fw-semibold">${money.format(Number(m.value||0))}</td>
       <td class="text-secondary">${escapeHtml(m.detail || '')}</td>
-    </tr>`).join('') : `<tr><td colspan="6"><div class="empty-state">No hay movimientos que coincidan con los filtros.</div></td></tr>`;
+      <td class="text-end text-nowrap">${movementActions(m)}</td>
+    </tr>`).join('') : `<tr><td colspan="7"><div class="empty-state">No hay movimientos que coincidan con los filtros.</div></td></tr>`;
     const amount = sumAmount(all);
     $('movementFilterSummary').textContent = `${integer.format(all.length)} movimientos · ${money.format(amount)}`;
     $('movementPaginationText').textContent = `Página ${movementPage} de ${totalPages}`;
@@ -477,11 +493,57 @@
     doc.save(`resumen_flujo_${month.replace('-','_')}.pdf`);
   }
 
+  function resetMovementForm() {
+    const today=new Date().toLocaleDateString('en-CA');
+    activeMovementId=null;
+    $('movementModalTitle').textContent='Nuevo movimiento';
+    $('movementModalSubtitle').textContent='Solo muestra los campos necesarios.';
+    $('movementSubmitBtn').querySelector('span').textContent='Guardar movimiento';
+    $('newDate').value=today; $('newCategory').value=''; $('newProvider').value=''; $('newDocument').value=''; $('newValue').value=''; $('newDiscount').value='0'; $('newDetail').value=''; $('discountField').classList.add('d-none');
+  }
+
   function openMovementModal() {
-    const today=new Date().toLocaleDateString('en-CA'); $('newDate').value=today; $('newCategory').value=''; $('newProvider').value=''; $('newDocument').value=''; $('newValue').value=''; $('newDiscount').value='0'; $('newDetail').value=''; $('discountField').classList.add('d-none');
+    resetMovementForm();
     clearProviderSuggestions();
     preloadProviders().catch(() => {});
     bootstrap.Modal.getOrCreateInstance($('movementModal')).show();
+  }
+
+  function openEditMovement(id) {
+    if (!window.TRAuth?.canWrite?.()) { showToast('Tu rol es solo de consulta.'); return; }
+    const m=allMovements().find(row=>row.id===id);
+    if(!m || !isMutableMovement(m)){ showToast('Este movimiento no se puede editar desde esta fuente de datos.'); return; }
+    activeMovementId=id;
+    $('movementModalTitle').textContent='Editar movimiento';
+    $('movementModalSubtitle').textContent='Los cambios actualizarán automáticamente totales, comparaciones y reportes.';
+    $('movementSubmitBtn').querySelector('span').textContent='Guardar cambios';
+    $('newDate').value=m.date||''; $('newCategory').value=m.category||''; $('newProvider').value=m.provider||''; $('newDocument').value=m.document||''; $('newValue').value=Number(m.value||0); $('newDiscount').value=Number(m.discount||0); $('newDetail').value=m.detail||'';
+    $('discountField').classList.toggle('d-none',!categoryByName.get(m.category)?.supportsDiscount);
+    clearProviderSuggestions(); preloadProviders().catch(()=>{});
+    bootstrap.Modal.getOrCreateInstance($('movementModal')).show();
+  }
+
+  function openDeleteMovement(id) {
+    if (!window.TRAuth?.canDelete?.()) { showToast('Solo un Administrador puede eliminar movimientos.'); return; }
+    const m=allMovements().find(row=>row.id===id);
+    if(!m || !isMutableMovement(m)){ showToast('Este movimiento no se puede eliminar desde esta fuente de datos.'); return; }
+    pendingDeleteMovementId=id;
+    $('deleteMovementSummary').innerHTML=`<strong>${escapeHtml(formatDate(m.date))}</strong> · ${escapeHtml(categoryLabel(m.category))}<br>${escapeHtml(m.provider||'—')} · <strong>${money.format(Number(m.value||0))}</strong>`;
+    bootstrap.Modal.getOrCreateInstance($('deleteMovementModal')).show();
+  }
+
+  async function confirmDeleteMovement() {
+    const id=pendingDeleteMovementId;
+    if(!id)return;
+    const btn=$('confirmDeleteMovement'); btn.disabled=true;
+    try{
+      await window.TRData.deleteMovement(id);
+      pendingDeleteMovementId=null;
+      bootstrap.Modal.getInstance($('deleteMovementModal'))?.hide();
+      showToast('Movimiento eliminado correctamente.');
+      refreshPeriodSelectors(); renderDashboard(); renderMovements(); renderCompare(); renderReports();
+    }catch(error){ showToast(error.message||'No se pudo eliminar el movimiento.'); }
+    finally{btn.disabled=false;}
   }
 
   async function saveDemoMovement(event) {
@@ -490,10 +552,12 @@
     const category=$('newCategory').value;
     const rec={sourceMonth:getMonthFromIso($('newDate').value),sourceYear:Number($('newDate').value.slice(0,4)),date:$('newDate').value,category,provider:$('newProvider').value.trim(),document:$('newDocument').value.trim(),value:Number($('newValue').value||0),discount:Number($('newDiscount').value||0),detail:$('newDetail').value.trim()};
     try{
-      await window.TRData.createMovement(rec);
+      if(activeMovementId) await window.TRData.updateMovement(activeMovementId,rec); else await window.TRData.createMovement(rec);
+      const wasEditing=!!activeMovementId;
+      activeMovementId=null;
       bootstrap.Modal.getInstance($('movementModal'))?.hide();
-      showToast(window.TRData.state.mode==='firebase'?'Movimiento guardado en Firestore.':'Movimiento guardado en modo demostración.');
-      refreshPeriodSelectors(); renderDashboard(); renderMovements(); renderCompare();
+      showToast(wasEditing?'Movimiento actualizado correctamente.':(window.TRData.state.mode==='firebase'?'Movimiento guardado en Firestore.':'Movimiento guardado en modo demostración.'));
+      refreshPeriodSelectors(); renderDashboard(); renderMovements(); renderCompare(); renderReports();
     }catch(error){ showToast(error.message||'No se pudo guardar el movimiento.'); }
   }
 
@@ -557,12 +621,15 @@
     });
     $('movementModal').addEventListener('hidden.bs.modal', clearProviderSuggestions);
     $('movementForm').addEventListener('submit',saveDemoMovement);
+    $('confirmDeleteMovement').addEventListener('click',confirmDeleteMovement);
     $('downloadSummaryCsv').addEventListener('click',downloadSummary); $('downloadMovementsCsv').addEventListener('click',downloadMovements);
     $('downloadSummaryXlsx').addEventListener('click',downloadSummaryXlsx); $('downloadSummaryPdf').addEventListener('click',downloadSummaryPdf);
 
     document.addEventListener('click',e=>{
       const cat=e.target.closest('[data-open-category]'); if(cat) openCategory(cat.dataset.openCategory);
       const ccat=e.target.closest('[data-compare-open]'); if(ccat){ switchView('movements'); $('movCategory').value=ccat.dataset.compareOpen; movementPage=1; renderMovements(); }
+      const edit=e.target.closest('[data-edit-movement]'); if(edit) openEditMovement(edit.dataset.editMovement);
+      const del=e.target.closest('[data-delete-movement]'); if(del) openDeleteMovement(del.dataset.deleteMovement);
     });
 
     await window.TRImporter?.init?.();

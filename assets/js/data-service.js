@@ -26,9 +26,24 @@
     const data=await apiRequest('POST',input);state.movements.push(data.movement);return data.movement;
   }
   async function updateMovement(id,patch){
-    if(state.mode!=='firebase')throw new Error('Edición persistente disponible al conectar Firebase.');
     if(!global.TRAuth.canWrite())throw new Error('Tu rol es solo de consulta.');
+    if(state.mode!=='firebase'){
+      const idx=state.movements.findIndex(m=>m.id===id);
+      if(idx<0)throw new Error('Este registro histórico no se puede modificar en modo demostración.');
+      const next={...state.movements[idx],...patch,value:Number(patch.value ?? state.movements[idx].value ?? 0),discount:Number(patch.discount ?? state.movements[idx].discount ?? 0),updatedAt:new Date().toISOString()};
+      if(next.date){next.sourceMonth=Number(String(next.date).slice(5,7));next.sourceYear=Number(String(next.date).slice(0,4));}
+      state.movements[idx]=next;saveLocal();return next;
+    }
     const data=await apiRequest('PATCH',{id,changes:patch});const idx=state.movements.findIndex(m=>m.id===id);if(idx>=0)state.movements[idx]=data.movement;return data.movement;
+  }
+  async function deleteMovement(id){
+    if(!global.TRAuth.canDelete())throw new Error('Solo un Administrador puede eliminar movimientos.');
+    if(state.mode!=='firebase'){
+      const idx=state.movements.findIndex(m=>m.id===id);
+      if(idx<0)throw new Error('Este registro histórico no se puede eliminar en modo demostración.');
+      state.movements.splice(idx,1);saveLocal();return true;
+    }
+    await apiRequest('DELETE',{id});state.movements=state.movements.filter(m=>m.id!==id);return true;
   }
   async function importDemoRecords(records,batchMeta){
     if(state.mode==='firebase')throw new Error('Esta función solo existe en modo demostración.');
@@ -40,5 +55,5 @@
     if(state.mode==='firebase')throw new Error('Esta función solo existe en modo demostración.');
     state.movements=state.movements.filter(m=>m.importBatchId!==batchId);saveLocal();return true;
   }
-  global.TRData={state,boot,refresh,getMovements,getNewMovements,createMovement,updateMovement,importDemoRecords,revertDemoImport};
+  global.TRData={state,boot,refresh,getMovements,getNewMovements,createMovement,updateMovement,deleteMovement,importDemoRecords,revertDemoImport};
 })(window);

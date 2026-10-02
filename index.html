@@ -148,7 +148,7 @@
         <div class="card border-0 shadow-sm">
           <div class="table-responsive movement-table-wrap">
             <table class="table table-hover align-middle mb-0">
-              <thead class="sticky-top"><tr><th>Fecha</th><th>Categoría</th><th>Proveedor</th><th>Documento</th><th class="text-end">Valor</th><th>Detalle</th></tr></thead>
+              <thead class="sticky-top"><tr><th>Fecha</th><th>Categoría</th><th>Proveedor</th><th>Documento</th><th class="text-end">Valor</th><th>Detalle</th><th class="text-end">Acciones</th></tr></thead>
               <tbody id="movementsTable"></tbody>
             </table>
           </div>
@@ -287,7 +287,7 @@
         <div class="row g-4 mb-4">
           <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Fuente de datos</div><div id="settingsDataMode" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Demo usa el navegador. Producción usa Firebase Authentication y Firestore.</p></div></div></div>
           <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Rol actual</div><div id="settingsRole" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Administrador: control total. Contabilidad: captura/edición. Consulta: solo lectura.</p></div></div></div>
-          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Auditoría</div><div class="h5 mt-1 mb-2">Bitácora inmutable</div><p class="small text-secondary mb-0">Cada alta o edición en producción registra usuario, hora y valores afectados.</p></div></div></div>
+          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Auditoría</div><div class="h5 mt-1 mb-2">Bitácora inmutable</div><p class="small text-secondary mb-0">Cada alta, edición o eliminación en producción registra usuario, hora y valores afectados.</p></div></div></div>
         </div>
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Clasificación de categorías</h2><p class="small text-secondary mb-0">Base utilizada por los resúmenes y comparaciones.</p></div>
@@ -302,7 +302,7 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content border-0 shadow">
         <form id="movementForm">
-          <div class="modal-header"><div><h2 class="modal-title fs-5">Nuevo movimiento</h2><div class="small text-secondary">Solo muestra los campos necesarios.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-header"><div><h2 id="movementModalTitle" class="modal-title fs-5">Nuevo movimiento</h2><div id="movementModalSubtitle" class="small text-secondary">Solo muestra los campos necesarios.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
           <div class="modal-body p-4">
             <div class="row g-3">
               <div class="col-md-4"><label class="form-label">Fecha</label><input id="newDate" type="date" class="form-control" required></div>
@@ -314,8 +314,28 @@
               <div class="col-12"><label class="form-label">Detalle</label><textarea id="newDetail" class="form-control" rows="2"></textarea></div>
             </div>
           </div>
-          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-2"></i>Guardar movimiento</button></div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button id="movementSubmitBtn" type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-2"></i><span>Guardar movimiento</span></button></div>
         </form>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="deleteMovementModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <div><h2 class="modal-title fs-5">Eliminar movimiento</h2><div class="small text-secondary">Esta acción no se puede deshacer.</div></div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">¿Seguro que deseas eliminar este registro?</p>
+          <div id="deleteMovementSummary" class="small text-secondary"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button id="confirmDeleteMovement" type="button" class="btn btn-danger"><i class="fa-solid fa-trash me-2"></i>Eliminar definitivamente</button>
+        </div>
       </div>
     </div>
   </div>
