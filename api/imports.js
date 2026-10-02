@@ -5,6 +5,7 @@ const ALLOWED_CATEGORIES=new Set(['REMESA','CORRESPONSAL','COMPRAS AL CONTADO','
 function clean(v,max=1000){return String(v??'').trim().slice(0,max)}
 function norm(v){return clean(v).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ')}
 function signature(r){return [r.date||'',r.category||'',norm(r.provider),norm(r.document),Number(r.value||0).toFixed(2),Number(r.discount||0).toFixed(2),norm(r.detail)].join('|')}
+function identityKey(r){const doc=norm(r.document);return doc?`${norm(r.provider)}|${doc}`:''}
 function hash(v){return crypto.createHash('sha1').update(String(v)).digest('hex')}
 function validateRecord(input){
   const date=clean(input.date,10),category=clean(input.category,80),provider=clean(input.provider,180),value=Number(input.value),discount=Number(input.discount||0);
@@ -21,12 +22,42 @@ function validateRecord(input){
 function ts(v){return v?.toDate?.()?.toISOString?.()||v||null}
 function batchPublic(doc){const d=doc.data();return {id:doc.id,...d,startedAt:ts(d.startedAt),completedAt:ts(d.completedAt),revertedAt:ts(d.revertedAt)}}
 
+async function loadExistingForRecords(db,records){
+  const bySig=new Map(),byIdentity=new Map(),docs=new Map();
+  const collect=snap=>snap.docs.forEach(doc=>docs.set(doc.id,doc.data()));
+  const dates=[...new Set(records.map(r=>r.date).filter(Boolean))];
+  for(let i=0;i<dates.length;i+=30){
+    const chunk=dates.slice(i,i+30); if(chunk.length)collect(await db.collection('movements').where('date','in',chunk).get());
+  }
+  const documents=[...new Set(records.map(r=>clean(r.document,120)).filter(Boolean))];
+  for(let i=0;i<documents.length;i+=30){
+    const chunk=documents.slice(i,i+30); if(chunk.length)collect(await db.collection('movements').where('document','in',chunk).get());
+  }
+  docs.forEach(d=>{
+    const sig=signature(d); bySig.set(sig,(bySig.get(sig)||0)+1);
+    const key=identityKey(d); if(key){if(!byIdentity.has(key))byIdentity.set(key,new Set());byIdentity.get(key).add(sig);}
+  });
+  return {bySig,byIdentity};
+}
+function incomingIdentityConflicts(records){
+  const map=new Map();
+  records.forEach(r=>{const key=identityKey(r);if(!key)return;if(!map.has(key))map.set(key,new Set());map.get(key).add(r.signature);});
+  return new Set([...map.entries()].filter(([,sigs])=>sigs.size>1).map(([key])=>key));
+}
+async function classify(db,records){
+  const {bySig,byIdentity}=await loadExistingForRecords(db,records); const peerConflicts=incomingIdentityConflicts(records);
+  return records.map(r=>{
+    const duplicate=(bySig.get(r.signature)||0)>=r.occurrence;
+    const key=identityKey(r),existing=key?byIdentity.get(key):null;
+    const conflict=!!(!duplicate&&key&&((existing&&[...existing].some(sig=>sig!==r.signature))||peerConflicts.has(key)));
+    return {duplicate,conflict};
+  });
+}
 async function preview(db,inputs){
   if(!Array.isArray(inputs)||inputs.length>250)throw new Error('La vista previa admite hasta 250 registros por bloque.');
   const parsed=inputs.map(input=>{try{return {record:validateRecord(input),error:null};}catch(e){return {record:null,error:e.message};}});
-  const refs=parsed.filter(x=>x.record).map(x=>db.collection('movements').doc('imp_'+hash(x.record.signature+'|'+x.record.occurrence).slice(0,28)));
-  const snaps=refs.length?await db.getAll(...refs):[]; let cursor=0;
-  return parsed.map(x=>x.record?{duplicate:!!snaps[cursor++]?.exists}:{duplicate:false,error:x.error});
+  const valid=parsed.filter(x=>x.record).map(x=>x.record); const statuses=valid.length?await classify(db,valid):[]; let cursor=0;
+  return parsed.map(x=>x.record?statuses[cursor++]:{duplicate:false,conflict:false,error:x.error});
 }
 
 export default async function handler(req,res){
@@ -45,26 +76,26 @@ export default async function handler(req,res){
     }
     if(action==='start'){
       const meta=req.body?.meta||{}; const ref=db.collection('import_batches').doc();
-      await ref.set({status:'processing',fileNames:Array.isArray(meta.fileNames)?meta.fileNames.map(v=>clean(v,220)).slice(0,100):[],parsedCount:Number(meta.parsedCount||0),readyCount:Number(meta.readyCount||0),issueCount:Number(meta.issueCount||0),warningCount:Number(meta.warningCount||0),inserted:0,skipped:0,actorUid:user.uid,actorEmail:user.email||'',startedAt:admin.firestore.FieldValue.serverTimestamp()});
+      await ref.set({status:'processing',fileNames:Array.isArray(meta.fileNames)?meta.fileNames.map(v=>clean(v,220)).slice(0,100):[],parsedCount:Number(meta.parsedCount||0),readyCount:Number(meta.readyCount||0),issueCount:Number(meta.issueCount||0),warningCount:Number(meta.warningCount||0),duplicateCount:Number(meta.duplicateCount||0),conflictCount:Number(meta.conflictCount||0),inserted:0,skipped:0,actorUid:user.uid,actorEmail:user.email||'',startedAt:admin.firestore.FieldValue.serverTimestamp()});
       return res.status(201).json({ok:true,batchId:ref.id});
     }
     if(action==='commit'){
       const batchId=clean(req.body?.batchId,120),inputs=req.body?.records||[]; if(!batchId)throw new Error('Lote requerido.'); if(!Array.isArray(inputs)||inputs.length>200)throw new Error('Cada bloque admite hasta 200 registros.');
       const batchRef=db.collection('import_batches').doc(batchId); const batchSnap=await batchRef.get(); if(!batchSnap.exists)throw new Error('El lote de importación no existe.'); if(batchSnap.data().status!=='processing')throw new Error('El lote ya no está en proceso.');
-      const records=inputs.map(validateRecord); const refs=records.map(r=>db.collection('movements').doc('imp_'+hash(r.signature+'|'+r.occurrence).slice(0,28))); const existing=refs.length?await db.getAll(...refs):[];
-      const write=db.batch(); let inserted=0,skipped=0;
+      const records=inputs.map(validateRecord); const statuses=await classify(db,records); const refs=records.map(r=>db.collection('movements').doc('imp_'+hash(r.signature+'|'+r.occurrence).slice(0,28)));
+      const write=db.batch(); let inserted=0,skipped=0,conflicts=0;
       records.forEach((r,i)=>{
-        if(existing[i]?.exists){skipped++;return;} inserted++;
-        write.set(refs[i],{date:r.date,sourceMonth:r.sourceMonth,sourceYear:r.sourceYear,category:r.category,provider:r.provider,document:r.document,value:r.value,discount:r.discount,detail:r.detail,source:'excel_import',sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow,sourcePeriodMonth:r.sourcePeriodMonth,sourcePeriodYear:r.sourcePeriodYear,legacyNumber:r.legacyNumber,canonicalKey:hash(r.signature),canonicalOccurrence:r.occurrence,importBatchId:batchId,importedByUid:user.uid,importedByEmail:user.email||'',importedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+        if(statuses[i]?.duplicate){skipped++;return;} if(statuses[i]?.conflict){conflicts++;return;} inserted++;
+        write.set(refs[i],{date:r.date,sourceMonth:r.sourceMonth,sourceYear:r.sourceYear,category:r.category,provider:r.provider,document:r.document,value:r.value,discount:r.discount,detail:r.detail,source:'excel_import',sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow,sourcePeriodMonth:r.sourcePeriodMonth,sourcePeriodYear:r.sourcePeriodYear,legacyNumber:r.legacyNumber,canonicalKey:hash(r.signature),canonicalIdentityKey:identityKey(r)?hash(identityKey(r)):null,canonicalOccurrence:r.occurrence,importBatchId:batchId,importedByUid:user.uid,importedByEmail:user.email||'',importedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
       });
-      write.update(batchRef,{inserted:admin.firestore.FieldValue.increment(inserted),skipped:admin.firestore.FieldValue.increment(skipped)});
-      const log=db.collection('activity_log').doc();write.set(log,{action:'import_chunk',entityType:'import_batch',entityId:batchId,actorUid:user.uid,actorEmail:user.email||'',inserted,skipped,createdAt:admin.firestore.FieldValue.serverTimestamp()});await write.commit();
-      return res.status(200).json({ok:true,inserted,skipped});
+      write.update(batchRef,{inserted:admin.firestore.FieldValue.increment(inserted),skipped:admin.firestore.FieldValue.increment(skipped),conflictsSkipped:admin.firestore.FieldValue.increment(conflicts)});
+      const log=db.collection('activity_log').doc();write.set(log,{action:'import_chunk',entityType:'import_batch',entityId:batchId,actorUid:user.uid,actorEmail:user.email||'',inserted,skipped,conflicts,createdAt:admin.firestore.FieldValue.serverTimestamp()});await write.commit();
+      return res.status(200).json({ok:true,inserted,skipped,conflicts});
     }
     if(action==='finish'){
       const batchId=clean(req.body?.batchId,120);if(!batchId)throw new Error('Lote requerido.');const ref=db.collection('import_batches').doc(batchId);const snap=await ref.get();if(!snap.exists)throw new Error('Lote no encontrado.');
-      await ref.update({status:'completed',completedAt:admin.firestore.FieldValue.serverTimestamp(),reportedInserted:Number(req.body?.inserted||0),reportedSkipped:Number(req.body?.skipped||0)});
-      await db.collection('activity_log').add({action:'import_complete',entityType:'import_batch',entityId:batchId,actorUid:user.uid,actorEmail:user.email||'',inserted:Number(req.body?.inserted||0),skipped:Number(req.body?.skipped||0),createdAt:admin.firestore.FieldValue.serverTimestamp()});
+      await ref.update({status:'completed',completedAt:admin.firestore.FieldValue.serverTimestamp(),reportedInserted:Number(req.body?.inserted||0),reportedSkipped:Number(req.body?.skipped||0),reportedConflicts:Number(req.body?.conflicts||0)});
+      await db.collection('activity_log').add({action:'import_complete',entityType:'import_batch',entityId:batchId,actorUid:user.uid,actorEmail:user.email||'',inserted:Number(req.body?.inserted||0),skipped:Number(req.body?.skipped||0),conflicts:Number(req.body?.conflicts||0),createdAt:admin.firestore.FieldValue.serverTimestamp()});
       return res.status(200).json({ok:true});
     }
     if(action==='revert'){

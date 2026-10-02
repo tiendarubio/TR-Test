@@ -270,11 +270,11 @@
         </div>
 
         <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between gap-2"><div><h2 class="h5 mb-1">Vista previa y revisión</h2><p id="importPreviewSummary" class="small text-secondary mb-0">Analiza uno o varios archivos antes de importar.</p></div><span class="small text-secondary">Los duplicados no se vuelven a cargar.</span></div>
+          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between gap-2"><div><h2 class="h5 mb-1">Vista previa y revisión</h2><p id="importPreviewSummary" class="small text-secondary mb-0">Analiza uno o varios archivos antes de importar.</p></div><span class="small text-secondary">Los duplicados se omiten y los conflictos se detienen para revisión.</span></div>
           <div class="table-responsive import-issues-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Archivo</th><th>Origen</th><th>Fecha</th><th>Proveedor</th><th class="text-end">Valor</th><th>Observación</th></tr></thead><tbody id="importIssueTable"></tbody></table></div>
         </div>
 
-        <div class="alert alert-info border-0 shadow-sm"><i class="fa-solid fa-circle-info me-2"></i><strong>Regla de seguridad:</strong> los registros con errores no se importan. Las advertencias, como una fecha fuera del mes nominal del archivo, se conservan para que puedas decidir sin que la aplicación altere tu información.</div>
+        <div class="alert alert-info border-0 shadow-sm"><i class="fa-solid fa-circle-info me-2"></i><strong>Regla de seguridad:</strong> los registros con errores no se importan. Los duplicados exactos se omiten automáticamente. Si el mismo proveedor + documento/referencia aparece con datos diferentes, se marca como conflicto y tampoco se importa automáticamente. Las advertencias, como una fecha fuera del mes nominal del archivo, se conservan para revisión.</div>
 
         <div class="card border-0 shadow-sm mt-4">
           <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Historial de importaciones</h2><p class="small text-secondary mb-0">Cada lote queda identificado. Un Administrador puede revertir un lote sin afectar movimientos creados manualmente.</p></div>

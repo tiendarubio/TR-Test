@@ -55,11 +55,25 @@
   function canonicalSignature(r){
     return [r.date||'',r.category||'',norm(r.provider),norm(r.document),Number(r.value||0).toFixed(2),Number(r.discount||0).toFixed(2),norm(r.detail)].join('|');
   }
+  function identityKey(r){
+    const doc=norm(r.document);
+    return doc?`${norm(r.provider)}|${doc}`:'';
+  }
   function recalcOccurrences(records){
     const seen=new Map(); records.forEach(r=>{const sig=canonicalSignature(r); const occ=(seen.get(sig)||0)+1;seen.set(sig,occ);r.signature=sig;r.occurrence=occ;});
   }
-  function existingCounts(){
-    const map=new Map(); (global.TRData?.getMovements?.(global.HISTORICAL_DATA?.movements||[])||[]).forEach(r=>{const s=canonicalSignature(r);map.set(s,(map.get(s)||0)+1)}); return map;
+  function existingIndex(){
+    const counts=new Map(), identities=new Map();
+    (global.TRData?.getMovements?.(global.HISTORICAL_DATA?.movements||[])||[]).forEach(r=>{
+      const sig=canonicalSignature(r); counts.set(sig,(counts.get(sig)||0)+1);
+      const key=identityKey(r); if(key){if(!identities.has(key))identities.set(key,new Set());identities.get(key).add(sig);}
+    });
+    return {counts,identities};
+  }
+  function incomingConflicts(){
+    const map=new Map();
+    state.records.filter(r=>r.valid).forEach(r=>{const key=identityKey(r);if(!key)return;if(!map.has(key))map.set(key,new Set());map.get(key).add(r.signature);});
+    return new Set([...map.entries()].filter(([,sigs])=>sigs.size>1).map(([key])=>key));
   }
   function validateRecord(r,period){
     const errors=[],warnings=[];
@@ -141,39 +155,46 @@
     const s=$('importStatus'); if(s)s.innerHTML=on?`<span class="spinner-border spinner-border-sm me-2"></span>${esc(msg)}`:'';
   }
   function summary(){
-    const valid=state.records.filter(r=>r.valid); const duplicates=valid.filter(r=>r.duplicate); const warnings=state.records.filter(r=>r.warnings?.length); const invalid=state.records.filter(r=>!r.valid);
-    return {total:state.records.length,valid:valid.length,duplicates:duplicates.length,warnings:warnings.length,invalid:invalid.length,ready:valid.filter(r=>!r.duplicate).length};
+    const valid=state.records.filter(r=>r.valid); const duplicates=valid.filter(r=>r.duplicate); const conflicts=valid.filter(r=>r.conflict); const warnings=state.records.filter(r=>r.warnings?.length); const invalid=state.records.filter(r=>!r.valid);
+    return {total:state.records.length,valid:valid.length,duplicates:duplicates.length,conflicts:conflicts.length,warnings:warnings.length,invalid:invalid.length,ready:valid.filter(r=>!r.duplicate&&!r.conflict).length};
   }
   function render(){
     const s=summary();
     $('importKpis').innerHTML=[
-      ['Archivos',state.files.length,'fa-solid fa-file-excel'],['Movimientos',s.total,'fa-solid fa-receipt'],['Listos para importar',s.ready,'fa-solid fa-circle-check'],['Requieren revisión',s.invalid+s.warnings,'fa-solid fa-triangle-exclamation']
+      ['Archivos',state.files.length,'fa-solid fa-file-excel'],['Movimientos',s.total,'fa-solid fa-receipt'],['Nuevos para importar',s.ready,'fa-solid fa-circle-check'],['Requieren revisión',s.invalid+s.conflicts+s.warnings,'fa-solid fa-triangle-exclamation']
     ].map(([l,v,i])=>`<div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body d-flex justify-content-between"><div><div class="kpi-label">${l}</div><div class="kpi-value mt-1">${integer.format(v)}</div></div><div class="kpi-icon"><i class="${i}"></i></div></div></div></div>`).join('');
     $('importFileTable').innerHTML=state.files.length?state.files.map(f=>`<tr><td class="fw-semibold">${esc(f.fileName)}</td><td>${f.period.month&&f.period.year?`${String(f.period.month).padStart(2,'0')}/${f.period.year}`:'No detectado'}</td><td class="text-end">${integer.format(f.records.length)}</td><td>${f.fileIssues.length?`<span class="badge text-bg-warning">${f.fileIssues.length} aviso(s)</span>`:'<span class="badge text-bg-success">Reconocido</span>'}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-state">Selecciona archivos para analizarlos.</td></tr>';
-    const problemRows=state.records.map((r,i)=>({r,i})).filter(x=>!x.r.valid||x.r.warnings?.length||x.r.duplicate);
+    const problemRows=state.records.map((r,i)=>({r,i})).filter(x=>!x.r.valid||x.r.warnings?.length||x.r.duplicate||x.r.conflict);
     $('importIssueTable').innerHTML=problemRows.length?problemRows.slice(0,250).map(({r,i})=>{
-      const status=!r.valid?'<span class="badge text-bg-danger">Error</span>':r.duplicate?'<span class="badge text-bg-secondary">Duplicado</span>':'<span class="badge text-bg-warning">Aviso</span>';
-      const messages=[...(r.errors||[]),...(r.warnings||[]),...(r.duplicate?['Ya existe en el historial']:[])].join(' · ');
+      const status=!r.valid?'<span class="badge text-bg-danger">Error</span>':r.conflict?'<span class="badge text-bg-warning">Conflicto</span>':r.duplicate?'<span class="badge text-bg-secondary">Duplicado</span>':'<span class="badge text-bg-warning">Aviso</span>';
+      const messages=[...(r.errors||[]),...(r.warnings||[]),...(r.duplicate?['Ya existe un registro idéntico']:[]),...(r.conflict?['Mismo proveedor y documento/referencia, pero con datos diferentes. No se importará automáticamente.']:[])].join(' · ');
       return `<tr><td>${status}</td><td>${esc(r.sourceFile)}</td><td>${esc(r.sourceSheet)} · fila ${r.sourceRow}</td><td>${r.date?esc(r.date):`<input type="date" class="form-control form-control-sm import-date-fix" data-record-index="${i}" style="min-width:145px">`}</td><td>${esc(r.provider)}</td><td class="text-end">${Number.isFinite(Number(r.value))?money.format(r.value):'—'}</td><td class="small">${esc(messages)}</td></tr>`;
     }).join(''):'<tr><td colspan="7" class="empty-state">No hay incidencias.</td></tr>';
-    $('importPreviewSummary').innerHTML=state.analyzed?`<strong>${integer.format(s.ready)}</strong> registros listos · ${integer.format(s.duplicates)} duplicados · ${integer.format(s.invalid)} con error · ${integer.format(s.warnings)} con avisos.`:'Analiza uno o varios archivos antes de importar.';
+    $('importPreviewSummary').innerHTML=state.analyzed?`<strong>${integer.format(s.ready)}</strong> nuevos · ${integer.format(s.duplicates)} duplicados · ${integer.format(s.conflicts)} conflictos · ${integer.format(s.invalid)} con error · ${integer.format(s.warnings)} con avisos.`:'Analiza uno o varios archivos antes de importar.';
     $('importCommitBtn').disabled=state.busy||!state.previewed||s.ready===0||!(global.TRAuth?.canImport?.());
     if($('importAdminNote')) $('importAdminNote').classList.toggle('d-none',global.TRAuth?.canImport?.());
     if($('importModeNote')) $('importModeNote').innerHTML=global.TRData?.state?.mode==='firebase'?'<i class="fa-solid fa-database me-2"></i><strong>Producción:</strong> la vista previa consulta Firestore y solo habilita registros que aún no existen.':'<i class="fa-solid fa-flask me-2"></i><strong>Modo demo:</strong> el histórico 2026 ya viene precargado; al analizar esos mismos Excel aparecerán como duplicados. Esto permite probar la detección antes de conectar Firestore.';
   }
   function applyDemoDuplicates(){
-    const counts=existingCounts(); state.records.forEach(r=>{r.duplicate=r.valid&&((counts.get(r.signature)||0)>=r.occurrence)}); state.previewed=true;
+    const {counts,identities}=existingIndex(); const peerConflicts=incomingConflicts();
+    state.records.forEach(r=>{
+      r.duplicate=!!(r.valid&&((counts.get(r.signature)||0)>=r.occurrence));
+      const key=identityKey(r); const existingSigs=key?identities.get(key):null;
+      r.conflict=!!(r.valid&&!r.duplicate&&key&&((existingSigs&&[...existingSigs].some(sig=>sig!==r.signature))||peerConflicts.has(key)));
+    });
+    state.previewed=true;
   }
   async function api(action,payload={}){
     const token=await global.TRAuth.token(); const res=await fetch('/api/imports',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...payload})});
     const data=await res.json().catch(()=>({})); if(!res.ok||!data.ok)throw new Error(data.error||'No se pudo completar la importación.'); return data;
   }
   async function applyProductionDuplicates(){
-    const valid=state.records.map((r,i)=>({r,i})).filter(x=>x.r.valid); valid.forEach(x=>x.r.duplicate=false);
+    const valid=state.records.map((r,i)=>({r,i})).filter(x=>x.r.valid); const peerConflicts=incomingConflicts(); valid.forEach(x=>{x.r.duplicate=false;x.r.conflict=false;});
     for(let p=0;p<valid.length;p+=200){
       const part=valid.slice(p,p+200); const data=await api('preview',{records:part.map(x=>serialize(x.r))});
-      data.results.forEach((result,j)=>{part[j].r.duplicate=!!result.duplicate;});
+      data.results.forEach((result,j)=>{part[j].r.duplicate=!!result.duplicate;part[j].r.conflict=!!result.conflict;});
     }
+    valid.forEach(({r})=>{if(!r.duplicate&&identityKey(r)&&peerConflicts.has(identityKey(r)))r.conflict=true;});
     state.previewed=true;
   }
   function serialize(r){return {date:r.date,category:r.category,provider:r.provider,document:r.document,value:Number(r.value),discount:Number(r.discount||0),detail:r.detail||'',sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow,sourcePeriodMonth:r.sourcePeriodMonth||null,sourcePeriodYear:r.sourcePeriodYear||null,legacyNumber:r.legacyNumber??null,signature:r.signature,occurrence:r.occurrence};}
@@ -199,19 +220,19 @@
   function saveLocalBatches(v){localStorage.setItem(LOCAL_BATCH_KEY,JSON.stringify(v))}
   async function commit(){
     if(!global.TRAuth?.canImport?.()){alert('Solo un Administrador puede importar histórico.');return;}
-    const ready=state.records.filter(r=>r.valid&&!r.duplicate); if(!ready.length){alert('No hay registros nuevos listos para importar.');return;}
+    const ready=state.records.filter(r=>r.valid&&!r.duplicate&&!r.conflict); if(!ready.length){alert('No hay registros nuevos listos para importar. Los duplicados y conflictos no se cargarán.');return;}
     const warnings=ready.filter(r=>r.warnings?.length).length;
-    const ok=confirm(`Se importarán ${ready.length} movimientos${warnings?` (${warnings} con avisos revisables)`:''}. ¿Deseas continuar?`); if(!ok)return;
+    const s=summary(); const ok=confirm(`Se importarán únicamente ${ready.length} registros nuevos. Se omitirán ${s.duplicates} duplicados y ${s.conflicts} conflictos${warnings?`; ${warnings} nuevos tienen avisos`:''}. ¿Deseas continuar?`); if(!ok)return;
     setBusy(true,'Importando movimientos...');
     try{
       if(global.TRData.state.mode!=='firebase'){
         const batchId='demoimp_'+Date.now(); const meta={id:batchId,status:'completed',startedAt:new Date().toISOString(),completedAt:new Date().toISOString(),recordCount:ready.length,fileNames:[...new Set(ready.map(r=>r.sourceFile))]};
         await global.TRData.importDemoRecords(ready.map(serialize),meta); const bs=localBatches();bs.unshift(meta);saveLocalBatches(bs.slice(0,50));
       }else{
-        const start=await api('start',{meta:{fileNames:[...new Set(ready.map(r=>r.sourceFile))],parsedCount:state.records.length,readyCount:ready.length,issueCount:state.records.filter(r=>!r.valid).length,warningCount:warnings}}); const batchId=start.batchId;
-        let inserted=0,skipped=0;
-        for(let i=0;i<ready.length;i+=200){const d=await api('commit',{batchId,records:ready.slice(i,i+200).map(serialize)});inserted+=d.inserted;skipped+=d.skipped; $('importStatus').textContent=`Importando ${Math.min(i+200,ready.length)}/${ready.length}…`;}
-        await api('finish',{batchId,inserted,skipped}); await global.TRData.refresh();
+        const start=await api('start',{meta:{fileNames:[...new Set(ready.map(r=>r.sourceFile))],parsedCount:state.records.length,readyCount:ready.length,duplicateCount:s.duplicates,conflictCount:s.conflicts,issueCount:state.records.filter(r=>!r.valid).length,warningCount:warnings}}); const batchId=start.batchId;
+        let inserted=0,skipped=0,conflicts=0;
+        for(let i=0;i<ready.length;i+=200){const d=await api('commit',{batchId,records:ready.slice(i,i+200).map(serialize)});inserted+=d.inserted;skipped+=d.skipped;conflicts+=Number(d.conflicts||0); $('importStatus').textContent=`Importando ${Math.min(i+200,ready.length)}/${ready.length}…`;}
+        await api('finish',{batchId,inserted,skipped,conflicts}); await global.TRData.refresh();
       }
       state.records=[];state.files=[];state.selectedFiles=[];state.analyzed=false;state.previewed=false;$('importFiles').value='';render();await loadHistory();document.dispatchEvent(new CustomEvent('tr:data-updated'));alert('Importación completada correctamente.');
     }catch(e){console.error(e);alert('La importación no pudo completarse: '+(e.message||e));}
