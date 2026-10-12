@@ -47,11 +47,14 @@
     <aside class="sidebar border-end bg-white">
       <nav class="nav nav-pills flex-column gap-1 p-3" aria-label="Navegación principal">
         <button class="nav-link active text-start" data-view="dashboard"><i class="fa-solid fa-chart-pie me-2"></i>Inicio</button>
-        <button class="nav-link text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
-        <button class="nav-link text-start" data-view="debts"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Cuentas por pagar</button>
-        <button class="nav-link text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
-        <button class="nav-link text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
-        <button id="navImport" class="nav-link text-start" data-view="import" data-admin-only><i class="fa-solid fa-file-import me-2"></i>Importar histórico</button>
+        <div class="module-nav-label finance-label">TR-FINANZAS · FLUJO DE EFECTIVO</div>
+        <button class="nav-link module-finance text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
+        <button class="nav-link module-finance text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
+        <button class="nav-link module-finance text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
+        <div class="module-nav-label debt-label">CUENTAS POR PAGAR</div>
+        <button class="nav-link module-debt text-start" data-view="debts"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Seguimiento de deuda</button>
+        <div class="module-nav-label admin-label">ADMINISTRACIÓN</div>
+        <button id="navImport" class="nav-link text-start" data-view="import" data-admin-only><i class="fa-solid fa-file-import me-2"></i>Importar archivos</button>
         <button class="nav-link text-start" data-view="settings"><i class="fa-solid fa-gear me-2"></i>Configuración</button>
       </nav>
       <div class="sidebar-footer p-3 small text-secondary border-top">
@@ -114,7 +117,7 @@
         <div class="card border-0 shadow-sm mt-4">
           <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div><h2 class="h5 mb-1">Resumen por categoría</h2><p class="small text-secondary mb-0">Haz clic en una categoría para ver sus movimientos.</p></div>
-            <button class="btn btn-primary btn-sm" data-new-movement><i class="fa-solid fa-plus me-1"></i>Nuevo movimiento</button>
+            <button class="btn btn-primary btn-sm" data-new-movement><i class="fa-solid fa-plus me-1"></i>Registrar en TR-Finanzas</button>
           </div>
           <div class="table-responsive">
             <table class="table align-middle mb-0">
@@ -127,8 +130,8 @@
 
       <section id="view-movements" class="app-view d-none">
         <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow">Operación</div><h1 class="h3 mb-1">Movimientos</h1><p class="text-secondary mb-0">Buscar, registrar y revisar operaciones desde un solo lugar.</p></div>
-          <button class="btn btn-primary" data-new-movement><i class="fa-solid fa-plus me-2"></i>Nuevo movimiento</button>
+          <div><div class="eyebrow module-eyebrow finance-text">Módulo · TR-Finanzas</div><h1 class="h3 mb-1">Flujo de efectivo · Movimientos</h1><p class="text-secondary mb-0">Aquí se registran y consultan únicamente movimientos financieros.</p></div>
+          <button class="btn btn-primary" data-new-movement><i class="fa-solid fa-plus me-2"></i>Registrar en TR-Finanzas</button>
         </div>
 
         <div class="card border-0 shadow-sm mb-4">
@@ -162,8 +165,13 @@
 
       <section id="view-debts" class="app-view d-none">
         <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow">Seguimiento</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Seguimiento del consolidado de deuda, vencimientos, pagos y saldo pendiente.</p></div>
+          <div><div class="eyebrow module-eyebrow debt-text">Módulo · Cuentas por pagar</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Seguimiento independiente del consolidado de deuda, vencimientos, pagos y saldo pendiente.</p></div>
           <button id="debtRefresh" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate me-2"></i>Actualizar</button>
+        </div>
+
+        <div class="module-context module-context-debt mb-4">
+          <div><strong>Estás trabajando en: Cuentas por pagar</strong><div class="small">La carga actualiza obligaciones. Solo una obligación realmente nueva genera una C X P en TR-Finanzas.</div></div>
+          <span class="module-pill debt-pill"><i class="fa-solid fa-file-invoice-dollar me-1"></i>Destino principal: Cuentas por pagar</span>
         </div>
 
         <div id="debtKpis" class="row g-3 mb-4"></div>
@@ -184,7 +192,7 @@
 
         <div id="debtImportAdminNote" class="alert alert-secondary d-none"><i class="fa-solid fa-lock me-2"></i>La consulta del módulo está disponible, pero solo un Administrador puede cargar un nuevo consolidado.</div>
         <div id="debtImportCard" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Actualizar desde Excel</h2><p class="small text-secondary mb-0">Puedes cargar nuevamente el mismo consolidado. Las obligaciones existentes se actualizan y únicamente las nuevas pasan a TR-Finanzas como C X P.</p></div>
+          <div class="card-header bg-white border-0 pt-4 px-4"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><h2 class="h5 mb-1">Actualizar Cuentas por pagar desde Excel</h2><p class="small text-secondary mb-0">Puedes cargar nuevamente el mismo consolidado. Las existentes se actualizan; solo las obligaciones nuevas generan C X P en TR-Finanzas.</p></div><span class="module-pill debt-pill"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Destino: Cuentas por pagar</span></div></div>
           <div class="card-body p-4">
             <div class="import-dropzone p-4 text-center">
               <input id="debtFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls" multiple style="max-width:680px">
@@ -280,12 +288,16 @@
 
       <section id="view-import" class="app-view d-none">
         <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Importar histórico</h1><p class="text-secondary mb-0">Convierte los Excel existentes en movimientos del sistema sin importar a ciegas.</p></div>
+          <div><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Importar archivos</h1><p class="text-secondary mb-0">La aplicación identifica el tipo de Excel y muestra claramente qué módulo recibirá los datos antes de guardar.</p></div>
           <span class="badge text-bg-dark"><i class="fa-solid fa-shield-halved me-1"></i>Solo Administrador</span>
         </div>
 
         <div id="importAdminNote" class="alert alert-danger d-none">Tu rol actual no permite realizar importaciones.</div>
         <div id="importModeNote" class="alert alert-secondary"></div>
+        <div class="module-destination-grid mb-4">
+          <div class="module-destination-card finance-destination"><div class="module-destination-icon"><i class="fa-solid fa-chart-line"></i></div><div><strong>TR-Finanzas · Flujo de efectivo</strong><div class="small text-secondary">Excel históricos de movimientos, categorías, proveedores y valores.</div></div></div>
+          <div class="module-destination-card debt-destination"><div class="module-destination-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div><div><strong>Cuentas por pagar</strong><div class="small text-secondary">DEUDA CONSOLIDADO: obligaciones, pagos, saldos y vencimientos.</div></div></div>
+        </div>
 
         <div class="card border-0 shadow-sm mb-4">
           <div class="card-body p-4">
@@ -345,6 +357,10 @@
         <form id="movementForm">
           <div class="modal-header"><div><h2 id="movementModalTitle" class="modal-title fs-5">Nuevo movimiento</h2><div id="movementModalSubtitle" class="small text-secondary">Solo muestra los campos necesarios.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
           <div class="modal-body p-4">
+            <div class="module-context module-context-finance mb-4">
+              <div><strong>Registro dirigido a TR-Finanzas</strong><div class="small">Este formulario crea o modifica un movimiento de flujo de efectivo. No crea una cuenta por pagar.</div></div>
+              <span class="module-pill finance-pill"><i class="fa-solid fa-chart-line me-1"></i>Destino: TR-Finanzas</span>
+            </div>
             <div class="row g-3">
               <div class="col-md-4"><label class="form-label">Fecha</label><input id="newDate" type="date" class="form-control" required></div>
               <div class="col-md-8"><label class="form-label">Categoría</label><select id="newCategory" class="form-select" required></select></div>
@@ -393,7 +409,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="data/historico-2026.js"></script>
-  <script src="data/deuda-consolidado-2026.js"></script>
   <script src="assets/js/auth.js"></script>
   <script src="assets/js/data-service.js"></script>
   <script src="assets/js/debts.js"></script>

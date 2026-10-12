@@ -104,7 +104,7 @@
     try{const w=global.XLSX.read(arrayBuffer,{type:'array',sheetRows:20,cellDates:true});return w.SheetNames.some(n=>detectHeader(global.XLSX.utils.sheet_to_json(w.Sheets[n],{header:1,defval:'',raw:true}))>=0)}catch{return false}
   }
   function serialize(r){return {date:r.date,quedan:r.quedan,provider:r.provider,ccf:r.ccf,value:Number(r.value),days:Number(r.days||0),dueDate:r.dueDate||'',paidValue:Number(r.paidValue||0),balance:Number(r.balance||0),monthLabel:r.monthLabel||'',sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow,sourceYear:r.sourceYear||null};}
-  function localRecords(){try{const raw=localStorage.getItem(LOCAL_KEY);return raw?JSON.parse(raw):[...(global.INITIAL_DEBT_DATA||[])];}catch{return [...(global.INITIAL_DEBT_DATA||[])]}}
+  function localRecords(){try{const raw=localStorage.getItem(LOCAL_KEY);return raw?JSON.parse(raw):[];}catch{return []}}
   function saveLocal(records){localStorage.setItem(LOCAL_KEY,JSON.stringify(records))}
   async function api(action,payload={},method='POST'){
     const token=await global.TRAuth.token();
