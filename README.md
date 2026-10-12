@@ -112,3 +112,13 @@ El modelo deja espacio para presupuesto por categoría, comparaciones interanual
 
 ## Buscador de proveedores
 La modal **Nuevo movimiento** consulta la misma estructura de proveedores utilizada por TR-Recepcion mediante `/api/proveedores`. En Vercel deben existir `GOOGLE_SHEETS_API_KEY` y `GOOGLE_SHEETS_ID`; opcionalmente `GOOGLE_SHEETS_PROV_RANGE` (por defecto `proveedores!C2:C1000`). Si la consulta remota no está disponible, el buscador usa temporalmente los proveedores ya presentes en los movimientos cargados.
+
+
+## Módulo Cuentas por pagar
+
+- Reconoce automáticamente libros con la estructura `FECHA / QUEDANS / PROVEEDOR / CCF / VALOR / DIAS / FECHA PAGO / VALOR PAGO / DIFERENCIA`.
+- El archivo puede cargarse desde el propio módulo o desde **Importar histórico**; si se detecta como consolidado de deuda, se redirige automáticamente al módulo correcto.
+- La identidad de una obligación se construye con proveedor + CCF + QUEDAN + fecha + valor. Los cambios de días, vencimiento, valor pagado o saldo actualizan la obligación existente en vez de crear una nueva.
+- Solo una obligación realmente nueva genera un movimiento `C X P` en TR-Finanzas. Antes de crear ese movimiento se verifica que no exista ya un C X P equivalente.
+- En el Excel original, la columna `FECHA PAGO` se trata como **vencimiento**, porque el libro la calcula como `FECHA + DIAS`.
+- Fechas de factura posteriores al año nominal del consolidado se bloquean para revisión y no pasan automáticamente a TR-Finanzas.

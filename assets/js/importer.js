@@ -203,11 +203,16 @@
     if(!global.XLSX||!global.JSZip){alert('No se cargaron las librerías necesarias para leer Excel/ZIP.');return;}
     setBusy(true,'Analizando archivos...');
     try{
-      const expanded=await expandSelectedFiles(selected); const parsed=[]; const records=[];
-      for(const item of expanded){const r=parseWorkbook(item.name,item.buffer);r.container=item.container;parsed.push(r);records.push(...r.records);}
-      state.files=parsed;state.records=records;state.analyzed=true;state.previewed=false;recalcOccurrences(state.records);
-      if(global.TRData?.state?.mode==='firebase')await applyProductionDuplicates();else applyDemoDuplicates();
-      render();
+      const expanded=await expandSelectedFiles(selected); const parsed=[]; const records=[]; const debtItems=[];
+      for(const item of expanded){
+        if(global.TRDebts?.isDebtWorkbook?.(item.buffer)){debtItems.push(item);continue;}
+        const r=parseWorkbook(item.name,item.buffer);r.container=item.container;parsed.push(r);records.push(...r.records);
+      }
+      if(debtItems.length) await global.TRDebts.analyzeExternalFiles(debtItems);
+      state.files=parsed;state.records=records;state.analyzed=parsed.length>0;state.previewed=false;recalcOccurrences(state.records);
+      if(parsed.length){if(global.TRData?.state?.mode==='firebase')await applyProductionDuplicates();else applyDemoDuplicates();render();}
+      else{state.previewed=false;render();}
+      if(debtItems.length&&parsed.length)alert(`${debtItems.length} archivo(s) de deuda consolidada fueron enviados automáticamente al módulo Cuentas por pagar. Los demás archivos continúan en Importar histórico.`);
     }catch(e){console.error(e);alert('No se pudieron analizar los archivos: '+(e.message||e));}
     finally{setBusy(false);render();}
   }

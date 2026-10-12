@@ -140,6 +140,7 @@
     qsa('[data-view]').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
     if (view === 'dashboard') renderDashboard();
     if (view === 'movements') renderMovements();
+    if (view === 'debts') window.TRDebts?.render?.();
     if (view === 'compare') renderCompare();
     if (view === 'reports') renderReports();
     if (view === 'import') { window.TRImporter?.render?.(); window.TRImporter?.loadHistory?.(); }
@@ -632,8 +633,10 @@
       const del=e.target.closest('[data-delete-movement]'); if(del) openDeleteMovement(del.dataset.deleteMovement);
     });
 
+    await window.TRDebts?.init?.();
     await window.TRImporter?.init?.();
-    document.addEventListener('tr:data-updated',()=>{refreshPeriodSelectors();renderDashboard();renderMovements();renderCompare();renderReports();renderSettings();});
+    document.addEventListener('tr:navigate',e=>{if(e.detail?.view)switchView(e.detail.view);});
+    document.addEventListener('tr:data-updated',()=>{refreshPeriodSelectors();renderDashboard();renderMovements();renderCompare();renderReports();renderSettings();window.TRDebts?.render?.();});
     renderDashboard(); renderMovements(); renderCompare(); renderReports(); renderSettings();
   }
 

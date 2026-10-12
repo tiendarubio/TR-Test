@@ -48,6 +48,7 @@
       <nav class="nav nav-pills flex-column gap-1 p-3" aria-label="Navegación principal">
         <button class="nav-link active text-start" data-view="dashboard"><i class="fa-solid fa-chart-pie me-2"></i>Inicio</button>
         <button class="nav-link text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
+        <button class="nav-link text-start" data-view="debts"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Cuentas por pagar</button>
         <button class="nav-link text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
         <button class="nav-link text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
         <button id="navImport" class="nav-link text-start" data-view="import" data-admin-only><i class="fa-solid fa-file-import me-2"></i>Importar histórico</button>
@@ -159,6 +160,46 @@
         </div>
       </section>
 
+      <section id="view-debts" class="app-view d-none">
+        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+          <div><div class="eyebrow">Seguimiento</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Seguimiento del consolidado de deuda, vencimientos, pagos y saldo pendiente.</p></div>
+          <button id="debtRefresh" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate me-2"></i>Actualizar</button>
+        </div>
+
+        <div id="debtKpis" class="row g-3 mb-4"></div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body p-3 p-lg-4">
+            <div class="row g-3 align-items-end">
+              <div class="col-lg-7"><label class="form-label small">Buscar</label><input id="debtSearch" class="form-control" placeholder="Proveedor, CCF o QUEDAN..."></div>
+              <div class="col-lg-5"><label class="form-label small">Estado</label><select id="debtStatus" class="form-select"><option value="">Todos</option><option value="pending">Pendientes</option><option value="overdue">Vencidas</option><option value="partial">Pago parcial</option><option value="paid">Pagadas</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Consolidado</h2><p class="small text-secondary mb-0">“Fecha pago” del Excel se interpreta como vencimiento porque el archivo la calcula como Fecha + Días.</p></div>
+          <div class="table-responsive debt-table-wrap"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>QUEDAN</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-center">Días</th><th>Vencimiento</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Estado</th></tr></thead><tbody id="debtTable"></tbody></table></div>
+        </div>
+
+        <div id="debtImportAdminNote" class="alert alert-secondary d-none"><i class="fa-solid fa-lock me-2"></i>La consulta del módulo está disponible, pero solo un Administrador puede cargar un nuevo consolidado.</div>
+        <div id="debtImportCard" class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Actualizar desde Excel</h2><p class="small text-secondary mb-0">Puedes cargar nuevamente el mismo consolidado. Las obligaciones existentes se actualizan y únicamente las nuevas pasan a TR-Finanzas como C X P.</p></div>
+          <div class="card-body p-4">
+            <div class="import-dropzone p-4 text-center">
+              <input id="debtFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls" multiple style="max-width:680px">
+              <div class="d-flex flex-wrap justify-content-center gap-2 mt-3"><button id="debtAnalyzeBtn" class="btn btn-dark"><i class="fa-solid fa-magnifying-glass-chart me-2"></i>Analizar consolidado</button><button id="debtCommitBtn" class="btn btn-success" disabled><i class="fa-solid fa-database me-2"></i>Aplicar cambios</button></div>
+              <div id="debtImportStatus" class="small text-secondary mt-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Vista previa de la carga</h2><p id="debtPreviewSummary" class="small text-secondary mb-0">Carga un consolidado para compararlo con lo existente.</p></div>
+          <div class="table-responsive debt-preview-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Fila</th><th>Fecha</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Observación</th></tr></thead><tbody id="debtPreviewTable"><tr><td colspan="9" class="empty-state">Sin vista previa.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
       <section id="view-compare" class="app-view d-none">
         <div class="page-heading mb-4">
           <div class="eyebrow">Análisis</div><h1 class="h3 mb-1">Comparar</h1><p class="text-secondary mb-0">Comparaciones útiles sin construir reportes manualmente.</p>
@@ -265,7 +306,7 @@
         <div id="importKpis" class="row g-3 mb-4"></div>
 
         <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Archivos reconocidos</h2><p class="small text-secondary mb-0">El sistema detecta automáticamente las hojas actuales y también admite un formato genérico con columna Categoría.</p></div>
+          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Archivos reconocidos</h2><p class="small text-secondary mb-0">El sistema detecta automáticamente las hojas actuales, el formato genérico con columna Categoría y el consolidado de deuda, que se envía al módulo Cuentas por pagar.</p></div>
           <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Archivo</th><th>Periodo detectado</th><th class="text-end">Movimientos</th><th>Estado</th></tr></thead><tbody id="importFileTable"></tbody></table></div>
         </div>
 
@@ -352,8 +393,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
   <script src="data/historico-2026.js"></script>
+  <script src="data/deuda-consolidado-2026.js"></script>
   <script src="assets/js/auth.js"></script>
   <script src="assets/js/data-service.js"></script>
+  <script src="assets/js/debts.js"></script>
   <script src="assets/js/importer.js"></script>
   <script src="assets/js/app.js"></script>
 </body>

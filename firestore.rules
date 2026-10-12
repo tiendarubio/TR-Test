@@ -32,9 +32,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /debts/{id} {
+      // Consulta y escritura únicamente mediante /api/debts para validar, deduplicar y auditar.
+      allow read, create, update, delete: if false;
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || roleIs(['admin']));
       allow write: if false;
     }
   }
 }
+
