@@ -36,9 +36,56 @@ export default async function handler(req,res){
     }
     if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return res.status(405).json({ok:false,error:'Método no permitido.'});}
     const user=await requireUser(req,['admin']);const action=clean(req.body?.action,30);const inputs=req.body?.records||[];if(!Array.isArray(inputs)||inputs.length>250)throw new Error('Máximo 250 registros por bloque.');const parsed=inputs.map(validate);
+    if(action==='create_manual'){
+      await requireUser(req,['admin','contabilidad']);
+      const input=req.body?.record||{};
+      const date=clean(input.date,10),days=Number(input.days||0);
+      const dueDate=clean(input.dueDate,10);
+      if(!Number.isInteger(days)||days<0||days>3650)throw new Error('Días de crédito inválidos.');
+      const r=validate({...input,days,dueDate,paidValue:0,balance:Number(input.value),sourceFile:'',sourceSheet:'',sourceYear:null});
+      if(!r.ccf&&!r.quedan)throw new Error('Es necesario indicar CCF/factura o QUEDAN.');
+      const id='debt_'+hash(r.identity).slice(0,32),ref=db.collection('debts').doc(id);
+      const result=await db.runTransaction(async tx=>{
+        const old=await tx.get(ref);if(old.exists)throw new Error('Ya existe esta obligación.');
+        const mref=db.collection('movements').doc('debtmov_'+hash(r.identity).slice(0,28));
+        const existingMove=await tx.get(mref);
+        const payload={...r,canonicalIdentity:hash(r.identity),source:'manual',createdByUid:user.uid,createdByEmail:user.email||'',updatedByUid:user.uid,updatedByEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+        delete payload.identity;delete payload.snapshot;
+        tx.create(ref,payload);
+        if(!existingMove.exists)tx.create(mref,{date:r.date,sourceMonth:Number(r.date.slice(5,7)),sourceYear:Number(r.date.slice(0,4)),category:'C X P',provider:r.provider,document:r.ccf||r.quedan,value:r.value,discount:0,detail:`Cuenta por pagar${r.quedan?` · QUEDAN ${r.quedan}`:''}${r.ccf?` · CCF ${r.ccf}`:''}`,source:'debt_manual',debtId:id,createdByUid:user.uid,createdByEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+        tx.create(db.collection('activity_log').doc(),{action:'debt_manual_create',entityType:'debt',entityId:id,actorUid:user.uid,actorEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp()});
+        return {id,financeInserted:!existingMove.exists};
+      });return res.status(200).json({ok:true,...result});
+    }
+    if(action==='edit_manual'){
+      await requireUser(req,['admin','contabilidad']);
+      const id=clean(req.body?.id,100),days=Number(req.body?.days),dueDate=clean(req.body?.dueDate,10),quedan=clean(req.body?.quedan,120);
+      if(!id||!Number.isInteger(days)||days<0||days>3650||dueDate&&!validDate(dueDate))throw new Error('Datos de edición inválidos.');
+      const ref=db.collection('debts').doc(id);
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref);if(!snap.exists)throw new Error('Obligación no encontrada.');
+        const old=snap.data();if(old.quedan!==quedan)throw new Error('El número de QUEDAN identifica la obligación y no se puede cambiar.');
+        tx.update(ref,{days,dueDate,updatedByUid:user.uid,updatedByEmail:user.email||'',updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+        tx.create(db.collection('activity_log').doc(),{action:'debt_manual_edit',entityType:'debt',entityId:id,before:{days:old.days,dueDate:old.dueDate},after:{days,dueDate},actorUid:user.uid,actorEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp()});
+      });return res.status(200).json({ok:true});
+    }
+    if(action==='register_payment'){
+      await requireUser(req,['admin','contabilidad']);
+      const id=clean(req.body?.id,100),amount=Number(req.body?.amount),date=clean(req.body?.paymentDate,10),note=clean(req.body?.note,300);
+      if(!id||!validDate(date)||!Number.isFinite(amount)||amount<=0||round2(amount)!==amount)throw new Error('Pago o fecha inválidos.');
+      const ref=db.collection('debts').doc(id),paymentRef=db.collection('debt_payments').doc();
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref);if(!snap.exists)throw new Error('Obligación no encontrada.');
+        const old=snap.data(),balance=round2(old.balance),paid=round2(old.paidValue);
+        if(amount>balance+.001)throw new Error('El pago excede el saldo pendiente.');
+        tx.update(ref,{paidValue:round2(paid+amount),balance:round2(balance-amount),manualPaymentCount:admin.firestore.FieldValue.increment(1),updatedByUid:user.uid,updatedByEmail:user.email||'',updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+        tx.create(paymentRef,{debtId:id,date,amount,note,actorUid:user.uid,actorEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp()});
+        tx.create(db.collection('activity_log').doc(),{action:'debt_payment',entityType:'debt',entityId:id,paymentId:paymentRef.id,amount,date,actorUid:user.uid,actorEmail:user.email||'',createdAt:admin.firestore.FieldValue.serverTimestamp()});
+      });return res.status(200).json({ok:true,paymentId:paymentRef.id});
+    }
     if(action==='preview'){const results=await classify(db,parsed);return res.status(200).json({ok:true,results});}
     if(action==='commit'){
-      if(parsed.length>120)throw new Error('Máximo 120 registros por bloque de guardado.');const statuses=await classify(db,parsed);const newRecords=parsed.filter((r,i)=>statuses[i].state==='new');const movementKeys=await existingMovementKeys(db,newRecords);const batch=db.batch();let newCount=0,updatedCount=0,unchangedCount=0,financeInserted=0,financeSkipped=0;
+      if(parsed.length>120)throw new Error('Máximo 120 registros por bloque de guardado.');const statuses=await classify(db,parsed);const protectedExisting=await findExisting(db,parsed);parsed.forEach((r,i)=>{const old=protectedExisting.get('debt_'+hash(r.identity).slice(0,32));if(old?.source==='manual'||old?.manualPaymentCount>0){if(statuses[i].state==='update')throw new Error('La importación intenta sobrescribir una obligación gestionada manualmente. Revisa el documento '+(r.ccf||r.quedan));}});const newRecords=parsed.filter((r,i)=>statuses[i].state==='new');const movementKeys=await existingMovementKeys(db,newRecords);const batch=db.batch();let newCount=0,updatedCount=0,unchangedCount=0,financeInserted=0,financeSkipped=0;
       parsed.forEach((r,i)=>{
         const debtId='debt_'+hash(r.identity).slice(0,32),ref=db.collection('debts').doc(debtId),st=statuses[i].state;
         if(st==='unchanged'){unchangedCount++;return;}

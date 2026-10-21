@@ -2,7 +2,7 @@
   'use strict';
 
   const LOCAL_KEY='trDebtRecordsV1';
-  const state={records:[],preview:[],files:[],busy:false,loaded:false};
+  const state={records:[],preview:[],files:[],busy:false,loaded:false,editingId:null,payingId:null};
   const $=id=>document.getElementById(id);
   const esc=v=>String(v??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[ch]));
   const money=new Intl.NumberFormat('es-SV',{style:'currency',currency:'USD'});
@@ -189,18 +189,65 @@
     const today=new Date();const d7=new Date(today);d7.setDate(d7.getDate()+7);const iso7=`${d7.getFullYear()}-${String(d7.getMonth()+1).padStart(2,'0')}-${String(d7.getDate()).padStart(2,'0')}`;const isoToday=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;const due7=outstanding.filter(r=>r.dueDate&&r.dueDate>=isoToday&&r.dueDate<=iso7);
     $('debtKpis').innerHTML=[['Saldo pendiente',money.format(outstanding.reduce((a,r)=>a+r.balance,0)),'fa-wallet'],['Deuda vencida',money.format(overdue.reduce((a,r)=>a+r.balance,0)),'fa-triangle-exclamation'],['Vence en 7 días',money.format(due7.reduce((a,r)=>a+r.balance,0)),'fa-calendar-day'],['Obligaciones abiertas',integer.format(outstanding.length),'fa-file-invoice-dollar']].map(x=>`<div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm kpi-card h-100"><div class="card-body d-flex justify-content-between gap-3"><div><div class="kpi-label">${x[0]}</div><div class="kpi-value mt-1">${x[1]}</div></div><div class="kpi-icon"><i class="fa-solid ${x[2]}"></i></div></div></div></div>`).join('');
     const rows=filteredRecords().sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
-    $('debtTable').innerHTML=rows.length?rows.slice(0,500).map(r=>`<tr><td>${esc(formatDate(r.date))}</td><td>${esc(r.quedan||'—')}</td><td>${esc(r.provider)}</td><td>${esc(r.ccf||'—')}</td><td class="text-end">${money.format(Number(r.value||0))}</td><td class="text-center">${esc(r.days||0)}</td><td>${esc(formatDate(r.dueDate))}</td><td class="text-end">${money.format(Number(r.paidValue||0))}</td><td class="text-end fw-semibold">${money.format(Number(r.balance||0))}</td><td>${badge(statusOf(r))}</td></tr>`).join(''):'<tr><td colspan="10" class="empty-state">Aún no hay cuentas por pagar cargadas.</td></tr>';
+    $('debtTable').innerHTML=rows.length?rows.slice(0,500).map(r=>`<tr><td>${esc(formatDate(r.date))}</td><td>${esc(r.quedan||'—')}</td><td>${esc(r.provider)}</td><td>${esc(r.ccf||'—')}</td><td class="text-end">${money.format(Number(r.value||0))}</td><td class="text-center">${esc(r.days||0)}</td><td>${esc(formatDate(r.dueDate))}</td><td class="text-end">${money.format(Number(r.paidValue||0))}</td><td class="text-end fw-semibold">${money.format(Number(r.balance||0))}</td><td>${badge(statusOf(r))}</td><td class="text-nowrap">${global.TRAuth?.canWrite?.()?`<button class="btn btn-sm btn-outline-secondary me-1" data-debt-edit="${esc(r.id||r.identity)}">Editar</button>${round2(r.balance)>0?`<button class="btn btn-sm btn-outline-success" data-debt-pay="${esc(r.id||r.identity)}">Abonar</button>`:''}`:''}</td></tr>`).join(''):'<tr><td colspan="11" class="empty-state">Aún no hay cuentas por pagar cargadas.</td></tr>';
     const s=summary();
     if($('debtPreviewSummary'))$('debtPreviewSummary').textContent=state.preview.length?`${s.total} filas · ${s.new} nuevas · ${s.update} actualizaciones · ${s.unchanged+s.duplicate_file} sin cambios/repetidas · ${s.conflict} conflictos · ${s.error} errores.`:'Carga un consolidado para comparar sus filas con lo que ya existe.';
     if($('debtPreviewTable'))$('debtPreviewTable').innerHTML=state.preview.length?state.preview.slice(0,800).map(r=>`<tr><td>${importBadge(r.importState)}</td><td>${esc(r.sourceRow)}</td><td>${esc(formatDate(r.date))}</td><td>${esc(r.provider)}</td><td>${esc(r.ccf||'—')}</td><td class="text-end">${money.format(r.value)}</td><td class="text-end">${money.format(r.paidValue)}</td><td class="text-end">${money.format(r.balance)}</td><td>${esc(r.importNote||r.warnings?.join('; ')||'')}</td></tr>`).join(''):'<tr><td colspan="9" class="empty-state">Sin vista previa.</td></tr>';
     if($('debtCommitBtn'))$('debtCommitBtn').disabled=state.busy||!(s.new+s.update);
     if($('debtImportAdminNote'))$('debtImportAdminNote').classList.toggle('d-none',!!global.TRAuth?.canImport?.());
-    if($('debtImportCard'))$('debtImportCard').classList.toggle('d-none',!global.TRAuth?.canImport?.());
+    if($('debtImportCard'))$('debtImportCard').classList.toggle('d-none',!global.TRAuth?.canImport?.());if($('debtNewBtn'))$('debtNewBtn').classList.toggle('d-none',!global.TRAuth?.canWrite?.());
   }
+  function dateToday(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  function dueFromDays(){const d=$('debtManualDate')?.value,days=Number($('debtManualDays')?.value);if(!d||!Number.isInteger(days)||days<0)return;const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+days);$('debtManualDueDate').value=x.toISOString().slice(0,10);}
+  function manualError(id,message){const el=$(id);el.textContent=message||'';el.classList.toggle('d-none',!message);}
+  function findRecord(id){return state.records.find(r=>(r.id||r.identity)===id);}
+  function openManual(r=null){
+    if(!global.TRAuth?.canWrite?.())return;
+    state.editingId=r?(r.id||r.identity):null;
+    $('debtManualForm').reset();manualError('debtManualError','');
+    $('debtManualTitle').textContent=r?'Editar condiciones de obligación':'Nueva cuenta por pagar';
+    const values={debtManualProvider:r?.provider||'',debtManualDate:r?.date||dateToday(),debtManualCCF:r?.ccf||'',debtManualQuedan:r?.quedan||'',debtManualValue:r?.value??'',debtManualDays:r?.days??30};
+    Object.entries(values).forEach(([key,v])=>{$(key).value=v;});
+    ['debtManualProvider','debtManualDate','debtManualCCF','debtManualQuedan','debtManualValue'].forEach(k=>$(k).readOnly=!!r);
+    $('debtManualDueDate').value=r?.dueDate||'';if(!r)dueFromDays();
+    bootstrap.Modal.getOrCreateInstance($('debtManualModal')).show();
+  }
+  async function saveManual(event){
+    event.preventDefault();manualError('debtManualError','');const btn=$('debtManualSave');btn.disabled=true;
+    try{
+      const value=Number($('debtManualValue').value),days=Number($('debtManualDays').value),date=$('debtManualDate').value,dueDate=$('debtManualDueDate').value;
+      if(!Number.isInteger(days)||days<0||days>3650||!dueDate)throw new Error('Verifica días y vencimiento.');
+      if(state.editingId){
+        const r=findRecord(state.editingId);if(!r)throw new Error('No se encontró la obligación.');
+        if(global.TRData?.state?.mode==='firebase')await api('edit_manual',{id:state.editingId,days,dueDate,quedan:r.quedan||''});
+        else{r.days=days;r.dueDate=dueDate;r.updatedAt=new Date().toISOString();saveLocal(state.records);}
+      }else{
+        if(!Number.isFinite(value)||value<=0||round2(value)!==value)throw new Error('Ingresa un importe válido de máximo dos decimales.');
+        const r=validate({date,provider:text($('debtManualProvider').value),ccf:text($('debtManualCCF').value),quedan:text($('debtManualQuedan').value),value,days,dueDate,paidValue:0,balance:value,sourceFile:'',sourceSheet:'',monthLabel:''},null);
+        if(!r.valid||(!r.ccf&&!r.quedan))throw new Error('Completa proveedor y CCF/factura o QUEDAN.');
+        if(global.TRData?.state?.mode==='firebase')await api('create_manual',{record:serialize(r)});
+        else{
+          if(state.records.some(x=>identity(x)===identity(r)))throw new Error('La obligación ya está registrada.');
+          const item={...serialize(r),identity:r.identity,id:r.identity,createdAt:new Date().toISOString(),source:'manual'};
+          await global.TRData.importDemoRecords([{date:r.date,sourceMonth:Number(r.date.slice(5,7)),sourceYear:Number(r.date.slice(0,4)),category:'C X P',provider:r.provider,document:r.ccf||r.quedan,value:r.value,discount:0,detail:'Cuenta por pagar · Registro manual',debtIdentity:r.identity}],{id:'debtmanual_'+Date.now()});
+          state.records.push(item);saveLocal(state.records);
+        }
+      }
+      bootstrap.Modal.getInstance($('debtManualModal')).hide();await load();if(global.TRData?.state?.mode==='firebase')await global.TRData.refresh();document.dispatchEvent(new CustomEvent('tr:data-updated'));
+    }catch(e){manualError('debtManualError',e.message||String(e));}finally{btn.disabled=false;}
+  }
+  function openPayment(r){if(!r||!global.TRAuth?.canWrite?.()||round2(r.balance)<=0)return;state.payingId=r.id||r.identity;$('debtPaymentForm').reset();manualError('debtPaymentError','');$('debtPaymentDate').value=dateToday();$('debtPaymentAmount').max=round2(r.balance).toFixed(2);$('debtPaymentContext').textContent=`${r.provider} · ${r.ccf||r.quedan} · Saldo ${money.format(r.balance)}`;bootstrap.Modal.getOrCreateInstance($('debtPaymentModal')).show();}
+  async function savePayment(event){event.preventDefault();const btn=$('debtPaymentSave');btn.disabled=true;manualError('debtPaymentError','');try{
+    const r=findRecord(state.payingId),amount=Number($('debtPaymentAmount').value),paymentDate=$('debtPaymentDate').value,note=text($('debtPaymentNote').value);
+    if(!r||!Number.isFinite(amount)||amount<=0||round2(amount)!==amount||amount>round2(r.balance))throw new Error('El abono debe ser positivo, con dos decimales y no superar el saldo.');
+    if(global.TRData?.state?.mode==='firebase')await api('register_payment',{id:state.payingId,amount,paymentDate,note});
+    else{r.paidValue=round2(Number(r.paidValue||0)+amount);r.balance=round2(Number(r.balance)-amount);r.payments=[...(r.payments||[]),{amount,date:paymentDate,note,createdAt:new Date().toISOString()}];saveLocal(state.records);}
+    bootstrap.Modal.getInstance($('debtPaymentModal')).hide();await load();document.dispatchEvent(new CustomEvent('tr:data-updated'));
+  }catch(e){manualError('debtPaymentError',e.message||String(e));}finally{btn.disabled=false;}}
   function formatDate(v){if(!v)return '—';const [y,m,d]=String(v).split('-');return y&&m&&d?`${d}/${m}/${y}`:String(v)}
   async function init(){
     if(!$('view-debts'))return;
-    $('debtAnalyzeBtn')?.addEventListener('click',analyzeSelected);$('debtCommitBtn')?.addEventListener('click',commit);$('debtSearch')?.addEventListener('input',render);$('debtStatus')?.addEventListener('change',render);$('debtRefresh')?.addEventListener('click',load);
+    $('debtNewBtn')?.addEventListener('click',()=>openManual());$('debtManualForm')?.addEventListener('submit',saveManual);$('debtPaymentForm')?.addEventListener('submit',savePayment);$('debtManualDate')?.addEventListener('change',dueFromDays);$('debtManualDays')?.addEventListener('input',dueFromDays);$('debtTable')?.addEventListener('click',e=>{const edit=e.target.closest('[data-debt-edit]'),pay=e.target.closest('[data-debt-pay]');if(edit)openManual(findRecord(edit.dataset.debtEdit));if(pay)openPayment(findRecord(pay.dataset.debtPay));});$('debtAnalyzeBtn')?.addEventListener('click',analyzeSelected);$('debtCommitBtn')?.addEventListener('click',commit);$('debtSearch')?.addEventListener('input',render);$('debtStatus')?.addEventListener('change',render);$('debtRefresh')?.addEventListener('click',load);
     await load();
   }
 

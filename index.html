@@ -165,12 +165,12 @@
 
       <section id="view-debts" class="app-view d-none">
         <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow module-eyebrow debt-text">Módulo · Cuentas por pagar</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Seguimiento independiente del consolidado de deuda, vencimientos, pagos y saldo pendiente.</p></div>
-          <button id="debtRefresh" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate me-2"></i>Actualizar</button>
+          <div><div class="eyebrow module-eyebrow debt-text">Módulo · Cuentas por pagar</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Registra obligaciones, gestiona abonos y controla vencimientos sin depender de Excel.</p></div>
+          <div class="d-flex gap-2"><button id="debtNewBtn" class="btn btn-success"><i class="fa-solid fa-plus me-2"></i>Nueva cuenta por pagar</button><button id="debtRefresh" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate me-2"></i>Actualizar</button></div>
         </div>
 
         <div class="module-context module-context-debt mb-4">
-          <div><strong>Estás trabajando en: Cuentas por pagar</strong><div class="small">La carga actualiza obligaciones. Solo una obligación realmente nueva genera una C X P en TR-Finanzas.</div></div>
+          <div><strong>Estás trabajando en: Cuentas por pagar</strong><div class="small">Registra y actualiza obligaciones desde la aplicación. Excel se reserva para migración histórica.</div></div>
           <span class="module-pill debt-pill"><i class="fa-solid fa-file-invoice-dollar me-1"></i>Destino principal: Cuentas por pagar</span>
         </div>
 
@@ -187,12 +187,12 @@
 
         <div class="card border-0 shadow-sm mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Consolidado</h2><p class="small text-secondary mb-0">“Fecha pago” del Excel se interpreta como vencimiento porque el archivo la calcula como Fecha + Días.</p></div>
-          <div class="table-responsive debt-table-wrap"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>QUEDAN</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-center">Días</th><th>Vencimiento</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Estado</th></tr></thead><tbody id="debtTable"></tbody></table></div>
+          <div class="table-responsive debt-table-wrap"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>QUEDAN</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-center">Días</th><th>Vencimiento</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="debtTable"></tbody></table></div>
         </div>
 
         <div id="debtImportAdminNote" class="alert alert-secondary d-none"><i class="fa-solid fa-lock me-2"></i>La consulta del módulo está disponible, pero solo un Administrador puede cargar un nuevo consolidado.</div>
         <div id="debtImportCard" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><h2 class="h5 mb-1">Actualizar Cuentas por pagar desde Excel</h2><p class="small text-secondary mb-0">Puedes cargar nuevamente el mismo consolidado. Las existentes se actualizan; solo las obligaciones nuevas generan C X P en TR-Finanzas.</p></div><span class="module-pill debt-pill"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Destino: Cuentas por pagar</span></div></div>
+          <div class="card-header bg-white border-0 pt-4 px-4"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><h2 class="h5 mb-1">Importar registros históricos desde Excel</h2><p class="small text-secondary mb-0">Herramienta de migración histórica. Las obligaciones nuevas se administran normalmente desde el formulario.</p></div><span class="module-pill debt-pill"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Destino: Cuentas por pagar</span></div></div>
           <div class="card-body p-4">
             <div class="import-dropzone p-4 text-center">
               <input id="debtFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls" multiple style="max-width:680px">
@@ -206,6 +206,28 @@
           <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Vista previa de la carga</h2><p id="debtPreviewSummary" class="small text-secondary mb-0">Carga un consolidado para compararlo con lo existente.</p></div>
           <div class="table-responsive debt-preview-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Fila</th><th>Fecha</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Observación</th></tr></thead><tbody id="debtPreviewTable"><tr><td colspan="9" class="empty-state">Sin vista previa.</td></tr></tbody></table></div>
         </div>
+
+        <div class="modal fade" id="debtManualModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg"><div class="modal-content">
+          <form id="debtManualForm"><div class="modal-header"><h5 class="modal-title" id="debtManualTitle">Nueva cuenta por pagar</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+          <div class="modal-body"><div id="debtManualError" class="alert alert-danger d-none" role="alert"></div><div class="row g-3">
+            <div class="col-md-8"><label class="form-label">Proveedor *</label><input id="debtManualProvider" class="form-control" maxlength="180" required></div>
+            <div class="col-md-4"><label class="form-label">Fecha de emisión *</label><input id="debtManualDate" type="date" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">CCF / Factura</label><input id="debtManualCCF" class="form-control" maxlength="120"></div>
+            <div class="col-md-6"><label class="form-label">QUEDAN</label><input id="debtManualQuedan" class="form-control" maxlength="120"></div>
+            <div class="col-md-4"><label class="form-label">Importe ($) *</label><input id="debtManualValue" type="number" min="0.01" step="0.01" class="form-control" required></div>
+            <div class="col-md-4"><label class="form-label">Días de crédito *</label><input id="debtManualDays" type="number" min="0" max="3650" step="1" class="form-control" value="30" required></div>
+            <div class="col-md-4"><label class="form-label">Vencimiento *</label><input id="debtManualDueDate" type="date" class="form-control" required></div>
+          </div><p class="small text-secondary mt-3 mb-0">El vencimiento se calcula automáticamente al cambiar fecha o días. Al crear una obligación, el saldo inicia por el importe completo.</p></div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button id="debtManualSave" type="submit" class="btn btn-success">Guardar obligación</button></div></form>
+        </div></div></div>
+        <div class="modal fade" id="debtPaymentModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><form id="debtPaymentForm">
+          <div class="modal-header"><h5 class="modal-title">Registrar abono</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+          <div class="modal-body"><p id="debtPaymentContext" class="small text-secondary"></p><div id="debtPaymentError" class="alert alert-danger d-none"></div>
+          <label class="form-label">Importe del abono ($)</label><input id="debtPaymentAmount" class="form-control mb-3" type="number" min="0.01" step="0.01" required>
+          <label class="form-label">Fecha del pago</label><input id="debtPaymentDate" class="form-control mb-3" type="date" required>
+          <label class="form-label">Referencia / Nota</label><input id="debtPaymentNote" maxlength="300" class="form-control"></div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" id="debtPaymentSave" class="btn btn-success">Registrar pago</button></div>
+        </form></div></div></div>
       </section>
 
       <section id="view-compare" class="app-view d-none">
