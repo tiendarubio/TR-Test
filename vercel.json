@@ -1,5 +1,14 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/index.html" }
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/daily-sales-sync",
+      "schedule": "0 21 * * *"
+    }
   ]
 }

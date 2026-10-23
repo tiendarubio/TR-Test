@@ -1,10 +1,13 @@
-function env(name) { return String(process.env[name] || '').trim(); }
+function env(name) {
+  return String(process.env[name] || '').trim();
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
-    return res.status(405).json({ ok:false, error:'Método no permitido.' });
+    return res.status(405).json({ ok: false, error: 'Método no permitido.' });
   }
+
   const firebaseConfig = {
     apiKey: env('FIREBASE_API_KEY'),
     authDomain: env('FIREBASE_AUTH_DOMAIN'),
@@ -13,7 +16,16 @@ export default async function handler(req, res) {
     messagingSenderId: env('FIREBASE_MESSAGING_SENDER_ID'),
     appId: env('FIREBASE_APP_ID')
   };
-  const missingFirebase = Object.entries(firebaseConfig).filter(([,v])=>!v).map(([k])=>k);
-  res.setHeader('Cache-Control','no-store, max-age=0');
-  return res.status(200).json({ ok:missingFirebase.length===0, firebaseConfig, missingFirebase });
+
+  const missingFirebase = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  return res.status(200).json({
+    ok: missingFirebase.length === 0,
+    firebaseConfig,
+    missingFirebase,
+    firebaseVapidKey: env('VITE_FIREBASE_VAPID_KEY')
+  });
 }

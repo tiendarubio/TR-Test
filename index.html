@@ -1,443 +1,1164 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TR · Flujo de Efectivo</title>
-  <meta name="description" content="Prototipo funcional para control y comparación de flujo de efectivo.">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
-  <link href="assets/css/styles.css" rel="stylesheet">
-  <link href="assets/css/tr-brand.css" rel="stylesheet">
-</head>
-<body>
-  <div id="authGate" class="auth-gate d-none">
-    <div class="auth-card card border-0 shadow-lg">
-      <div class="card-body p-4 p-md-5">
-        <div class="d-flex align-items-center gap-3 mb-4">
-          <img src="assets/img/trlogo.png" alt="TR" class="auth-logo">
-          <div><div class="eyebrow">Acceso seguro</div><h1 class="h4 mb-0">Flujo de Efectivo</h1></div>
-        </div>
-        <p class="text-secondary small">Ingresa con tu usuario autorizado. Los permisos se asignan por rol.</p>
-        <div id="loginError" class="alert alert-danger py-2 small d-none"></div>
-        <form id="loginForm">
-          <div class="mb-3"><label class="form-label">Correo</label><input id="loginEmail" type="email" class="form-control" autocomplete="username" required></div>
-          <div class="mb-3"><label class="form-label">Contraseña</label><input id="loginPassword" type="password" class="form-control" autocomplete="current-password" required></div>
-          <button class="btn btn-dark w-100" type="submit"><i class="fa-solid fa-right-to-bracket me-2"></i>Ingresar</button>
-          <div id="loginStatus" class="small text-secondary text-center mt-3"></div>
-        </form>
-      </div>
-    </div>
-  </div>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"/>
+  <title>TRLista</title>
+  <link rel="icon" type="image/png" href="assets/img/trlogo.png">
 
-  <nav class="navbar navbar-dark bg-dark shadow-sm sticky-top">
-    <div class="container-fluid px-lg-4">
-      <a class="navbar-brand d-flex align-items-center gap-2" href="#" data-view-link="dashboard">
-        <img src="assets/img/trlogo.png" alt="TR" class="logo-navbar">
-        <span class="fw-semibold">Flujo de Efectivo</span>
+  <!-- Bootstrap & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+  <!-- Estilos propios -->
+  
+  <link href="assets/css/styles.css?v=20260717-requisition-state-guard" rel="stylesheet">
+
+  <script>
+    // Evita que el navegador restaure una posición intermedia al abrir la app.
+    (function forceInitialTop() {
+      const goTop = () => {
+        if (window.location.hash) return;
+        try {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch (_) {}
+      };
+      try {
+        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+        goTop();
+        document.addEventListener('DOMContentLoaded', goTop, { once: true });
+        window.addEventListener('pageshow', goTop);
+        window.addEventListener('load', () => setTimeout(goTop, 0), { once: true });
+      } catch (_) {}
+    })();
+  </script>
+
+  <!-- Librerías JS externas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.23.0"></script>
+</head>
+<body class="bg-light">
+
+  <!-- TOP NAVBAR -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+        <img src="assets/img/trlogo.png" alt="Logo TR" class="logo-navbar">
+        <span class="fw-semibold">TRLista</span>
       </a>
-      <div class="d-flex align-items-center gap-2 small">
-        <span id="authUserLabel" class="text-white-50 d-none d-lg-inline"></span>
-        <span id="authRoleLabel" class="badge rounded-pill text-bg-light">Cargando...</span>
-        <button id="btnThemeToggle" class="btn btn-outline-light btn-sm" type="button" aria-label="Cambiar tema" title="Cambiar tema"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
-        <button id="btnLogout" class="btn btn-outline-light btn-sm d-none">Salir</button>
+
+      <div id="authUserNav" class="navbar-nav ms-auto align-items-center gap-2 flex-row d-none">
+        <div class="dropdown auth-session-dropdown">
+          <button
+            type="button"
+            id="authUserMenuToggle"
+            class="btn auth-session-toggle dropdown-toggle"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+            title="Opciones de usuario"
+          >
+            <span class="auth-user-chip" id="authUserChip">
+              <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+              <span id="authUserLabel">Sesión</span>
+            </span>
+            <span id="authRoleChip" class="auth-role-chip d-none">Rol</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end auth-session-menu shadow" aria-labelledby="authUserMenuToggle">
+            <li>
+              <button type="button" id="btnAdminPanel" class="dropdown-item d-none">
+                <i class="fa-solid fa-chart-pie me-2 text-primary" aria-hidden="true"></i>
+                <span>Panel administrativo</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" id="btnOperationalView" class="dropdown-item d-none">
+                <i class="fa-solid fa-clipboard-list me-2 text-success" aria-hidden="true"></i>
+                <span>Vista operativa</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" id="btnAuthWarehouseNotifications" class="dropdown-item auth-notification-item warehouse-notification-toggle d-none" title="Activar notificaciones del navegador">
+                <i class="fa-regular fa-bell me-2 text-primary" aria-hidden="true"></i>
+                <span>Activar notificaciones</span>
+              </button>
+            </li>
+            <li><hr id="authBeforeLogoutDivider" class="dropdown-divider d-none"></li>
+            <li>
+              <button type="button" id="btnLogout" class="dropdown-item text-danger">
+                <i class="fa-solid fa-right-from-bracket me-2" aria-hidden="true"></i>
+                <span>Cerrar sesión</span>
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </nav>
 
-  <div class="app-shell">
-    <aside class="sidebar border-end bg-white">
-      <nav class="nav nav-pills flex-column gap-1 p-3" aria-label="Navegación principal">
-        <button class="nav-link active text-start" data-view="dashboard"><i class="fa-solid fa-chart-pie me-2"></i>Inicio</button>
-        <div class="module-nav-label finance-label">TR-FINANZAS · FLUJO DE EFECTIVO</div>
-        <button class="nav-link module-finance text-start" data-view="movements"><i class="fa-solid fa-receipt me-2"></i>Movimientos</button>
-        <button class="nav-link module-finance text-start" data-view="compare"><i class="fa-solid fa-code-compare me-2"></i>Comparar</button>
-        <button class="nav-link module-finance text-start" data-view="reports"><i class="fa-solid fa-file-export me-2"></i>Reportes</button>
-        <div class="module-nav-label debt-label">CUENTAS POR PAGAR</div>
-        <button class="nav-link module-debt text-start" data-view="debts"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Seguimiento de deuda</button>
-        <div class="module-nav-label admin-label">ADMINISTRACIÓN</div>
-        <button id="navImport" class="nav-link text-start" data-view="import" data-admin-only><i class="fa-solid fa-file-import me-2"></i>Importar archivos</button>
-        <button class="nav-link text-start" data-view="settings"><i class="fa-solid fa-gear me-2"></i>Configuración</button>
-      </nav>
-      <div class="sidebar-footer p-3 small text-secondary border-top">
-        <div class="fw-semibold text-dark mb-1">Diseño</div>
-        Captura simple, análisis potente y trazabilidad completa.
-      </div>
-    </aside>
+  <!-- MAIN CONTENT -->
+  <main class="container-fluid py-4">
+    <div id="operationalView" class="row g-4">
 
-    <main class="content-area p-3 p-lg-4">
-      <div id="prototypeNotice" class="alert alert-warning-subtle border alert-dismissible fade show mb-4" role="alert">
-        <div class="d-flex gap-2 align-items-start">
-          <i class="fa-solid fa-flask mt-1"></i>
-          <div><strong>Prototipo:</strong> usa el histórico real extraído de los Excel 2026. Los movimientos nuevos de esta maqueta se guardan únicamente en este navegador; Firebase se conecta en la versión productiva.</div>
+      <!-- PANEL PRINCIPAL -->
+      <div class="col-12">
+
+        
+<div class="card shadow-sm mb-4 workspace-top-card workspace-config-card">
+  <div class="card-header bg-white border-0">
+    <h6 class="card-title mb-0">
+      <i class="fa-solid fa-sliders me-2 text-primary"></i>
+      Configuración e histórico
+    </h6>
+  </div>
+
+  <div class="card-body border-top">
+    <div class="row g-3 align-items-start workspace-config-row-balanced">
+      <div class="col-12 col-lg-4">
+        <div class="config-field-stack h-100">
+          <label for="storeSelect" class="form-label fw-semibold mb-1">Tienda</label>
+          <div class="store-select-shell store-tone-morazan">
+            <span class="store-select-icon" aria-hidden="true">
+              <i class="fa-solid fa-store"></i>
+            </span>
+            <select id="storeSelect" class="form-select form-select-sm">
+              <option value="lista_sexta_calle">Sexta Calle</option>
+              <option value="lista_avenida_morazan" selected>Avenida Morazán</option>
+              <option value="lista_centro_comercial">Centro Comercial</option>
+            </select>
+          </div>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
       </div>
 
-      <section id="view-dashboard" class="app-view">
-        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+      <div class="col-12 col-lg-4">
+        <div class="config-field-stack h-100">
+          <label for="versionSelect" class="form-label fw-semibold mb-1">Versión de lista</label>
+          <select id="versionSelect" class="form-select form-select-sm">
+            <option value="base" selected>Principal</option>
+            <option value="alterna">Alterna</option>
+            <option value="traslado" hidden disabled>Traslado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-4">
+        <div class="hist-date-wrapper config-field-stack h-100">
+          <label for="histDateInput" class="form-label fw-semibold mb-1">Recepciones por fecha</label>
+          <div class="history-search-shell history-calendar-shell">
+            <div class="control-shell control-shell-search control-shell-history">
+              <span class="control-icon" aria-hidden="true">
+                <i class="fa-solid fa-calendar-day"></i>
+              </span>
+
+              <input
+                id="histDateInput"
+                type="text"
+                class="form-control control-input"
+                placeholder="Selecciona fecha"
+                autocomplete="off"
+                readonly
+              >
+
+              <div class="control-actions control-actions-compact">
+                <button type="button" id="btnHistToday" class="btn btn-outline-secondary control-inline-btn" title="Volver a hoy">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>Hoy</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="histCalendarPanel" class="history-calendar-panel d-none" aria-hidden="true"></div>
+          </div>
+
+          <div class="form-text small" id="histViewModeText">
+            Modo: checklist del día actual (editable).
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 d-none">
+        <div class="store-badge-wrap">
+          <span id="storeBadge" class="badge-store badge-morazan">
+            <i class="fa-solid fa-store"></i>
+            <span id="storeBadgeText">Avenida Morazán</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Nuevo módulo: sugeridos por ventas diarias + solicitudes históricas -->
+<div id="replenishmentCard" class="card shadow-sm mb-4 replenishment-card">
+  <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <div class="fw-semibold"><i class="fa-solid fa-chart-line me-2 text-primary" aria-hidden="true"></i>Sugeridos de reposición</div>
+      <div class="small text-muted" id="replenishmentStatus">Ventas diarias e historial de solicitudes de tu sucursal.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" id="btnSyncDailySales" class="btn btn-outline-secondary btn-sm d-none" title="Guardar ventas actuales en el historial (administrador)">
+        <i class="fa-solid fa-cloud-arrow-down me-1" aria-hidden="true"></i>Sincronizar ventas
+      </button>
+      <button type="button" id="btnOpenReplenishment" class="btn btn-primary btn-sm">
+        <i class="fa-solid fa-list-check me-1" aria-hidden="true"></i>Ver sugeridos
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="requestFlowCard" class="card shadow-sm mb-4 request-flow-card d-none" aria-live="polite">
+  <div class="card-body">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+      <div>
+        <div class="request-flow-kicker">Solicitud a bodega</div>
+        <h6 id="requestFlowTitle" class="mb-1">Inicia una lista para esta sucursal.</h6>
+        <div id="requestFlowMeta" class="small text-muted">Cuando finalices, la lista quedará enviada y bloqueada para edición.</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span id="requestStatusBadge" class="badge rounded-pill text-bg-secondary d-none">Sin iniciar</span>
+        <button type="button" id="btnStartList" class="btn btn-primary btn-sm">
+          <i class="fa-solid fa-play me-1" aria-hidden="true"></i>
+          <span>Iniciar lista</span>
+        </button>
+        <button type="button" id="btnSubmitRequest" class="btn btn-success btn-sm d-none">
+          <i class="fa-solid fa-paper-plane me-1" aria-hidden="true"></i>
+          <span>Finalizar y enviar</span>
+        </button>
+        <button type="button" id="btnViewCurrentRequest" class="btn btn-outline-primary btn-sm d-none">
+          <i class="fa-solid fa-eye me-1" aria-hidden="true"></i>
+          <span>Ver solicitud</span>
+        </button>
+        <button type="button" id="btnConfirmRequestReceived" class="btn btn-success btn-sm d-none">
+          <i class="fa-solid fa-box-open me-1" aria-hidden="true"></i>
+          <span>Confirmar recibido</span>
+        </button>
+        <button type="button" id="btnViewRequestHistory" class="btn btn-outline-secondary btn-sm">
+          <i class="fa-solid fa-list-ul me-1" aria-hidden="true"></i>
+          <span>Solicitudes</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="warehouseInboxCard" class="card shadow-sm mb-4 warehouse-inbox-card d-none" aria-live="polite">
+  <div class="card-body">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+      <div>
+        <div class="request-flow-kicker">Bodega</div>
+        <h6 class="mb-1">Solicitudes recibidas</h6>
+        <div id="warehouseInboxMeta" class="small text-muted">Abre la bandeja directamente; puedes filtrar por sucursal, tipo o fecha solo cuando lo necesites.</div>
+      </div>
+      <div class="warehouse-actions d-flex flex-wrap gap-2 align-items-center">
+        <button type="button" id="btnWarehouseInbox" class="btn btn-outline-primary btn-sm position-relative">
+          <i class="fa-solid fa-inbox me-1" aria-hidden="true"></i>
+          <span>Ver bandeja</span>
+          <span id="warehouseInboxBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger d-none">0</span>
+        </button>
+        <button type="button" id="btnCreateWarehouseRequest" class="btn btn-outline-primary btn-sm d-none">
+          <i class="fa-solid fa-circle-plus me-1" aria-hidden="true"></i>
+          <span>Crear traslado</span>
+        </button>
+
+        <details class="toolbar-menu toolbar-menu-compact warehouse-actions-menu" id="warehouseActionsMenu">
+          <summary class="btn btn-outline-secondary btn-sm toolbar-menu-toggle" title="Más acciones de bodega">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span>Acciones</span>
+          </summary>
+          <div class="toolbar-menu-panel warehouse-actions-panel">
+            <div class="toolbar-menu-title">Solicitud activa</div>
+            <div class="toolbar-menu-actions">
+              <button type="button" id="btnCloseWarehouseRequest" class="btn btn-outline-secondary btn-sm d-none">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                <span>Cerrar solicitud</span>
+              </button>
+              <button type="button" id="btnMarkRequestDispatched" class="btn btn-success btn-sm d-none">
+                <i class="fa-solid fa-truck-ramp-box me-1" aria-hidden="true"></i>
+                <span>Finalizar despacho</span>
+              </button>
+              <button type="button" id="btnCancelWarehouseRequest" class="btn btn-outline-danger btn-sm d-none">
+                <i class="fa-solid fa-ban me-1" aria-hidden="true"></i>
+                <span>Cancelar solicitud</span>
+              </button>
+            </div>
+            <div class="toolbar-menu-title mt-2">Herramientas</div>
+            <div class="toolbar-menu-actions">
+              <button type="button" id="btnMergeWarehouseRequests" class="btn btn-outline-warning btn-sm d-none">
+                <i class="fa-solid fa-code-merge me-1" aria-hidden="true"></i>
+                <span>Fusionar solicitudes</span>
+              </button>
+              <button type="button" id="btnRequisitionsByDay" class="btn btn-outline-primary btn-sm d-none" title="Consultar requisiciones pendientes por fecha y tienda">
+                <i class="fa-solid fa-calendar-days me-1" aria-hidden="true"></i>
+                <span>Requisiciones por día</span>
+              </button>
+              <button type="button" id="btnExportPendingRequisitions" class="btn btn-outline-success btn-sm d-none" title="Exportar cada solicitud pendiente por separado y marcarla como requisición hecha">
+                <i class="fa-solid fa-file-zipper me-1" aria-hidden="true"></i>
+                <span>Exportar pendientes por solicitud</span>
+              </button>
+              <button type="button" id="btnConsolidatePendingRequisitions" class="btn btn-outline-primary btn-sm d-none" title="Consolidar todas las solicitudes pendientes por sucursal y bodega, sumando cantidades únicamente por código de producto">
+                <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>
+                <span>Consolidar pendientes por bodega</span>
+              </button>
+              <button type="button" id="btnWarehouseNotifications" class="btn btn-outline-secondary btn-sm warehouse-notification-toggle d-none" title="Activar notificaciones del navegador">
+                <i class="fa-regular fa-bell me-1" aria-hidden="true"></i>
+                <span>Notificaciones</span>
+              </button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+
+        <!-- Card: Checklist -->
+        <div class="card shadow-sm">
+          <div class="card-header bg-white border-0 checklist-card-header">
+          <div class="checklist-header-shell">
+            <div class="checklist-header-top">
+              <div class="checklist-heading-block">
+                <h6 class="card-title mb-0">
+                  <i class="fa-solid fa-list-check me-2 text-primary"></i>
+                  Checklist de productos
+                </h6>
+              </div>
+
+              <div class="workspace-status-inline">
+                <span class="workspace-status-badge" id="lastSaved">
+                  <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                  Aún no guardado.
+                </span>
+              </div>
+            </div>
+
+            <div class="checklist-primary-toolbar" role="toolbar" aria-label="Acciones principales">
+              <button id="btnSave" class="btn btn-primary btn-sm" title="Guardar checklist">
+                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                <span>Guardar</span>
+              </button>
+
+              <button id="btnExport" class="btn btn-outline-danger btn-sm" title="Exportar checklist">
+                <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+                <span>Exportar</span>
+              </button>
+
+              <button type="button" id="btnToggleRequisition" class="btn btn-outline-secondary btn-sm d-none" title="Confirmar requisición hecha">
+                <i class="fa-regular fa-flag" aria-hidden="true"></i>
+                <span>Marcar requisición como hecha</span>
+              </button>
+
+              <details class="toolbar-menu toolbar-menu-compact" id="moreActionsMenu">
+                <summary class="btn btn-outline-secondary btn-sm toolbar-menu-toggle" title="Más acciones">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span>Acciones</span>
+                </summary>
+
+                <div class="toolbar-menu-panel">
+                  <div class="toolbar-menu-title">Acciones de tabla</div>
+                  <div class="toolbar-menu-actions">
+                    <button type="button" id="btnToggleHistLock" class="btn btn-outline-warning btn-sm d-none" disabled aria-disabled="true" title="Desbloquear edición">
+                      <i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i>
+                      <span>Desbloquear edición</span>
+                    </button>
+                  </div>
+                  <div class="toolbar-menu-title mt-2">Zona de cuidado</div>
+                  <div class="toolbar-menu-actions">
+                    <button id="btnClear" class="btn btn-outline-danger btn-sm" title="Limpiar checklist">
+                      <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                      <span>Limpiar todo</span>
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+          <div class="card-body border-top">
+            <div id="warehouseIdleNotice" class="alert alert-info d-none mb-3" role="status">
+              <div class="fw-semibold"><i class="fa-solid fa-inbox me-1"></i> Bodega sin solicitud abierta</div>
+              <div class="small mb-0">Presiona “Ver bandeja” para abrir una solicitud. No necesitas filtrar antes; la bandeja muestra solicitudes abiertas y las de hoy.</div>
+            </div>
+            <div class="checklist-workspace">
+              <div class="checklist-search-shell">
+                <div class="checklist-search-toolbar checklist-search-toolbar-single">
+                  <div class="position-relative checklist-search-input-wrap">
+                    <div class="input-group input-group-sm search-bar-group search-bar-embedded">
+                      <button
+                        id="btnSearchModeToggle"
+                        class="btn btn-outline-secondary search-lead-chip search-mode-toggle"
+                        type="button"
+                        title="Cambiar a búsqueda en la lista actual"
+                        aria-label="Cambiar modo de búsqueda"
+                        data-search-mode="catalog"
+                      >
+                        <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+                        <span id="searchLeadLabel">Catálogo</span>
+                      </button>
+                      <input
+                        id="searchInput"
+                        type="text"
+                        class="form-control"
+                        placeholder="Nombre, código inventario o código de barras"
+                        autocomplete="off"
+                      >
+<button
+                        id="btnScan"
+                        class="btn btn-outline-primary search-action-btn"
+                        type="button"
+                        title="Escanear código de barras"
+                        aria-label="Escanear código de barras"
+                      >
+                        <i class="fa-solid fa-barcode"></i>
+                      </button>
+                      <button
+                        id="btnScannerSoundToggle"
+                        class="btn btn-outline-secondary search-action-btn scanner-sound-toggle"
+                        type="button"
+                        title="Sonido del escáner activado"
+                        aria-label="Activar o desactivar sonido del escáner"
+                        aria-pressed="true"
+                      >
+                        <i class="fa-solid fa-volume-high"></i>
+                      </button>
+                    </div>
+
+                    <input
+                      id="fileScan"
+                      class="d-none"
+                      type="file"
+                      accept="image/*,application/pdf,.pdf"
+                      capture="environment"
+                    >
+
+                    <ul id="suggestions" class="list-group shadow-sm search-suggestions"></ul>
+                  </div>
+                </div>
+
+                <div class="search-mode-meta-row">
+                  <span id="searchModeHint" class="search-mode-hint">Modo: catálogo</span>
+                  <span id="listSearchCount" class="list-search-count">0 / 0</span>
+                  <button type="button" id="mobileFabToggle" class="btn btn-outline-primary btn-sm mobile-actions-toggle" aria-expanded="false" aria-controls="mobileFabMenu" aria-label="Abrir panel de acciones">
+                    <i class="fa-solid fa-bars-staggered" aria-hidden="true"></i>
+                    <span>Acciones</span>
+                  </button>
+                </div>
+
+                <div id="scanWrap" class="scanner-wrap scan-panel">
+                  <div class="scanner scanner-native-view">
+                    <video id="scanVideo" playsinline></video>
+                    <div class="scan-overlay"></div>
+                  </div>
+                  <div id="html5QrReader" class="html5-qrcode-reader d-none" aria-label="Escáner de códigos de barra"></div>
+                </div>
+</div>
+
+
+<div id="bulkSelectionDesktopSlot" class="bulk-selection-desktop-slot d-none" aria-hidden="true">
+<div id="bulkSelectionBar" class="bulk-selection-bar d-none" hidden inert aria-hidden="true">
+  <div class="bulk-selection-summary">
+    <span class="bulk-selection-count-pill">
+      <i class="fa-regular fa-square-check" aria-hidden="true"></i>
+      <span id="bulkSelectionCount">0 seleccionados</span>
+    </span>
+  </div>
+
+  <div class="bulk-selection-actions" role="toolbar" aria-label="Acciones sobre selección">
+    <button type="button" id="btnToggleSelectAllBulk" class="btn btn-outline-secondary btn-sm" disabled aria-disabled="true" title="Seleccionar o quitar todas las filas visibles" aria-label="Seleccionar o quitar todas las filas visibles">
+      <i class="fa-regular fa-square-check" aria-hidden="true"></i>
+      <span>Todas</span>
+    </button>
+    <button id="btnDispatchSelected" class="btn btn-outline-success btn-sm" disabled aria-disabled="true" title="Marcar seleccionados como despachados" aria-label="Marcar seleccionados como despachados">
+      <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
+      <span>Despachar</span>
+    </button>
+    <button id="btnMoveSelectedToRequest" class="btn btn-outline-warning btn-sm" type="button" disabled aria-disabled="true" title="Mover seleccionados a otra solicitud de la misma sucursal" aria-label="Mover seleccionados a otra solicitud de la misma sucursal">
+      <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+      <span>Mover</span>
+    </button>
+    <button id="btnDeleteSelected" class="btn btn-outline-danger btn-sm" type="button" disabled aria-disabled="true" title="Eliminar seleccionados" aria-label="Eliminar seleccionados">
+      <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+      <span>Eliminar</span>
+    </button>
+    <button type="button" id="btnClearSelection" class="btn btn-outline-secondary btn-sm" disabled aria-disabled="true" title="Cancelar selección" aria-label="Cancelar selección">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      <span>Cancelar</span>
+    </button>
+  </div>
+</div>
+</div>
+
+<div class="table-checklist-shell mt-3">
+                <div class="table-responsive table-checklist-wrapper">
+              <table class="table table-sm table-bordered align-middle mb-0" id="chkTable">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-center text-nowrap bulk-select-col sticky-col-select">
+                      <div class="d-inline-flex align-items-center justify-content-center gap-2 bulk-select-header-wrap">
+                        <input id="chkSelectAllRows" class="form-check-input mt-0" type="checkbox" aria-label="Seleccionar todas las filas visibles de la tabla">
+                        <span class="d-none d-md-inline">Sel.</span>
+                      </div>
+                    </th>
+                    <th class="text-center" style="width: 48px;">#</th>
+                    <th>Cód. barras</th>
+                    <th>Nombre</th>
+                    <th class="text-nowrap">Cód. inv.</th>
+                    <th id="thBodega" style="cursor:pointer;">
+                      Bodega <i class="fa-solid fa-arrow-up-wide-short ms-1 text-muted"></i>
+                    </th>
+                    <th class="text-center text-nowrap">Cant.</th>
+                    <th class="text-center text-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="chkBody"></tbody>
+              </table>
+                </div>
+                <div id="mobileChecklistCards" class="mobile-checklist-cards d-md-none" aria-live="polite"></div>
+</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /panel principal -->
+    </div><!-- /row -->
+
+
+    <section id="adminPanelView" class="admin-panel-view d-none" aria-live="polite">
+      <div class="admin-shell">
+        <div class="admin-hero card shadow-sm border-0 mb-4">
+          <div class="card-body d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3">
+            <div>
+              <div class="admin-kicker">Administración</div>
+              <h4 class="mb-1">Panel administrativo de despachos</h4>
+              <p class="mb-0 text-muted">Resumen ejecutivo, costo por despacho, comparación por tienda y control de productos sin costo usando la columna F de la hoja <strong>bd</strong>.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" id="adminRefreshBtn" class="btn btn-primary btn-sm">
+                <i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>
+                <span>Actualizar</span>
+              </button>
+              <button type="button" id="adminExportBtn" class="btn btn-outline-success btn-sm">
+                <i class="fa-solid fa-file-excel me-1" aria-hidden="true"></i>
+                <span>Exportar Excel</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm admin-tabs-card">
+          <div class="card-header bg-white border-0 pb-0">
+            <ul class="nav nav-pills admin-tabs" id="adminPanelTabs" role="tablist" aria-label="Secciones del panel administrativo">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="admin-overview-tab" data-bs-toggle="tab" data-bs-target="#adminOverviewPane" type="button" role="tab" aria-controls="adminOverviewPane" aria-selected="true">
+                  <i class="fa-solid fa-chart-line me-1" aria-hidden="true"></i>
+                  <span>Resumen</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-dispatches-tab" data-bs-toggle="tab" data-bs-target="#adminDispatchesPane" type="button" role="tab" aria-controls="adminDispatchesPane" aria-selected="false">
+                  <i class="fa-solid fa-truck-ramp-box me-1" aria-hidden="true"></i>
+                  <span>Despachos</span>
+                  <span id="adminDispatchTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-stores-tab" data-bs-toggle="tab" data-bs-target="#adminStoresPane" type="button" role="tab" aria-controls="adminStoresPane" aria-selected="false">
+                  <i class="fa-solid fa-store me-1" aria-hidden="true"></i>
+                  <span>Tiendas</span>
+                  <span id="adminStoresTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-warehouses-tab" data-bs-toggle="tab" data-bs-target="#adminWarehousesPane" type="button" role="tab" aria-controls="adminWarehousesPane" aria-selected="false">
+                  <i class="fa-solid fa-warehouse me-1" aria-hidden="true"></i>
+                  <span>Bodegas</span>
+                  <span id="adminWarehousesTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-top-products-tab" data-bs-toggle="tab" data-bs-target="#adminTopProductsPane" type="button" role="tab" aria-controls="adminTopProductsPane" aria-selected="false">
+                  <i class="fa-solid fa-ranking-star me-1" aria-hidden="true"></i>
+                  <span>Top 25</span>
+                  <span id="adminTopProductsTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-suggestions-tab" data-bs-toggle="tab" data-bs-target="#adminSuggestionsPane" type="button" role="tab" aria-controls="adminSuggestionsPane" aria-selected="false">
+                  <i class="fa-solid fa-lightbulb me-1" aria-hidden="true"></i>
+                  <span>Sugerencias</span>
+                  <span id="adminSuggestionsTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="admin-missing-costs-tab" data-bs-toggle="tab" data-bs-target="#adminMissingCostsPane" type="button" role="tab" aria-controls="adminMissingCostsPane" aria-selected="false">
+                  <i class="fa-solid fa-triangle-exclamation me-1" aria-hidden="true"></i>
+                  <span>Costos incompletos</span>
+                  <span id="adminMissingCostsTabBadge" class="badge rounded-pill text-bg-light ms-1">0</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tab-content admin-tab-content" id="adminPanelTabsContent">
+            <div class="tab-pane fade show active" id="adminOverviewPane" role="tabpanel" aria-labelledby="admin-overview-tab" tabindex="0">
+              <div class="card-body">
+                <div class="admin-tab-heading admin-tab-heading-clean">
+                  <div>
+                    <h6 class="mb-0">Resumen ejecutivo</h6>
+                    <small id="adminOverviewMeta" class="text-muted">Sin datos cargados.</small>
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-4 admin-stats-row">
+                  <div class="col-6 col-xl-3">
+                    <div class="admin-stat-card admin-stat-card-primary card h-100">
+                      <div class="card-body">
+                        <span class="admin-stat-label">Costo despachado</span>
+                        <strong id="adminTotalCost" class="admin-stat-value">$0.00</strong>
+                        <small class="text-muted">Despachadas, parciales y recibidas.</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6 col-xl-3">
+                    <div class="admin-stat-card card h-100">
+                      <div class="card-body">
+                        <span class="admin-stat-label">Solicitudes activas</span>
+                        <strong id="adminRequestCount" class="admin-stat-value">0</strong>
+                        <small class="text-muted">Excluye borradores/canceladas.</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6 col-xl-3">
+                    <div class="admin-stat-card card h-100">
+                      <div class="card-body">
+                        <span class="admin-stat-label">Items sin costo</span>
+                        <strong id="adminMissingCostCount" class="admin-stat-value">0</strong>
+                        <small class="text-muted">Prioridad de limpieza en bd.</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6 col-xl-3">
+                    <div class="admin-stat-card card h-100">
+                      <div class="card-body">
+                        <span class="admin-stat-label">Productos costeados</span>
+                        <strong id="adminCostCatalogCount" class="admin-stat-value">0</strong>
+                        <small class="text-muted">Catálogo con costo en F.</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-12 col-xl-7">
+                    <div class="admin-overview-block h-100">
+                      <div class="admin-block-title">
+                        <div>
+                          <h6 class="mb-0">Comparativo rápido por tienda</h6>
+                          <small class="text-muted">Costo, solicitudes y pendientes de costo.</small>
+                        </div>
+                      </div>
+                      <div id="adminOverviewStores" class="admin-store-cards-grid">
+                        <div class="text-muted small">Sin datos cargados.</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12 col-xl-5">
+                    <div class="admin-overview-block h-100">
+                      <div class="admin-block-title">
+                        <div>
+                          <h6 class="mb-0">Alertas administrativas</h6>
+                          <small class="text-muted">Puntos que requieren revisión.</small>
+                        </div>
+                      </div>
+                      <div id="adminAlertsList" class="admin-alert-list">
+                        <div class="text-muted small">Sin datos cargados.</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12 col-xl-6">
+                    <div class="admin-overview-block h-100">
+                      <div class="admin-block-title">
+                        <div>
+                          <h6 class="mb-0">Estado de solicitudes</h6>
+                          <small class="text-muted">Distribución del histórico cargado.</small>
+                        </div>
+                      </div>
+                      <div id="adminStatusBreakdown" class="admin-pill-list">
+                        <div class="text-muted small">Sin datos cargados.</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12 col-xl-6">
+                    <div class="admin-overview-block h-100">
+                      <div class="admin-block-title">
+                        <div>
+                          <h6 class="mb-0">Bodegas con mayor monto</h6>
+                          <small class="text-muted">Primeras 5 por costo despachado.</small>
+                        </div>
+                      </div>
+                      <div id="adminOverviewWarehouses" class="admin-pill-list">
+                        <div class="text-muted small">Sin datos cargados.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminDispatchesPane" role="tabpanel" aria-labelledby="admin-dispatches-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-dispatch-filter-panel px-3 px-lg-4 pt-3">
+                  <div class="d-flex flex-column flex-lg-row justify-content-between gap-1 mb-3">
+                    <div>
+                      <h6 class="mb-0">Despachos consolidados</h6>
+                      <small id="adminTableMeta" class="text-muted">Sin datos cargados.</small>
+                    </div>
+                    <small class="text-muted">Estos filtros aplican únicamente a esta tabla.</small>
+                  </div>
+                  <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-3 col-xl-2">
+                      <label for="adminDateFrom" class="form-label fw-semibold mb-1">Desde</label>
+                      <div class="history-calendar-shell admin-calendar-shell">
+                        <input type="text" id="adminDateFrom" class="form-control form-control-sm" placeholder="YYYY-MM-DD" autocomplete="off" readonly>
+                        <div id="adminDateFromCalendarPanel" class="history-calendar-panel admin-calendar-panel d-none" aria-hidden="true"></div>
+                      </div>
+                    </div>
+                    <div class="col-12 col-md-3 col-xl-2">
+                      <label for="adminDateTo" class="form-label fw-semibold mb-1">Hasta</label>
+                      <div class="history-calendar-shell admin-calendar-shell">
+                        <input type="text" id="adminDateTo" class="form-control form-control-sm" placeholder="YYYY-MM-DD" autocomplete="off" readonly>
+                        <div id="adminDateToCalendarPanel" class="history-calendar-panel admin-calendar-panel d-none" aria-hidden="true"></div>
+                      </div>
+                    </div>
+                    <div class="col-12 col-md-3 col-xl-3">
+                      <label for="adminStoreFilter" class="form-label fw-semibold mb-1">Tienda</label>
+                      <select id="adminStoreFilter" class="form-select form-select-sm">
+                        <option value="__all__">Todas las tiendas</option>
+                        <option value="lista_sexta_calle">Sexta Calle</option>
+                        <option value="lista_avenida_morazan">Avenida Morazán</option>
+                        <option value="lista_centro_comercial">Centro Comercial</option>
+                      </select>
+                    </div>
+                    <div class="col-12 col-md-3 col-xl-2">
+                      <label for="adminStatusFilter" class="form-label fw-semibold mb-1">Estado</label>
+                      <select id="adminStatusFilter" class="form-select form-select-sm">
+                        <option value="__all__">Todos</option>
+                        <option value="despachado">Despachadas</option>
+                        <option value="despachado_requisicion_pendiente">Despachado/Pendiente de requisición</option>
+                        <option value="despachado_requisicion_hecha">Despachado/Requisición hecha</option>
+                        <option value="despacho_parcial">Parciales</option>
+                        <option value="recibido">Recibidas</option>
+                        <option value="en_revision">En revisión</option>
+                        <option value="enviado">Enviadas</option>
+                        <option value="cancelado">Canceladas</option>
+                      </select>
+                    </div>
+                    <div class="col-12 col-xl-3">
+                      <div class="form-check admin-checkbox-filter">
+                        <input type="checkbox" id="adminOnlyMissingCost" class="form-check-input">
+                        <label for="adminOnlyMissingCost" class="form-check-label">Solo solicitudes con productos sin costo</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="table-responsive admin-table-wrap mt-3">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-dispatch-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Solicitud</th>
+                        <th>Tienda</th>
+                        <th>Tipo</th>
+                        <th>Estado</th>
+                        <th class="text-end">Items</th>
+                        <th class="text-end">Costo</th>
+                        <th class="text-end">Sin costo</th>
+                        <th class="text-center">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminRequestsBody">
+                      <tr><td colspan="9" class="text-center text-muted py-4">Abre el panel para cargar el consolidado.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminStoresPane" role="tabpanel" aria-labelledby="admin-stores-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-tab-heading px-3 px-lg-4 pt-3">
+                  <div>
+                    <h6 class="mb-0">Comparativo por tienda</h6>
+                    <small id="adminStoreSummaryMeta" class="text-muted">Muestra monto despachado, solicitudes e incidencias de costo por tienda.</small>
+                  </div>
+                </div>
+                <div class="table-responsive admin-insight-table-wrap">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-insight-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Tienda</th>
+                        <th class="text-end">Solicitudes</th>
+                        <th class="text-end">Despachadas</th>
+                        <th class="text-end">Items</th>
+                        <th class="text-end">Costo</th>
+                        <th class="text-end">Prom. solicitud</th>
+                        <th class="text-end">Sin costo</th>
+                        <th class="text-end">Última solicitud</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminStoreSummaryBody">
+                      <tr><td colspan="8" class="text-center text-muted py-4">Sin datos cargados.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminWarehousesPane" role="tabpanel" aria-labelledby="admin-warehouses-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-tab-heading px-3 px-lg-4 pt-3">
+                  <div>
+                    <h6 class="mb-0">Consumo por bodega</h6>
+                    <small id="adminWarehouseSummaryMeta" class="text-muted">Ayuda a ver qué bodegas concentran más costo y movimiento.</small>
+                  </div>
+                </div>
+                <div class="table-responsive admin-insight-table-wrap admin-insight-table-wrap-lg">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-insight-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Bodega</th>
+                        <th class="text-end">Productos</th>
+                        <th class="text-end">Items</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Costo</th>
+                        <th class="text-end">Sin costo</th>
+                        <th class="text-end">Tiendas</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminWarehouseSummaryBody">
+                      <tr><td colspan="7" class="text-center text-muted py-4">Sin datos cargados.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminTopProductsPane" role="tabpanel" aria-labelledby="admin-top-products-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-tab-heading px-3 px-lg-4 pt-3">
+                  <div>
+                    <h6 class="mb-0">Top 25 productos por tienda</h6>
+                    <small id="adminTopProductsMeta" class="text-muted">Calculado con el histórico cargado, sin los filtros de despachos.</small>
+                  </div>
+                  <div class="admin-subtabs" id="adminTopStoreTabs" aria-label="Top 25 por tienda">
+                    <button type="button" class="admin-subtab active" data-admin-top-store="__all__">Todas</button>
+                    <button type="button" class="admin-subtab" data-admin-top-store="lista_sexta_calle">Sexta</button>
+                    <button type="button" class="admin-subtab" data-admin-top-store="lista_avenida_morazan">Morazán</button>
+                    <button type="button" class="admin-subtab" data-admin-top-store="lista_centro_comercial">C. Comercial</button>
+                  </div>
+                </div>
+                <div class="table-responsive admin-insight-table-wrap admin-insight-table-wrap-lg">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-insight-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th class="text-end">#</th>
+                        <th>Producto</th>
+                        <th>Cód. inv.</th>
+                        <th>Bodega</th>
+                        <th class="text-end">Veces</th>
+                        <th class="text-end">Cant.</th>
+                        <th class="text-end">Costo</th>
+                        <th class="text-end">Sin costo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminTopProductsBody">
+                      <tr><td colspan="8" class="text-center text-muted py-4">Sin datos cargados.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminSuggestionsPane" role="tabpanel" aria-labelledby="admin-suggestions-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-tab-heading px-3 px-lg-4 pt-3">
+                  <div>
+                    <h6 class="mb-0">Sugerencias de despacho</h6>
+                    <small id="adminDispatchSuggestionsMeta" class="text-muted">Basadas en intervalos de solicitud, separadas por tienda.</small>
+                  </div>
+                  <div class="admin-subtabs" id="adminSuggestionStoreTabs" aria-label="Sugerencias por tienda">
+                    <button type="button" class="admin-subtab active" data-admin-suggestion-store="__all__">Todas</button>
+                    <button type="button" class="admin-subtab" data-admin-suggestion-store="lista_sexta_calle">Sexta</button>
+                    <button type="button" class="admin-subtab" data-admin-suggestion-store="lista_avenida_morazan">Morazán</button>
+                    <button type="button" class="admin-subtab" data-admin-suggestion-store="lista_centro_comercial">C. Comercial</button>
+                  </div>
+                </div>
+                <div class="table-responsive admin-insight-table-wrap admin-insight-table-wrap-lg">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-insight-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th class="text-end">#</th>
+                        <th>Producto</th>
+                        <th>Tienda</th>
+                        <th>Bodega</th>
+                        <th class="text-end">Sug.</th>
+                        <th class="text-end">Interv.</th>
+                        <th class="text-end">Venc.</th>
+                        <th class="text-end">Última</th>
+                        <th>Conf.</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminDispatchSuggestionsBody">
+                      <tr><td colspan="9" class="text-center text-muted py-4">Sin datos cargados.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="adminMissingCostsPane" role="tabpanel" aria-labelledby="admin-missing-costs-tab" tabindex="0">
+              <div class="card-body p-0">
+                <div class="admin-tab-heading px-3 px-lg-4 pt-3">
+                  <div>
+                    <h6 class="mb-0">Productos con costo incompleto</h6>
+                    <small id="adminMissingCostsMeta" class="text-muted">Prioriza qué productos revisar en la hoja bd, columna F.</small>
+                  </div>
+                </div>
+                <div class="table-responsive admin-insight-table-wrap admin-insight-table-wrap-lg">
+                  <table class="table table-sm table-hover align-middle mb-0 admin-insight-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Producto</th>
+                        <th>Cód. inv.</th>
+                        <th>Cód. barras</th>
+                        <th>Bodega</th>
+                        <th class="text-end">Veces</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Tiendas</th>
+                        <th class="text-end">Última</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminMissingCostBody">
+                      <tr><td colspan="8" class="text-center text-muted py-4">Sin datos cargados.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="appLoadingOverlay" class="app-loading-overlay d-none" aria-hidden="true">
+    <div class="app-loading-card" role="status" aria-live="polite" aria-atomic="true">
+      <div class="spinner-border text-primary app-loading-spinner" aria-hidden="true"></div>
+      <div id="appLoadingText" class="app-loading-text">Cargando checklist...</div>
+    </div>
+  </div>
+
+  <div id="qtyPreviewBubble" class="qty-preview-bubble d-none" aria-hidden="true"></div>
+
+
+  <div id="scanToastHost" class="scan-toast-host" aria-live="polite" aria-atomic="false"></div>
+
+
+  <div id="mobileFabBackdrop" class="mobile-fab-backdrop d-none" aria-hidden="true"></div>
+  <div class="mobile-fab-shell" aria-label="Panel de acciones">
+    <div id="mobileFabMenu" class="mobile-fab-menu mobile-actions-sidebar d-none" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Panel de acciones">
+      <div class="mobile-fab-sheet-handle" aria-hidden="true"></div>
+      <div class="mobile-fab-sheet-title">
+        <span>Acciones</span>
+        <button type="button" id="mobileFabClose" class="mobile-sidebar-close" aria-label="Cerrar panel de acciones">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div id="mobileFabBulkSelectionSlot" class="mobile-fab-bulk-selection-slot d-none" aria-hidden="true"></div>
+
+      <div id="mobileFabRequestSectionTitle" class="mobile-fab-section-title d-none">Solicitud activa</div>
+      <button type="button" id="btnFabDispatchRequest" class="btn btn-success mobile-fab-menu-btn d-none">
+        <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
+        <span>Finalizar despacho</span>
+      </button>
+      <button type="button" id="btnFabCancelRequest" class="btn btn-light mobile-fab-menu-btn mobile-fab-danger d-none">
+        <i class="fa-solid fa-ban" aria-hidden="true"></i>
+        <span>Cancelar solicitud</span>
+      </button>
+      <button type="button" id="btnFabRequisition" class="btn btn-light mobile-fab-menu-btn d-none">
+        <i class="fa-regular fa-flag" aria-hidden="true"></i>
+        <span>Marcar requisición como hecha</span>
+      </button>
+
+      <div class="mobile-fab-section-title">Reposición</div>
+      <button type="button" id="btnFabReplenishment" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+        <span>Ver sugeridos</span>
+      </button>
+
+      <div class="mobile-fab-section-title">Tabla</div>
+      <button type="button" id="btnFabSave" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+        <span>Guardar</span>
+      </button>
+      <button type="button" id="btnFabSearchList" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <span>Buscar en lista</span>
+      </button>
+      <button type="button" id="btnFabSortWarehouse" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-arrow-up-wide-short" aria-hidden="true"></i>
+        <span>Ordenar lista por bodega</span>
+      </button>
+      <button type="button" id="btnFabExport" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        <span>Exportar</span>
+      </button>
+      <button type="button" id="btnFabScrollTop" class="btn btn-light mobile-fab-menu-btn">
+        <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+        <span>Ir arriba</span>
+      </button>
+
+      <div id="mobileFabToolsSectionTitle" class="mobile-fab-section-title d-none">Herramientas</div>
+      <button type="button" id="btnFabMergeRequests" class="btn btn-light mobile-fab-menu-btn d-none">
+        <i class="fa-solid fa-code-merge" aria-hidden="true"></i>
+        <span>Fusionar solicitudes</span>
+      </button>
+      <button type="button" id="btnFabRequisitionsByDay" class="btn btn-light mobile-fab-menu-btn d-none">
+        <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+        <span>Requisiciones por día</span>
+      </button>
+      <button type="button" id="btnFabExportPendingRequisitions" class="btn btn-light mobile-fab-menu-btn d-none">
+        <i class="fa-solid fa-file-zipper" aria-hidden="true"></i>
+        <span>Exportar pendientes por solicitud</span>
+      </button>
+      <button type="button" id="btnFabConsolidatePendingRequisitions" class="btn btn-light mobile-fab-menu-btn d-none">
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+        <span>Consolidar pendientes por bodega</span>
+      </button>
+      <button type="button" id="btnFabWarehouseNotifications" class="btn btn-light mobile-fab-menu-btn d-none" aria-hidden="true" data-legacy-fab-notifications="true">
+        <i class="fa-regular fa-bell" aria-hidden="true"></i>
+        <span>Notificaciones</span>
+      </button>
+
+      <div class="mobile-fab-section-title mobile-fab-danger-title">Zona de cuidado</div>
+      <button type="button" id="btnFabClear" class="btn btn-light mobile-fab-menu-btn mobile-fab-danger">
+        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+        <span>Limpiar todo</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="authGate" class="auth-gate" aria-hidden="false">
+    <div class="auth-gate-card shadow-lg">
+      <div class="auth-gate-brand">
+        <img src="assets/img/trlogo.png" alt="Logo TR" class="auth-gate-logo">
+        <div>
+          <h1 class="auth-gate-title">Ingreso de usuarios</h1>
+          <p class="auth-gate-subtitle">Accede con tu usuario autorizado de TRLista.</p>
+        </div>
+      </div>
+
+      <div id="authErrorBox" class="alert alert-danger d-none mb-3" role="alert">
+        <i class="fa-solid fa-circle-exclamation me-2" aria-hidden="true"></i>
+        <span id="authErrorText">No se pudo iniciar sesión.</span>
+      </div>
+
+      <div id="authDeniedBox" class="alert alert-warning d-none mb-3" role="alert">
+        <div class="d-flex flex-column gap-2">
           <div>
-            <div class="eyebrow">Resumen</div>
-            <h1 class="h3 mb-1">Flujo de efectivo</h1>
-            <p class="text-secondary mb-0">Lo esencial del periodo, sin tener que navegar entre hojas.</p>
+            <i class="fa-solid fa-user-lock me-2" aria-hidden="true"></i>
+            <span id="authDeniedText">Tu cuenta no tiene permisos para usar TRLista.</span>
           </div>
-          <div class="period-picker card border-0 shadow-sm">
-            <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
-              <label for="dashboardMonth" class="small text-secondary mb-0">Periodo</label>
-              <select id="dashboardMonth" class="form-select form-select-sm border-0 fw-semibold"></select>
-            </div>
-          </div>
-        </div>
-
-        <div id="dataCutoffBanner" class="cutoff-banner mb-3"></div>
-
-        <div class="row g-3 mb-4" id="dashboardKpis"></div>
-
-        <div class="row g-4">
-          <div class="col-xl-7">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-start gap-3">
-                <div><h2 class="h5 mb-1">Distribución por categoría</h2><p class="small text-secondary mb-0">Totales del periodo seleccionado.</p></div>
-                <button class="btn btn-outline-secondary btn-sm" data-go-compare><i class="fa-solid fa-code-compare me-1"></i>Comparar</button>
-              </div>
-              <div class="card-body px-4 pb-4">
-                <div class="chart-wrap"><canvas id="dashboardChart"></canvas></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-xl-5">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 pt-4 px-4">
-                <h2 class="h5 mb-1">Lecturas rápidas</h2>
-                <p class="small text-secondary mb-0">Comparación contra el mismo corte del mes anterior.</p>
-              </div>
-              <div class="card-body px-4" id="dashboardInsights"></div>
-            </div>
+          <div>
+            <button type="button" id="btnDeniedLogout" class="btn btn-outline-dark btn-sm">
+              <i class="fa-solid fa-right-from-bracket me-2" aria-hidden="true"></i>
+              <span>Cerrar sesión</span>
+            </button>
           </div>
         </div>
-
-        <div class="card border-0 shadow-sm mt-4">
-          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div><h2 class="h5 mb-1">Resumen por categoría</h2><p class="small text-secondary mb-0">Haz clic en una categoría para ver sus movimientos.</p></div>
-            <button class="btn btn-primary btn-sm" data-new-movement><i class="fa-solid fa-plus me-1"></i>Registrar en TR-Finanzas</button>
-          </div>
-          <div class="table-responsive">
-            <table class="table align-middle mb-0">
-              <thead><tr><th>Categoría</th><th>Grupo</th><th class="text-end">Total</th><th class="text-end">Registros</th><th></th></tr></thead>
-              <tbody id="dashboardCategoryTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="view-movements" class="app-view d-none">
-        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow module-eyebrow finance-text">Módulo · TR-Finanzas</div><h1 class="h3 mb-1">Flujo de efectivo · Movimientos</h1><p class="text-secondary mb-0">Aquí se registran y consultan únicamente movimientos financieros.</p></div>
-          <button class="btn btn-primary" data-new-movement><i class="fa-solid fa-plus me-2"></i>Registrar en TR-Finanzas</button>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-body p-3 p-lg-4">
-            <div class="row g-3 align-items-end">
-              <div class="col-sm-6 col-lg-3"><label class="form-label small">Desde</label><input id="movStart" type="date" class="form-control"></div>
-              <div class="col-sm-6 col-lg-3"><label class="form-label small">Hasta</label><input id="movEnd" type="date" class="form-control"></div>
-              <div class="col-sm-6 col-lg-3"><label class="form-label small">Categoría</label><select id="movCategory" class="form-select"><option value="">Todas</option></select></div>
-              <div class="col-sm-6 col-lg-3"><label class="form-label small">Proveedor / documento</label><input id="movSearch" type="search" class="form-control" placeholder="Buscar..."></div>
-            </div>
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
-              <div id="movementFilterSummary" class="small text-secondary"></div>
-              <button id="resetMovementFilters" class="btn btn-outline-secondary btn-sm">Limpiar filtros</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card border-0 shadow-sm">
-          <div class="table-responsive movement-table-wrap">
-            <table class="table table-hover align-middle mb-0">
-              <thead class="sticky-top"><tr><th>Fecha</th><th>Categoría</th><th>Proveedor</th><th>Documento</th><th class="text-end">Valor</th><th>Detalle</th><th class="text-end">Acciones</th></tr></thead>
-              <tbody id="movementsTable"></tbody>
-            </table>
-          </div>
-          <div class="card-footer bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
-            <div id="movementPaginationText" class="small text-secondary"></div>
-            <div class="btn-group btn-group-sm"><button id="movPrev" class="btn btn-outline-secondary">Anterior</button><button id="movNext" class="btn btn-outline-secondary">Siguiente</button></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="view-debts" class="app-view d-none">
-        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow module-eyebrow debt-text">Módulo · Cuentas por pagar</div><h1 class="h3 mb-1">Cuentas por pagar</h1><p class="text-secondary mb-0">Registra obligaciones, gestiona abonos y controla vencimientos sin depender de Excel.</p></div>
-          <div class="d-flex gap-2"><button id="debtNewBtn" class="btn btn-success"><i class="fa-solid fa-plus me-2"></i>Nueva cuenta por pagar</button><button id="debtRefresh" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate me-2"></i>Actualizar</button></div>
-        </div>
-
-        <div class="module-context module-context-debt mb-4">
-          <div><strong>Estás trabajando en: Cuentas por pagar</strong><div class="small">Registra y actualiza obligaciones desde la aplicación. Excel se reserva para migración histórica.</div></div>
-          <span class="module-pill debt-pill"><i class="fa-solid fa-file-invoice-dollar me-1"></i>Destino principal: Cuentas por pagar</span>
-        </div>
-
-        <div id="debtKpis" class="row g-3 mb-4"></div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-body p-3 p-lg-4">
-            <div class="row g-3 align-items-end">
-              <div class="col-lg-7"><label class="form-label small">Buscar</label><input id="debtSearch" class="form-control" placeholder="Proveedor, CCF o QUEDAN..."></div>
-              <div class="col-lg-5"><label class="form-label small">Estado</label><select id="debtStatus" class="form-select"><option value="">Todos</option><option value="pending">Pendientes</option><option value="overdue">Vencidas</option><option value="partial">Pago parcial</option><option value="paid">Pagadas</option></select></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Consolidado</h2><p class="small text-secondary mb-0">“Fecha pago” del Excel se interpreta como vencimiento porque el archivo la calcula como Fecha + Días.</p></div>
-          <div class="table-responsive debt-table-wrap"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>QUEDAN</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-center">Días</th><th>Vencimiento</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="debtTable"></tbody></table></div>
-        </div>
-
-        <div id="debtImportAdminNote" class="alert alert-secondary d-none"><i class="fa-solid fa-lock me-2"></i>La consulta del módulo está disponible, pero solo un Administrador puede cargar un nuevo consolidado.</div>
-        <div id="debtImportCard" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><h2 class="h5 mb-1">Importar registros históricos desde Excel</h2><p class="small text-secondary mb-0">Herramienta de migración histórica. Las obligaciones nuevas se administran normalmente desde el formulario.</p></div><span class="module-pill debt-pill"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Destino: Cuentas por pagar</span></div></div>
-          <div class="card-body p-4">
-            <div class="import-dropzone p-4 text-center">
-              <input id="debtFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls" multiple style="max-width:680px">
-              <div class="d-flex flex-wrap justify-content-center gap-2 mt-3"><button id="debtAnalyzeBtn" class="btn btn-dark"><i class="fa-solid fa-magnifying-glass-chart me-2"></i>Analizar consolidado</button><button id="debtCommitBtn" class="btn btn-success" disabled><i class="fa-solid fa-database me-2"></i>Aplicar cambios</button></div>
-              <div id="debtImportStatus" class="small text-secondary mt-3"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Vista previa de la carga</h2><p id="debtPreviewSummary" class="small text-secondary mb-0">Carga un consolidado para compararlo con lo existente.</p></div>
-          <div class="table-responsive debt-preview-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Fila</th><th>Fecha</th><th>Proveedor</th><th>CCF</th><th class="text-end">Valor</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Observación</th></tr></thead><tbody id="debtPreviewTable"><tr><td colspan="9" class="empty-state">Sin vista previa.</td></tr></tbody></table></div>
-        </div>
-
-        <div class="modal fade" id="debtManualModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg"><div class="modal-content">
-          <form id="debtManualForm"><div class="modal-header"><h5 class="modal-title" id="debtManualTitle">Nueva cuenta por pagar</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
-          <div class="modal-body"><div id="debtManualError" class="alert alert-danger d-none" role="alert"></div><div class="row g-3">
-            <div class="col-md-8"><label class="form-label">Proveedor *</label><input id="debtManualProvider" class="form-control" maxlength="180" required></div>
-            <div class="col-md-4"><label class="form-label">Fecha de emisión *</label><input id="debtManualDate" type="date" class="form-control" required></div>
-            <div class="col-md-6"><label class="form-label">CCF / Factura</label><input id="debtManualCCF" class="form-control" maxlength="120"></div>
-            <div class="col-md-6"><label class="form-label">QUEDAN</label><input id="debtManualQuedan" class="form-control" maxlength="120"></div>
-            <div class="col-md-4"><label class="form-label">Importe ($) *</label><input id="debtManualValue" type="number" min="0.01" step="0.01" class="form-control" required></div>
-            <div class="col-md-4"><label class="form-label">Días de crédito *</label><input id="debtManualDays" type="number" min="0" max="3650" step="1" class="form-control" value="30" required></div>
-            <div class="col-md-4"><label class="form-label">Vencimiento *</label><input id="debtManualDueDate" type="date" class="form-control" required></div>
-          </div><p class="small text-secondary mt-3 mb-0">El vencimiento se calcula automáticamente al cambiar fecha o días. Al crear una obligación, el saldo inicia por el importe completo.</p></div>
-          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button id="debtManualSave" type="submit" class="btn btn-success">Guardar obligación</button></div></form>
-        </div></div></div>
-        <div class="modal fade" id="debtPaymentModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><form id="debtPaymentForm">
-          <div class="modal-header"><h5 class="modal-title">Registrar abono</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
-          <div class="modal-body"><p id="debtPaymentContext" class="small text-secondary"></p><div id="debtPaymentError" class="alert alert-danger d-none"></div>
-          <label class="form-label">Importe del abono ($)</label><input id="debtPaymentAmount" class="form-control mb-3" type="number" min="0.01" step="0.01" required>
-          <label class="form-label">Fecha del pago</label><input id="debtPaymentDate" class="form-control mb-3" type="date" required>
-          <label class="form-label">Referencia / Nota</label><input id="debtPaymentNote" maxlength="300" class="form-control"></div>
-          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" id="debtPaymentSave" class="btn btn-success">Registrar pago</button></div>
-        </form></div></div></div>
-      </section>
-
-      <section id="view-compare" class="app-view d-none">
-        <div class="page-heading mb-4">
-          <div class="eyebrow">Análisis</div><h1 class="h3 mb-1">Comparar</h1><p class="text-secondary mb-0">Comparaciones útiles sin construir reportes manualmente.</p>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4 compare-control-card">
-          <div class="card-body p-3 p-lg-4">
-            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
-              <div class="btn-group" role="group" aria-label="Tipo de comparación">
-                <button id="compareQuickBtn" class="btn btn-dark btn-sm">Rápida</button>
-                <button id="compareCustomBtn" class="btn btn-outline-dark btn-sm">Personalizada</button>
-              </div>
-              <div class="small text-secondary"><i class="fa-solid fa-circle-info me-1"></i>La comparación por mismo corte evita enfrentar un mes incompleto contra uno completo.</div>
-            </div>
-
-            <div id="quickCompareControls">
-              <div class="row g-3 align-items-end">
-                <div class="col-md-3"><label class="form-label small">Periodo actual</label><select id="compareMonthA" class="form-select"></select></div>
-                <div class="col-md-3"><label class="form-label small">Periodo base</label><select id="compareMonthB" class="form-select"></select></div>
-                <div class="col-md-3"><label class="form-label small">Agrupar por</label><select id="compareGroupBy" class="form-select"><option value="category">Categoría</option><option value="provider">Proveedor</option><option value="group">Grupo</option></select></div>
-                <div class="col-md-3"><label class="form-label small">Métrica</label><select id="compareMetric" class="form-select"><option value="amount">Valor</option><option value="count">Número de movimientos</option><option value="average">Promedio por movimiento</option><option value="discount">Descuentos</option></select></div>
-              </div>
-              <div class="form-check form-switch mt-3">
-                <input class="form-check-input" type="checkbox" role="switch" id="compareSameCutoff" checked>
-                <label class="form-check-label" for="compareSameCutoff">Comparar hasta el mismo día de corte</label>
-                <div id="cutoffHelp" class="form-text"></div>
-              </div>
-            </div>
-
-            <div id="customCompareControls" class="d-none">
-              <div class="row g-3">
-                <div class="col-12 col-lg-6"><div class="range-box"><div class="fw-semibold mb-2">Periodo A</div><div class="row g-2"><div class="col"><input id="customAStart" type="date" class="form-control"></div><div class="col"><input id="customAEnd" type="date" class="form-control"></div></div></div></div>
-                <div class="col-12 col-lg-6"><div class="range-box"><div class="fw-semibold mb-2">Periodo B</div><div class="row g-2"><div class="col"><input id="customBStart" type="date" class="form-control"></div><div class="col"><input id="customBEnd" type="date" class="form-control"></div></div></div></div>
-              </div>
-              <div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label small">Agrupar por</label><select id="customGroupBy" class="form-select"><option value="category">Categoría</option><option value="provider">Proveedor</option><option value="group">Grupo</option></select></div><div class="col-md-6"><label class="form-label small">Métrica</label><select id="customMetric" class="form-select"><option value="amount">Valor</option><option value="count">Número de movimientos</option><option value="average">Promedio por movimiento</option><option value="discount">Descuentos</option></select></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="row g-3 mb-4" id="compareKpis"></div>
-
-        <div class="row g-4">
-          <div class="col-xl-8">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Comparación visual</h2><p id="compareChartSubtitle" class="small text-secondary mb-0"></p></div>
-              <div class="card-body px-4 pb-4"><div class="chart-wrap compare-chart"><canvas id="compareChart"></canvas></div></div>
-            </div>
-          </div>
-          <div class="col-xl-4">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Variaciones relevantes</h2><p class="small text-secondary mb-0">Ordenadas por impacto absoluto.</p></div>
-              <div class="card-body px-4" id="compareInsights"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Detalle comparativo</h2><p class="small text-secondary mb-0">El porcentaje se marca como “Nuevo” cuando el periodo base era cero.</p></div>
-          <div class="table-responsive">
-            <table class="table align-middle mb-0"><thead><tr><th id="compareEntityHeader">Categoría</th><th id="periodBHeader" class="text-end">Periodo base</th><th id="periodAHeader" class="text-end">Periodo actual</th><th class="text-end">Diferencia</th><th class="text-end">Variación</th><th></th></tr></thead><tbody id="compareTable"></tbody></table>
-          </div>
-        </div>
-      </section>
-
-      <section id="view-reports" class="app-view d-none">
-        <div class="page-heading mb-4"><div class="eyebrow">Salida</div><h1 class="h3 mb-1">Reportes</h1><p class="text-secondary mb-0">Excel deja de ser la base de trabajo y pasa a ser un formato de salida.</p></div>
-        <div class="row g-4">
-          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-table"></i></div><h2 class="h5">Resumen mensual</h2><p class="text-secondary small">Totales por categoría y grupos del mes seleccionado.</p><select id="reportMonth" class="form-select mb-3"></select><button id="downloadSummaryCsv" class="btn btn-outline-success w-100"><i class="fa-solid fa-file-csv me-2"></i>Descargar CSV</button></div></div></div>
-          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-list"></i></div><h2 class="h5">Detalle de movimientos</h2><p class="text-secondary small">Exportación de todos los movimientos históricos válidos cargados.</p><button id="downloadMovementsCsv" class="btn btn-outline-success w-100 mt-4"><i class="fa-solid fa-file-csv me-2"></i>Descargar CSV</button></div></div></div>
-          <div class="col-md-6 col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="report-icon"><i class="fa-solid fa-file-excel"></i></div><h2 class="h5">Excel y PDF</h2><p class="text-secondary small">Genera reportes formales desde la fuente de datos actual, sin editar hojas manualmente.</p><div class="d-grid gap-2 mt-3"><button id="downloadSummaryXlsx" class="btn btn-outline-success"><i class="fa-solid fa-file-excel me-2"></i>Resumen Excel</button><button id="downloadSummaryPdf" class="btn btn-outline-danger"><i class="fa-solid fa-file-pdf me-2"></i>Resumen PDF</button></div></div></div></div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Pendientes de depuración del histórico</h2><p class="small text-secondary mb-0">Registros que la nueva aplicación no permitiría guardar sin una fecha válida.</p></div>
-          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Libro</th><th>Hoja</th><th>Fila</th><th>Fecha original</th><th>Proveedor</th><th class="text-end">Valor</th></tr></thead><tbody id="importIssuesTable"></tbody></table></div>
-        </div>
-      </section>
-
-      <section id="view-import" class="app-view d-none">
-        <div class="page-heading d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
-          <div><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Importar archivos</h1><p class="text-secondary mb-0">La aplicación identifica el tipo de Excel y muestra claramente qué módulo recibirá los datos antes de guardar.</p></div>
-          <span class="badge text-bg-dark"><i class="fa-solid fa-shield-halved me-1"></i>Solo Administrador</span>
-        </div>
-
-        <div id="importAdminNote" class="alert alert-danger d-none">Tu rol actual no permite realizar importaciones.</div>
-        <div id="importModeNote" class="alert alert-secondary"></div>
-        <div class="module-destination-grid mb-4">
-          <div class="module-destination-card finance-destination"><div class="module-destination-icon"><i class="fa-solid fa-chart-line"></i></div><div><strong>TR-Finanzas · Flujo de efectivo</strong><div class="small text-secondary">Excel históricos de movimientos, categorías, proveedores y valores.</div></div></div>
-          <div class="module-destination-card debt-destination"><div class="module-destination-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div><div><strong>Cuentas por pagar</strong><div class="small text-secondary">DEUDA CONSOLIDADO: obligaciones, pagos, saldos y vencimientos.</div></div></div>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-body p-4">
-            <div id="importDropzone" class="import-dropzone text-center p-4 p-lg-5">
-              <div class="import-drop-icon mx-auto mb-3"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-              <h2 class="h5">Selecciona Excel o un ZIP completo</h2>
-              <p class="text-secondary small mb-3">Acepta los libros históricos actuales (.xlsx/.xls), varios archivos a la vez o un ZIP con varios meses.</p>
-              <input id="importFiles" type="file" class="form-control mx-auto" accept=".xlsx,.xls,.zip" multiple style="max-width:680px">
-              <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
-                <button id="importAnalyzeBtn" class="btn btn-dark"><i class="fa-solid fa-magnifying-glass-chart me-2"></i>Analizar archivos</button>
-                <button id="importCommitBtn" class="btn btn-success" disabled><i class="fa-solid fa-database me-2"></i>Importar registros nuevos</button>
-              </div>
-              <div id="importStatus" class="small text-secondary mt-3"></div>
-            </div>
-          </div>
-        </div>
-
-        <div id="importKpis" class="row g-3 mb-4"></div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Archivos reconocidos</h2><p class="small text-secondary mb-0">El sistema detecta automáticamente las hojas actuales, el formato genérico con columna Categoría y el consolidado de deuda, que se envía al módulo Cuentas por pagar.</p></div>
-          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Archivo</th><th>Periodo detectado</th><th class="text-end">Movimientos</th><th>Estado</th></tr></thead><tbody id="importFileTable"></tbody></table></div>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4 d-flex flex-wrap justify-content-between gap-2"><div><h2 class="h5 mb-1">Vista previa y revisión</h2><p id="importPreviewSummary" class="small text-secondary mb-0">Analiza uno o varios archivos antes de importar.</p></div><span class="small text-secondary">Los duplicados se omiten y los conflictos se detienen para revisión.</span></div>
-          <div class="table-responsive import-issues-wrap"><table class="table align-middle mb-0"><thead><tr><th>Estado</th><th>Archivo</th><th>Origen</th><th>Fecha</th><th>Proveedor</th><th class="text-end">Valor</th><th>Observación</th></tr></thead><tbody id="importIssueTable"></tbody></table></div>
-        </div>
-
-        <div class="alert alert-info border-0 shadow-sm"><i class="fa-solid fa-circle-info me-2"></i><strong>Regla de seguridad:</strong> los registros con errores no se importan. Los duplicados exactos se omiten automáticamente. Si el mismo proveedor + documento/referencia aparece con datos diferentes, se marca como conflicto y tampoco se importa automáticamente. Las advertencias, como una fecha fuera del mes nominal del archivo, se conservan para revisión.</div>
-
-        <div class="card border-0 shadow-sm mt-4">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Historial de importaciones</h2><p class="small text-secondary mb-0">Cada lote queda identificado. Un Administrador puede revertir un lote sin afectar movimientos creados manualmente.</p></div>
-          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Fecha</th><th>Archivo(s)</th><th class="text-end">Importados</th><th>Estado</th><th>Usuario</th><th></th></tr></thead><tbody id="importHistoryTable"></tbody></table></div>
-        </div>
-      </section>
-
-      <section id="view-settings" class="app-view d-none">
-        <div class="page-heading mb-4"><div class="eyebrow">Administración</div><h1 class="h3 mb-1">Configuración</h1><p class="text-secondary mb-0">Clasificaciones, seguridad y estado de la fuente de datos.</p></div>
-        <div class="row g-4 mb-4">
-          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Fuente de datos</div><div id="settingsDataMode" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Demo usa el navegador. Producción usa Firebase Authentication y Firestore.</p></div></div></div>
-          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Rol actual</div><div id="settingsRole" class="h5 mt-1 mb-2">—</div><p class="small text-secondary mb-0">Administrador: control total. Contabilidad: captura/edición. Consulta: solo lectura.</p></div></div></div>
-          <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Auditoría</div><div class="h5 mt-1 mb-2">Bitácora inmutable</div><p class="small text-secondary mb-0">Cada alta, edición o eliminación en producción registra usuario, hora y valores afectados.</p></div></div></div>
-        </div>
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Clasificación de categorías</h2><p class="small text-secondary mb-0">Base utilizada por los resúmenes y comparaciones.</p></div>
-          <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Categoría</th><th>Grupo</th><th>Descuento</th></tr></thead><tbody id="settingsCategories"></tbody></table></div>
-        </div>
-      </section>
-
-    </main>
-  </div>
-
-  <div class="modal fade" id="movementModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <form id="movementForm">
-          <div class="modal-header"><div><h2 id="movementModalTitle" class="modal-title fs-5">Nuevo movimiento</h2><div id="movementModalSubtitle" class="small text-secondary">Solo muestra los campos necesarios.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-          <div class="modal-body p-4">
-            <div class="module-context module-context-finance mb-4">
-              <div><strong>Registro dirigido a TR-Finanzas</strong><div class="small">Este formulario crea o modifica un movimiento de flujo de efectivo. No crea una cuenta por pagar.</div></div>
-              <span class="module-pill finance-pill"><i class="fa-solid fa-chart-line me-1"></i>Destino: TR-Finanzas</span>
-            </div>
-            <div class="row g-3">
-              <div class="col-md-4"><label class="form-label">Fecha</label><input id="newDate" type="date" class="form-control" required></div>
-              <div class="col-md-8"><label class="form-label">Categoría</label><select id="newCategory" class="form-select" required></select></div>
-              <div class="col-md-7 position-relative provider-field"><label for="newProvider" class="form-label">Proveedor</label><input id="newProvider" class="form-control" autocomplete="off" placeholder="Escriba para buscar proveedor..." aria-describedby="newProviderSuggestions" required><ul id="newProviderSuggestions" class="list-group provider-suggestions"></ul></div>
-              <div class="col-md-5"><label class="form-label">Documento</label><input id="newDocument" class="form-control"></div>
-              <div class="col-md-6"><label class="form-label">Valor</label><div class="input-group"><span class="input-group-text">$</span><input id="newValue" type="number" min="0" step="0.01" class="form-control" required></div></div>
-              <div id="discountField" class="col-md-6 d-none"><label class="form-label">Descuento</label><div class="input-group"><span class="input-group-text">$</span><input id="newDiscount" type="number" min="0" step="0.01" class="form-control" value="0"></div></div>
-              <div class="col-12"><label class="form-label">Detalle</label><textarea id="newDetail" class="form-control" rows="2"></textarea></div>
-            </div>
-          </div>
-          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button id="movementSubmitBtn" type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-2"></i><span>Guardar movimiento</span></button></div>
-        </form>
       </div>
+
+      <form id="loginForm" class="auth-form" autocomplete="on">
+        <div class="mb-3">
+          <label for="loginEmail" class="form-label fw-semibold">Usuario</label>
+          <input id="loginEmail" name="email" type="email" class="form-control" placeholder="correo@empresa.com" autocomplete="username" required>
+        </div>
+
+        <div class="mb-3">
+          <label for="loginPassword" class="form-label fw-semibold">Contraseña</label>
+          <input id="loginPassword" name="password" type="password" class="form-control" placeholder="Ingresa tu contraseña" autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" id="loginSubmit" class="btn btn-primary w-100 auth-submit-btn">
+          <i class="fa-solid fa-right-to-bracket me-2" aria-hidden="true"></i>
+          <span>Ingresar</span>
+        </button>
+      </form>
+
+      <p id="authStatusText" class="auth-status-text mb-0 mt-3">Validando sesión...</p>
     </div>
   </div>
 
 
-  <div class="modal fade" id="deleteMovementModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header">
-          <div><h2 class="modal-title fs-5">Eliminar movimiento</h2><div class="small text-secondary">Esta acción no se puede deshacer.</div></div>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-2">¿Seguro que deseas eliminar este registro?</p>
-          <div id="deleteMovementSummary" class="small text-secondary"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button id="confirmDeleteMovement" type="button" class="btn btn-danger"><i class="fa-solid fa-trash me-2"></i>Eliminar definitivamente</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Bootstrap + SweetAlert -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-  <div class="toast-container position-fixed bottom-0 end-0 p-3"><div id="appToast" class="toast" role="status"><div class="toast-body d-flex gap-2 align-items-center"><i class="fa-solid fa-circle-check text-success"></i><span id="toastText"></span></div></div></div>
+  <!-- Firebase (Firestore/Auth) -->
+  <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-messaging-compat.js"></script>
+  <script>
+    // Inicializar Firebase desde variables de entorno servidas por /api/client-config.
+    // Se usa una carga síncrona corta para mantener compatible el orden legacy de scripts.
+    (function initFirebaseFromEnv() {
+      if (typeof firebase === 'undefined' || !firebase.apps || firebase.apps.length) return;
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
-  <script src="assets/js/tr-theme.js"></script>
-  <script src="data/historico-2026.js"></script>
-  <script src="assets/js/auth.js"></script>
-  <script src="assets/js/data-service.js"></script>
-  <script src="assets/js/debts.js"></script>
-  <script src="assets/js/importer.js"></script>
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/client-config', false);
+        xhr.send(null);
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          throw new Error('No se pudo leer /api/client-config');
+        }
+
+        const payload = JSON.parse(xhr.responseText || '{}');
+        const firebaseConfig = payload.firebaseConfig || {};
+        const required = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        const missing = required.filter((key) => !firebaseConfig[key]);
+
+        if (missing.length) {
+          throw new Error('Faltan variables Firebase cliente: ' + missing.join(', '));
+        }
+
+        window.TR_CLIENT_CONFIG = payload;
+        firebase.initializeApp(firebaseConfig);
+      } catch (error) {
+        console.error('Error inicializando Firebase desde variables de entorno:', error);
+        window.TR_FIREBASE_INIT_ERROR = error;
+      }
+    })();
+  </script>
+
+  <!-- Barcode scanner library -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- App -->
+  <script src="assets/js/trlista-utils.js"></script>
+  <script src="assets/js/trlista-checklist-helpers.js"></script>
   <script src="assets/js/app.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/checklist.js?v=20261023-sales-replenishment-v1"></script>
+  <script src="assets/js/admin.js?v=20260717-requisition-state-guard"></script>
 </body>
 </html>

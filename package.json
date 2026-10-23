@@ -1,13 +1,13 @@
 {
-  "name": "tr-flujo-efectivo",
+  "name": "trlista-firebase-historial",
   "private": true,
   "type": "module",
-  "version": "0.5.0",
-  "description": "Aplicación de flujo de efectivo en Vercel + Firebase.",
-  "scripts": {
-    "migrate:2026": "node scripts/import-historical.mjs"
-  },
+  "version": "1.0.0",
+  "description": "TRLista con Firestore + histórico por día (flatpickr) y catálogo/proveedores vía Google Sheets (proxy en Vercel).",
   "dependencies": {
     "firebase-admin": "^12.7.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
   }
 }

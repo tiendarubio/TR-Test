@@ -1,46 +1,136 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function roleIs(roles) { return signedIn() && request.auth.token.role in roles; }
-    function canWriteFinance() { return roleIs(['admin','contabilidad']); }
-
-    match /movements/{id} {
-      allow read: if roleIs(['admin','contabilidad','consulta']);
-      // Las escrituras pasan por /api/movements para forzar validación + auditoría.
-      allow create, update, delete: if false;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    match /categories/{id} {
-      allow read: if roleIs(['admin','contabilidad','consulta']);
-      allow write: if roleIs(['admin']);
+    function hasRole(roles) {
+      return signedIn() && request.auth.token.role in roles;
     }
 
-    match /budgets/{id} {
-      allow read: if roleIs(['admin','contabilidad','consulta']);
-      allow write: if roleIs(['admin','contabilidad']);
+    function isProtectedList(docId) {
+      return docId.matches('^traslado_.*$');
     }
 
-    match /activity_log/{id} {
-      allow read: if roleIs(['admin','contabilidad']);
-      // La bitácora se escribe únicamente desde APIs de servidor (Admin SDK).
-      allow create, update, delete: if false;
+    function isOperatorOwnStore(storeKey) {
+      return signedIn()
+        && request.auth.token.role == 'operador'
+        && request.auth.token.storeKey == storeKey;
     }
 
-    match /import_batches/{id} {
-      allow read: if roleIs(['admin']);
-      allow create, update, delete: if false;
+    function isOperatorOwnList(docId) {
+      return signedIn()
+        && request.auth.token.role == 'operador'
+        && (
+          (request.auth.token.storeKey == 'lista_sexta_calle'
+            && (docId == '68c5b46ed0ea881f407ce556' || docId == '69174e9943b1c97be9ad5f6b'))
+          || (request.auth.token.storeKey == 'lista_avenida_morazan'
+            && (docId == '68c5b4e043b1c97be941f83f' || docId == '69174e1ad0ea881f40e8565f'))
+          || (request.auth.token.storeKey == 'lista_centro_comercial'
+            && (docId == '68c5b4add0ea881f407ce586' || docId == '69174eb7d0ea881f40e85786'))
+        );
     }
 
-    match /debts/{id} {
-      // Consulta y escritura únicamente mediante /api/debts para validar, deduplicar y auditar.
-      allow read, create, update, delete: if false;
+    match /tr_lista/{docId}/historial/{day} {
+      allow read: if hasRole(['admin', 'supervisor']) || isOperatorOwnList(docId);
+      allow write: if hasRole(['admin', 'supervisor'])
+        || (isOperatorOwnList(docId) && !isProtectedList(docId));
+    }
+
+    match /requests/{requestId} {
+      allow read: if hasRole(['admin', 'supervisor'])
+        || (signedIn() && resource.data.createdByUid == request.auth.uid)
+        || isOperatorOwnStore(resource.data.storeKey);
+      allow create: if hasRole(['admin', 'supervisor'])
+        || (signedIn()
+          && request.resource.data.createdByUid == request.auth.uid
+          && isOperatorOwnStore(request.resource.data.storeKey));
+      allow update: if hasRole(['admin', 'supervisor'])
+        || (signedIn()
+          && resource.data.createdByUid == request.auth.uid
+          && request.resource.data.createdByUid == request.auth.uid
+          && isOperatorOwnStore(resource.data.storeKey)
+          && isOperatorOwnStore(request.resource.data.storeKey))
+        || (signedIn()
+          && request.auth.token.role == 'operador'
+          && isOperatorOwnStore(resource.data.storeKey)
+          && isOperatorOwnStore(request.resource.data.storeKey)
+          && request.resource.data.status == 'recibido'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'statusUpdatedAt',
+            'statusUpdatedByUid',
+            'statusUpdatedByEmail',
+            'receivedAt',
+            'receivedByUid',
+            'receivedByEmail'
+          ]));
+      allow delete: if hasRole(['admin']);
+    }
+
+    match /dispatches/{dispatchId} {
+      allow read: if hasRole(['admin', 'supervisor'])
+        || isOperatorOwnStore(resource.data.storeKey);
+      allow create, update, delete: if hasRole(['admin', 'supervisor']);
+    }
+
+    match /receipts/{receiptId} {
+      allow read: if hasRole(['admin', 'supervisor'])
+        || isOperatorOwnStore(resource.data.storeKey);
+      allow create: if hasRole(['admin', 'supervisor'])
+        || (signedIn()
+          && request.resource.data.createdByUid == request.auth.uid
+          && isOperatorOwnStore(request.resource.data.storeKey));
+      allow update: if hasRole(['admin', 'supervisor'])
+        || (signedIn()
+          && resource.data.createdByUid == request.auth.uid
+          && request.resource.data.createdByUid == request.auth.uid
+          && isOperatorOwnStore(resource.data.storeKey)
+          && isOperatorOwnStore(request.resource.data.storeKey))
+        || (signedIn()
+          && request.auth.token.role == 'operador'
+          && isOperatorOwnStore(resource.data.storeKey)
+          && isOperatorOwnStore(request.resource.data.storeKey)
+          && request.resource.data.status == 'recibido'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'statusUpdatedAt',
+            'statusUpdatedByUid',
+            'statusUpdatedByEmail',
+            'receivedAt',
+            'receivedByUid',
+            'receivedByEmail'
+          ]));
+      allow delete: if hasRole(['admin']);
+    }
+
+    match /incidents/{incidentId} {
+      allow read: if hasRole(['admin', 'supervisor'])
+        || isOperatorOwnStore(resource.data.storeKey);
+      allow create: if signedIn() && (
+        hasRole(['admin', 'supervisor'])
+        || (request.resource.data.createdByUid == request.auth.uid
+          && isOperatorOwnStore(request.resource.data.storeKey))
+      );
+      allow update, delete: if hasRole(['admin', 'supervisor']);
+    }
+
+
+    match /consolidations/{consolidationId} {
+      allow read: if hasRole(['admin', 'supervisor']);
+      allow create, update, delete: if hasRole(['admin', 'supervisor']);
+    }
+
+    match /activity_log/{logId} {
+      allow read: if hasRole(['admin', 'supervisor']);
+      allow create: if signedIn();
+      allow update, delete: if false;
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || roleIs(['admin']));
+      allow read: if signedIn() && request.auth.uid == uid;
       allow write: if false;
     }
   }
 }
-

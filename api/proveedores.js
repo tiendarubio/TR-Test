@@ -1,12 +1,11 @@
-// api/proveedores.js — Proxy a Google Sheets para lista de proveedores (misma fuente que TR-Recepcion)
 export default async function handler(req, res) {
   try {
     const apiKey  = process.env.GOOGLE_SHEETS_API_KEY;
-    const sheetId = process.env.GOOGLE_SHEETS_ID;
+    const sheetId = process.env.GOOGLE_SHEETS_SHEET_ID || process.env.GOOGLE_SHEETS_ID;
     const range   = process.env.GOOGLE_SHEETS_PROV_RANGE || 'proveedores!C2:C1000';
 
     if (!apiKey || !sheetId) {
-      return res.status(500).json({ error: 'Faltan variables de entorno (GOOGLE_SHEETS_API_KEY / GOOGLE_SHEETS_ID)' });
+      return res.status(500).json({ error: 'Faltan variables de entorno de Google Sheets (GOOGLE_SHEETS_API_KEY / GOOGLE_SHEETS_ID).' });
     }
 
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}`;

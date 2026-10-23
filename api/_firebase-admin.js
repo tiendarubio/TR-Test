@@ -1,43 +1,36 @@
 import admin from 'firebase-admin';
 
-function required(name) {
+function readRequiredEnv(name) {
   const value = String(process.env[name] || '').trim();
-  if (!value) throw new Error(`Falta la variable de entorno ${name}.`);
+  if (!value) throw new Error('Falta la variable de entorno ' + name + '.');
   return value;
 }
 
-function privateKey(value) {
-  return String(value || '').replace(/^"(.*)"$/s, '$1').replace(/\\n/g, '\n').trim();
+function normalizePrivateKey(value) {
+  let key = String(value || '').trim();
+  // Acepta valores PEM directos, entrecomillados o JSON-escaped.
+  if (key.startsWith('"') && key.endsWith('"')) {
+    try { key = JSON.parse(key); }
+    catch (_) { key = key.slice(1, -1); }
+  }
+  key = String(key).replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
+  // No intentamos reconstruir credenciales truncadas o inválidas.
+  if (!/^-----BEGIN PRIVATE KEY-----\n[\s\S]+\n-----END PRIVATE KEY-----$/.test(key)) {
+    throw new Error('FIREBASE_ADMIN_PRIVATE_KEY no tiene formato PEM válido. Revisa el valor completo en Vercel (BEGIN/END PRIVATE KEY y saltos de línea).');
+  }
+  return key;
 }
 
 export function getAdminApp() {
   if (admin.apps.length) return admin.app();
-  return admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: required('FIREBASE_PROJECT_ID'),
-      clientEmail: required('FIREBASE_ADMIN_CLIENT_EMAIL'),
-      privateKey: privateKey(required('FIREBASE_ADMIN_PRIVATE_KEY'))
-    })
-  });
-}
 
-export async function requireUser(req, allowedRoles = []) {
-  getAdminApp();
-  const header = String(req.headers.authorization || '');
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (!token) {
-    const err = new Error('Token de autenticación no enviado.');
-    err.statusCode = 401;
-    throw err;
-  }
-  const decoded = await admin.auth().verifyIdToken(token);
-  const role = String(decoded.role || 'sin_acceso');
-  if (allowedRoles.length && !allowedRoles.includes(role)) {
-    const err = new Error('No tienes permisos para realizar esta acción.');
-    err.statusCode = 403;
-    throw err;
-  }
-  return { ...decoded, role };
+  const projectId = readRequiredEnv('FIREBASE_PROJECT_ID');
+  const clientEmail = readRequiredEnv('FIREBASE_ADMIN_CLIENT_EMAIL');
+  const privateKey = normalizePrivateKey(readRequiredEnv('FIREBASE_ADMIN_PRIVATE_KEY'));
+
+  return admin.initializeApp({
+    credential: admin.credential.cert({ projectId, clientEmail, privateKey })
+  });
 }
 
 export { admin };
