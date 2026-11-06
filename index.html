@@ -195,24 +195,6 @@
 
 
 
-<!-- Nuevo módulo: sugeridos por ventas diarias + solicitudes históricas -->
-<div id="replenishmentCard" class="card shadow-sm mb-4 replenishment-card">
-  <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
-    <div>
-      <div class="fw-semibold"><i class="fa-solid fa-chart-line me-2 text-primary" aria-hidden="true"></i>Sugeridos de reposición</div>
-      <div class="small text-muted" id="replenishmentStatus">Ventas diarias e historial de solicitudes de tu sucursal.</div>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" id="btnSyncDailySales" class="btn btn-outline-secondary btn-sm d-none" title="Guardar ventas actuales en el historial (administrador)">
-        <i class="fa-solid fa-cloud-arrow-down me-1" aria-hidden="true"></i>Sincronizar ventas
-      </button>
-      <button type="button" id="btnOpenReplenishment" class="btn btn-primary btn-sm">
-        <i class="fa-solid fa-list-check me-1" aria-hidden="true"></i>Ver sugeridos
-      </button>
-    </div>
-  </div>
-</div>
-
 <div id="requestFlowCard" class="card shadow-sm mb-4 request-flow-card d-none" aria-live="polite">
   <div class="card-body">
     <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
@@ -998,12 +980,6 @@
         <span>Marcar requisición como hecha</span>
       </button>
 
-      <div class="mobile-fab-section-title">Reposición</div>
-      <button type="button" id="btnFabReplenishment" class="btn btn-light mobile-fab-menu-btn">
-        <i class="fa-solid fa-list-check" aria-hidden="true"></i>
-        <span>Ver sugeridos</span>
-      </button>
-
       <div class="mobile-fab-section-title">Tabla</div>
       <button type="button" id="btnFabSave" class="btn btn-light mobile-fab-menu-btn">
         <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
@@ -1158,7 +1134,7 @@
   <script src="assets/js/trlista-checklist-helpers.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/auth.js"></script>
-  <script src="assets/js/checklist.js?v=20261023-sales-replenishment-v1"></script>
+  <script src="assets/js/checklist.js?v=20261019-requisitions-by-day-fab-fix"></script>
   <script src="assets/js/admin.js?v=20260717-requisition-state-guard"></script>
 </body>
 </html>

@@ -84,10 +84,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnFabRequisitionsByDay = $('btnFabRequisitionsByDay');
   const btnFabConsolidatePendingRequisitions = $('btnFabConsolidatePendingRequisitions');
   const btnFabWarehouseNotifications = $('btnFabWarehouseNotifications');
-  const btnOpenReplenishment = $('btnOpenReplenishment');
-  const btnFabReplenishment = $('btnFabReplenishment');
-  const btnSyncDailySales = $('btnSyncDailySales');
-  const replenishmentStatus = $('replenishmentStatus');
   const mobileFabRequestSectionTitle = $('mobileFabRequestSectionTitle');
   const mobileFabToolsSectionTitle = $('mobileFabToolsSectionTitle');
   const searchModeHint = $('searchModeHint');
@@ -165,6 +161,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let lastCatalogQuery = '';
   let suppressProductAddedToast = false;
   let isBulkRenderingRows = false;
+  let bulkRowFragment = null;
   let scannerAudioContext = null;
   let scannerSoundEnabled = localStorage.getItem('trlistaScannerSound') !== 'off';
   let warehouseRequestsUnsubscribe = null;
@@ -180,7 +177,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let autoSaveQueued = false;
   let autoSaveDirty = false;
   let lastAutoSaveSignature = '';
-  let lastAutoSaveToastAt = 0;
   let suppressMobileCardRefresh = false;
   let pendingMobileCardRefresh = false;
   const AUTO_SAVE_DELAY_MS = 2500;
@@ -335,39 +331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toastTitle = String(title || '').trim();
     const toastMessage = String(message || '').trim();
 
-    // En pantallas compactas usamos siempre el host propio. SweetAlert2 puede modificar
-    // foco, clases del body y compensación del scrollbar incluso en modo toast; algunos
-    // navegadores móviles interpretan esos cambios como una solicitud de volver arriba.
-    const useNativeMobileToast = isCompactScreen();
-
-    // En escritorio se conserva SweetAlert2, pero sin restauración de foco ni ajustes
-    // automáticos de altura/scroll para que el aviso no altere la posición de la vista.
-    if (!useNativeMobileToast && window.Swal?.mixin) {
-      const Toast = Swal.mixin({
-        toast: true,
-        position: options.position || 'top-end',
-        icon: safeType,
-        showConfirmButton: false,
-        returnFocus: false,
-        heightAuto: false,
-        scrollbarPadding: false,
-        timer: timeout > 0 ? timeout : undefined,
-        timerProgressBar: timeout > 0,
-        customClass: {
-          popup: 'tr-swal-toast'
-        },
-        didOpen: (toast) => {
-          toast.addEventListener('mouseenter', Swal.stopTimer);
-          toast.addEventListener('mouseleave', Swal.resumeTimer);
-        }
-      });
-
-      return Toast.fire({
-        title: toastTitle,
-        text: toastMessage
-      });
-    }
-
+    // Avisos ligeros y consistentes en escritorio/móvil; sin bloquear foco ni scroll.
     if (!scanToastHost) return Promise.resolve();
 
     const toast = document.createElement('div');
@@ -389,9 +353,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     toast.querySelector('.scan-toast-close')?.addEventListener('click', closeToast);
+    const duplicate = [...scanToastHost.children].find(node => node.querySelector('.scan-toast-title')?.textContent === toastTitle && node.querySelector('.scan-toast-message')?.textContent === toastMessage);
+    duplicate?.remove();
     scanToastHost.appendChild(toast);
 
-    while (scanToastHost.children.length > 3) {
+    while (scanToastHost.children.length > 2) {
       scanToastHost.firstElementChild?.remove();
     }
 
@@ -677,11 +643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateLastSavedText(payload.meta?.updatedAt || new Date().toISOString());
       updateRequestFlowUI({ refreshMobileCards: false });
 
-      const nowMs = Date.now();
-      if (!isMobileQuantityEditorActive() && nowMs - lastAutoSaveToastAt > 12000) {
-        showScanToast('success', 'Guardado automático', formatSV(payload.meta?.updatedAt || new Date().toISOString()), { timeout: 1900 });
-        lastAutoSaveToastAt = nowMs;
-      }
+      // El estado persistente de guardado ofrece confirmación sin interrumpir al operador.
     } catch (err) {
       console.error('Error en autoguardado:', err);
       setAutoSaveStatus('error');
@@ -2206,6 +2168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 
+  let loadingRevealTimer = null;
   function setLoadingState(isLoading, message = 'Cargando...') {
     if (!appLoadingOverlay) return;
 
@@ -2214,14 +2177,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (appLoadingText) {
         appLoadingText.textContent = message || 'Cargando...';
       }
-      appLoadingOverlay.classList.remove('d-none');
-      appLoadingOverlay.setAttribute('aria-hidden', 'false');
+      if (!loadingRevealTimer) {
+        loadingRevealTimer = window.setTimeout(() => {
+          loadingRevealTimer = null;
+          if (loadingCounter > 0) {
+            appLoadingOverlay.classList.remove('d-none');
+            appLoadingOverlay.setAttribute('aria-hidden', 'false');
+          }
+        }, 250);
+      }
       return;
     }
 
     loadingCounter = Math.max(0, loadingCounter - 1);
 
     if (loadingCounter === 0) {
+      window.clearTimeout(loadingRevealTimer);
+      loadingRevealTimer = null;
       appLoadingOverlay.classList.add('d-none');
       appLoadingOverlay.setAttribute('aria-hidden', 'true');
     }
@@ -2229,8 +2201,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function withLoading(message, task) {
     setLoadingState(true, message);
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-
     try {
       return await task();
     } finally {
@@ -2517,14 +2487,29 @@ function isMobileQuantityEditorActive() {
     && (active.classList.contains('qty') || active.classList.contains('mobile-card-qty-input'));
 }
 
+let mobileRefreshFrame = null;
 function refreshMobileChecklistCardsSafely(options = {}) {
   const { force = false } = options || {};
+  if (!isCompactScreen()) {
+    if (mobileRefreshFrame !== null) cancelAnimationFrame(mobileRefreshFrame);
+    mobileRefreshFrame = null;
+    if (mobileChecklistCards?.childElementCount) mobileChecklistCards.replaceChildren();
+    return true;
+  }
   if (!force && isMobileQuantityEditorActive()) {
     pendingMobileCardRefresh = true;
     return false;
   }
   pendingMobileCardRefresh = false;
-  refreshMobileChecklistCards();
+  if (mobileRefreshFrame !== null) cancelAnimationFrame(mobileRefreshFrame);
+  mobileRefreshFrame = requestAnimationFrame(() => {
+    mobileRefreshFrame = null;
+    if (isMobileQuantityEditorActive()) {
+      pendingMobileCardRefresh = true;
+      return;
+    }
+    refreshMobileChecklistCards();
+  });
   return true;
 }
 
@@ -2575,7 +2560,7 @@ function refreshMobileChecklistCards() {
   }
 
   const rows = getTableRows();
-  mobileChecklistCards.innerHTML = '';
+  const fragment = document.createDocumentFragment();
 
   rows.forEach((tr) => {
     const item = buildChecklistItemFromRow(tr);
@@ -2640,6 +2625,7 @@ function refreshMobileChecklistCards() {
             aria-label="Cantidad"
           >
         </label>
+        <button type="button" class="qty-multiply-btn tr-qty-multiply" aria-label="Multiplicar cantidad" title="Multiplicar">×</button>
       </div>
 
       <div class="mobile-card-actions" role="group" aria-label="Acciones del producto">
@@ -2673,6 +2659,14 @@ function refreshMobileChecklistCards() {
         cardQtyInput.value = sourceQtyInput.value || '';
         cardQtyInput.disabled = !!sourceQtyInput.disabled;
 
+        card.querySelector('.tr-qty-multiply')?.addEventListener('click', () => insertQuantityMultiply(cardQtyInput));
+        cardQtyInput.addEventListener('blur', () => {
+          normalizeQuantity(cardQtyInput);
+          if (sourceQtyInput.value !== cardQtyInput.value) {
+            sourceQtyInput.value = cardQtyInput.value;
+            sourceQtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
         cardQtyInput.addEventListener('input', () => {
           const previousSuppress = suppressMobileCardRefresh;
           suppressMobileCardRefresh = true;
@@ -2736,10 +2730,10 @@ function refreshMobileChecklistCards() {
     });
 
     applyRoleStateToMobileCard(card, tr);
-    mobileChecklistCards.appendChild(card);
+    fragment.appendChild(card);
   });
 
-  const visibleCount = rows.filter(tr => rowMatchesCurrentListSearch(tr)).length;
+  mobileChecklistCards.replaceChildren(fragment);
 }
 
 function applyListSearchFilter() {
@@ -2890,6 +2884,43 @@ async function openInsertedRowsSearch(options = {}) {
     });
   }
 
+  // Misma operación de cantidad que TR-Recepción; se valida la expresión completa.
+  function parseQuantityExpression(value) {
+    const raw = String(value ?? '').trim().replace(/,/g, '.');
+    if (!raw) return null;
+    const match = raw.match(/^([0-9]+(?:\.[0-9]+)?)\s*(?:[xX*×]\s*([0-9]+(?:\.[0-9]+)?))?$/);
+    if (!match) return null;
+    const result = Number(match[1]) * (match[2] === undefined ? 1 : Number(match[2]));
+    return Number.isFinite(result) && result >= 0 ? Number(result.toFixed(4)) : null;
+  }
+
+  function insertQuantityMultiply(input) {
+    if (!input || input.disabled) return;
+    const value = input.value || '';
+    if (/[xX*×]/.test(value)) return input.focus({ preventScroll: true });
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? start;
+    input.value = value.slice(0, start) + '×' + value.slice(end);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(start + 1, start + 1);
+  }
+
+  function normalizeQuantity(input) {
+    if (!input || !String(input.value).trim()) return;
+    const result = parseQuantityExpression(input.value);
+    if (result === null) {
+      input.setCustomValidity('Ingresa una cantidad válida (ej. 12×4).');
+      input.reportValidity();
+      return;
+    }
+    input.setCustomValidity('');
+    if (input.value !== String(result)) {
+      input.value = String(result);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
   function syncQtyInputMode(input) {
     if (!input) return;
     input.readOnly = false;
@@ -2950,7 +2981,6 @@ async function openInsertedRowsSearch(options = {}) {
   window.addEventListener('resize', () => {
     const active = document.activeElement;
     updateQtyPreview(active && active.classList && active.classList.contains('qty') ? active : null);
-    [...body.querySelectorAll('.qty')].forEach(syncQtyInputMode);
     updateBulkSelectionUI();
   });
 
@@ -4644,187 +4674,6 @@ async function handleProductSelection(item) {
     if (existingChanged) queueAutoSave('producto existente actualizado');
   }
 
-  // ===== Sugeridos por ventas diarias / historial de solicitudes =====
-  // Solo se incorporan productos confirmados del catálogo y dentro de la sucursal autorizada.
-  async function fetchReplenishment(storeKey) {
-    const token = await getCurrentUserIdToken();
-    if (!token) throw new Error('Tu sesión expiró. Ingresa nuevamente.');
-    const resp = await fetch('/api/replenishment?storeKey=' + encodeURIComponent(storeKey), {
-      headers: { Authorization: 'Bearer ' + token }, cache:'no-store'
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'No se pudieron obtener los sugeridos.');
-    return data;
-  }
-
-  async function syncDailySales(day = '') {
-    if (!hasRole('admin')) {
-      await showRoleDeniedAlert('sincronizar ventas', 'administradores');
-      return false;
-    }
-    const token = await getCurrentUserIdToken();
-    const resp = await fetch('/api/daily-sales-sync', {
-      method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
-      body:JSON.stringify({ ...(day ? { day } : {}) }), cache:'no-store'
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (resp.status >= 400 || !data.results) throw new Error(data.error || 'No se pudieron archivar las ventas.');
-    const details = data.results.map(row => {
-      const label = (row.sheet || row.storeKey || '').replace('VENTAS-DIARIAS-','');
-      const status = row.status === 'saved' ? 'Archivada' : row.status === 'updated' ? 'Actualizada'
-        : row.status === 'already-saved' ? 'Ya guardada' : row.status === 'unchanged-source' ? 'Sin cambios desde la última captura' : 'Error';
-      return '<div class="d-flex justify-content-between gap-2 border-bottom py-2"><span>' + escapeHtml(label)
-        + '</span><span><strong>' + escapeHtml(status) + '</strong> · ' + escapeHtml(String(row.rows ?? 0))
-        + ' productos' + (row.error ? '<div class="text-danger small">' + escapeHtml(row.error) + '</div>' : '') + '</span></div>';
-    }).join('');
-    await Swal.fire({title:'Sincronización de ventas', html:'<div class="text-start">' + details + '</div>', icon:data.ok ? 'success' : 'warning', confirmButtonText:'Aceptar'});
-    return data.ok;
-  }
-
-  function getQuantityFromRow(row) {
-    const raw = String(row?.querySelector('.qty')?.value ?? '').trim();
-    if (!raw) return 0;
-    // La tabla permite cantidades textuales; nunca sumamos si no es numérica.
-    if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return null;
-    return Number(raw.replace(',','.'));
-  }
-
-  function findSalesCatalogEntry(code, catalog) {
-    const target = String(code || '').trim().toUpperCase().replace(/^0+(?=\d)/,'');
-    if (!target) return null;
-    const matches = (catalog || []).filter(row => {
-      const inv = String(row?.[1] || '').trim().toUpperCase().replace(/^0+(?=\d)/,'');
-      return inv === target;
-    });
-    // Si el mismo código aparece en varias bodegas, resolver SOLO por nombre exacto.
-    if (matches.length === 1) return matches[0];
-    // No adivinar asignaciones con códigos ambiguos.
-    return null;
-  }
-
-  async function openReplenishment() {
-    closeMobileFab();
-    if (!(await enforceCurrentStoreAccess('consultar sugeridos'))) return;
-    const storeKey = String(storeSelect?.value || '');
-    if (!['lista_avenida_morazan','lista_centro_comercial','lista_sexta_calle'].includes(storeKey)) {
-      await showScanToast('info','Elige una sucursal','Selecciona una tienda específica para consultar sus sugeridos.');
-      return;
-    }
-    try {
-      const [data,catalog] = await withLoading('Consultando ventas y solicitudes...', () => Promise.all([fetchReplenishment(storeKey), loadProductsFromGoogleSheets()]));
-        if (storeSelect.value !== storeKey) throw new Error('La sucursal cambió durante la consulta.');
-        const activeEntries = (data.results || []).filter(item => item.suggestedQty > 0).slice(0,150).map(item => {
-          const catalogRow = findSalesCatalogEntry(item.code,catalog);
-          const existingRow = catalogRow ? findExistingRowByItem(buildItemFromCatalogRow(catalogRow)) : null;
-          const alreadyOnList = existingRow ? getQuantityFromRow(existingRow) : 0;
-          return { ...item, catalogRow, existingRow, alreadyOnList,
-            quantity:Math.max(0,Math.ceil(item.suggestedQty - (alreadyOnList ?? 0))) };
-        });
-        if (replenishmentStatus) replenishmentStatus.textContent = (data.latestDay
-          ? 'Ventas archivadas hasta ' + data.latestDay : 'Sin ventas diarias archivadas')
-          + ' · ' + (data.requestRecords || 0) + ' solicitudes históricas consultadas.';
-        if (!activeEntries.length) {
-          await Swal.fire({icon:'info',title:'Sin sugeridos disponibles',
-            text:data.warning || 'No hay productos con patrones suficientes o aún no corresponde otra solicitud.'});
-          return;
-        }
-        const canAdd = !isEditingLocked() && (!isBranchOperator() || isRequestDraftStatus(requestFlowState?.status)) && isStoreAllowedForCurrentUser(storeKey);
-        const rows = activeEntries.map((item,index) => {
-          const unavailable = !item.catalogRow;
-          const badQty = item.alreadyOnList === null;
-          const blocked = unavailable || badQty || item.quantity <= 0 || !canAdd;
-          return `<tr class="align-middle" data-suggest-index="${index}">
-            <td><input class="form-check-input suggest-select" type="checkbox" ${blocked ? 'disabled' : 'checked'} aria-label="Seleccionar producto"></td>
-            <td class="text-start"><div class="fw-semibold">${escapeHtml(item.name || item.catalogRow?.[0] || item.code)}</div>
-              <div class="small text-muted">${escapeHtml(item.code)} · ${item.salesDays} día(s) ventas · ${item.requestCount} solicitudes</div>
-              <div class="small ${unavailable || badQty ? 'text-danger' : 'text-muted'}">${unavailable ? 'No encontrado de forma única en catálogo' : badQty ? 'La cantidad actual es texto: revisar manualmente' : 'Prom. ventas: '+item.dailyDemand+'/día · Ciclo: '+item.intervalDays+' días'}</div></td>
-            <td class="text-end">${item.suggestedQty}</td>
-            <td><span class="badge ${item.confidence === 'Alta' ? 'text-bg-success' : item.confidence === 'Media' ? 'text-bg-primary' : 'text-bg-secondary'}">${escapeHtml(item.confidence)}</span></td>
-            <td style="min-width:90px"><input class="form-control form-control-sm suggest-qty" type="number" min="0" step="1" max="100000" value="${item.quantity}" ${blocked ? 'disabled' : ''} aria-label="Cantidad a incorporar"></td></tr>`;
-        }).join('');
-        const warning = data.warning ? `<div class="alert alert-warning py-2 small">${escapeHtml(data.warning)}</div>` : '';
-        const html = `<div class="text-start"><p class="small text-muted mb-2">${escapeHtml(storeSelect.options[storeSelect.selectedIndex]?.text || '')} · Última venta archivada: ${escapeHtml(data.latestDay || 'Sin datos')} · ${data.snapshotCount} fechas.</p>
-          <div class="alert alert-info py-2 small">Cantidades <strong>orientativas</strong>: basadas en ventas y patrones de solicitudes. Sin inventario físico confirmado no representan faltantes reales. Las cantidades ya presentes en la lista se descuentan.</div>${warning}
-          <div class="table-responsive" style="max-height:55vh;overflow-y:auto"><table class="table table-sm align-middle"><thead class="table-light sticky-top"><tr><th>Sel.</th><th>Producto</th><th class="text-end">Objetivo</th><th>Conf.</th><th>A agregar</th></tr></thead><tbody>${rows}</tbody></table></div>
-          <small class="text-muted">Solo se incorporarán productos con coincidencia única de código de inventario en el catálogo. Puedes ajustar cantidades antes de agregar.</small></div>`;
-        const result = await Swal.fire({title:'Sugeridos de reposición',html,width:1020,showCancelButton:canAdd,
-          showConfirmButton:canAdd,confirmButtonText:'Añadir seleccionados',cancelButtonText:'Cerrar',
-          didOpen: popup => {
-            popup.querySelectorAll('.suggest-qty').forEach(input => input.addEventListener('input',()=>{
-              const tr=input.closest('tr');
-              if (tr && Number(input.value)>0) tr.querySelector('.suggest-select').checked=true;
-            }));
-          },
-          preConfirm: () => {
-            const popup=Swal.getPopup();
-            const chosen=[...popup.querySelectorAll('tr[data-suggest-index]')].filter(tr=>tr.querySelector('.suggest-select')?.checked).map(tr => {
-              const idx=Number(tr.dataset.suggestIndex), qty=Number(tr.querySelector('.suggest-qty')?.value);
-              return { idx, qty };
-            });
-            if (!chosen.length) { Swal.showValidationMessage('Selecciona al menos un producto.'); return false; }
-            if (chosen.some(x=>!Number.isSafeInteger(x.qty)||x.qty<1||x.qty>100000)) {
-              Swal.showValidationMessage('Usa cantidades enteras entre 1 y 100000.');return false;
-            }
-            return chosen;
-          }
-        });
-        if (!result.isConfirmed || !Array.isArray(result.value)) return;
-        // Estado puede cambiar al abrir un modal (otra pestaña o contexto).
-        if (storeSelect.value !== storeKey || isEditingLocked() || (isBranchOperator() && !isRequestDraftStatus(requestFlowState?.status))) {
-          await showScanToast('warning','Lista bloqueada','Abre o inicia una lista editable antes de incorporar sugeridos.');return;
-        }
-        let added=0, summed=0, skipped=0;
-        for (const {idx,qty} of result.value) {
-          const item=activeEntries[idx];
-          if (!item?.catalogRow) { skipped++;continue; }
-          const listItem=buildItemFromCatalogRow(item.catalogRow);
-          const existing=findExistingRowByItem(listItem);
-          if (existing) {
-            const current=getQuantityFromRow(existing);
-            if (current === null) {skipped++;continue;}
-            const input=existing.querySelector('.qty');
-            if (!input || input.disabled) {skipped++;continue;}
-            input.value=String(Math.round((current+qty)*100)/100);
-            input.dispatchEvent(new Event('input',{bubbles:true}));
-            summed++;
-          } else {
-            addRowFromData({...listItem,cantidad:String(qty)}, {focusQuantity:false});
-            added++;
-          }
-        }
-        if (added || summed) {
-          renumber();updateBulkSelectionUI();applyListSearchFilter();
-          refreshMobileChecklistCardsSafely({force:true});
-          queueAutoSave('sugeridos de reposición');
-        }
-        await showScanToast('success','Sugeridos incorporados',`Nuevos: ${added} · Sumados: ${summed} · Omitidos: ${skipped}.`);
-    } catch(error) {
-      console.error('Error en sugeridos:',error);
-      await Swal.fire({icon:'error',title:'No se pudieron consultar los sugeridos',text:error.message || String(error)});
-    }
-  }
-
-  [btnOpenReplenishment, btnFabReplenishment].filter(Boolean).forEach(button => {
-    button.addEventListener('click', () => { openReplenishment(); });
-  });
-  if (btnSyncDailySales) {
-    btnSyncDailySales.classList.toggle('d-none', !hasRole('admin'));
-    btnSyncDailySales.addEventListener('click', async () => {
-      try {
-        const d = new Date();
-        d.setDate(d.getDate()-1);
-        const proposed = (window.TRUtils?.getLocalDateString?.(d)) || (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
-        const answer = await Swal.fire({title:'Fecha de las ventas cargadas',input:'date',inputValue:proposed,
-          text:'Indica el día al que corresponde lo que actualmente aparece en las tres hojas. No es la fecha de hoy salvo que sean ventas de hoy.',
-          showCancelButton:true,confirmButtonText:'Archivar tres sucursales',cancelButtonText:'Cancelar',
-          inputValidator: day => !day ? 'Selecciona una fecha.' : undefined});
-        if (!answer.isConfirmed) return;
-        const data = await withLoading('Archivando ventas de las tres sucursales...',()=>syncDailySales(answer.value));
-      }
-      catch(err) { await Swal.fire({icon:'error',title:'Error al sincronizar',text:err.message||String(err)}); }
-    });
-  }
-
   function collectPayload(options = {}) {
     const items = [...body.getElementsByTagName('tr')].map(buildChecklistItemFromRow);
     const meta = buildChecklistMeta();
@@ -4982,7 +4831,7 @@ async function handleProductSelection(item) {
       <td>${safeInventoryCode}</td>
       <td>${safeWarehouse}</td>
       <td>
-        <input type="text" class="form-control form-control-sm qty" value="${qtyValue}" placeholder="0">
+        <div class="tr-qty-editor"><input type="text" class="form-control form-control-sm qty" value="${qtyValue}" placeholder="Ej. 12×4" inputmode="text"><button type="button" class="tr-qty-multiply" title="Multiplicar" aria-label="Multiplicar cantidad">×</button></div>
       </td>
       <td class="text-center">
         <div class="row-actions-grid" role="group" aria-label="Acciones de fila">
@@ -4995,9 +4844,13 @@ async function handleProductSelection(item) {
         </div>
       </td>
     `;
-    body.insertBefore(tr, body.firstChild);
+    if (isBulkRenderingRows && bulkRowFragment) {
+      bulkRowFragment.prepend(tr);
+    } else {
+      body.insertBefore(tr, body.firstChild);
+    }
     applyResponsiveRowLabels(tr);
-    renumber();
+    if (!isBulkRenderingRows) renumber();
 
     const btnDes = getDispatchButton(tr);
     const btnMove = getMoveButton(tr);
@@ -5058,13 +4911,15 @@ async function handleProductSelection(item) {
     const qtyInput = tr.querySelector('.qty');
     if (qtyInput) {
       bindQtyPreview(qtyInput);
+      tr.querySelector('.tr-qty-multiply')?.addEventListener('click', () => insertQuantityMultiply(qtyInput));
       qtyInput.addEventListener('input', () => {
+        qtyInput.setCustomValidity('');
         const editingThisQty = document.activeElement === qtyInput;
         const deferMobileRefresh = isCompactScreen() && editingThisQty;
-        if (!suppressMobileCardRefresh && !deferMobileRefresh) {
+        if (!suppressMobileCardRefresh && !deferMobileRefresh && isCompactScreen()) {
           refreshMobileChecklistCardsSafely();
         }
-        updateListSearchMeta();
+        // La cantidad no altera el resultado de búsqueda por código/nombre.
         queueAutoSave('cantidad');
       });
       qtyInput.addEventListener('change', () => {
@@ -5074,6 +4929,7 @@ async function handleProductSelection(item) {
         flushPendingMobileCardRefresh({ delay: 120 });
       });
       qtyInput.addEventListener('blur', () => {
+        normalizeQuantity(qtyInput);
         if (!suppressMobileCardRefresh && isCompactScreen()) {
           flushPendingMobileCardRefresh({ delay: 120 });
           window.setTimeout(() => refreshMobileChecklistCardsSafely({ force: true }), 160);
@@ -5099,9 +4955,12 @@ async function handleProductSelection(item) {
   function renderChecklistItems(items = []) {
     const list = Array.isArray(items) ? items : [];
     isBulkRenderingRows = true;
+    bulkRowFragment = document.createDocumentFragment();
     try {
       list.forEach(item => addRowFromData(item, { focusQuantity: false }));
+      body.prepend(bulkRowFragment);
     } finally {
+      bulkRowFragment = null;
       isBulkRenderingRows = false;
     }
     renumber();
@@ -5706,7 +5565,7 @@ async function handleProductSelection(item) {
       const codigo = tr.cells[COL_INDEX.inventoryCode].innerText.trim();
       const descripcion = tr.cells[COL_INDEX.name].innerText.trim();
       const cantidadInput = tr.querySelector('.qty')?.value.trim() || '0';
-      const cantidad = (cantidadInput.match(/\d+/g)) ? parseInt(cantidadInput.match(/\d+/g).join('')) : 0;
+      const cantidad = parseQuantityExpression(cantidadInput) ?? 0;
       const lote = '';
       const fechaVence = new Date(1900, 0, 1);
       return [codigo, descripcion, cantidad, lote, fechaVence];
@@ -5775,10 +5634,9 @@ async function handleProductSelection(item) {
   }
 
   function parseExcelQuantityValue(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    const raw = String(value ?? '').trim();
-    const digits = raw.match(/\d+/g);
-    return digits ? parseInt(digits.join(''), 10) : 0;
+    // Los históricos pueden contener cantidades con multiplicación (12×4).
+    // Nunca concatenar dígitos: 12×4 representa 48, no 124.
+    return parseQuantityExpression(value) ?? 0;
   }
 
   function buildExcelWorkbookFromItems(items = []) {
@@ -9340,7 +9198,6 @@ async function handleProductSelection(item) {
 
   // Store/version change: vuelve a hoy y refresca calendario para el docId nuevo
   storeSelect.addEventListener('change', async () => {
-    if (replenishmentStatus) replenishmentStatus.textContent = 'Consulta los sugeridos de la sucursal seleccionada.';
     closeMoreActionsMenu();
     closeMobileFab();
     const requestedStoreValue = storeSelect.value;
